@@ -1,0 +1,39 @@
+name: "✨ 기능 개발"
+description: "새 기능 또는 개선 작업"
+title: "[feat] "
+labels: ["type:feat"]
+body:
+  - type: input
+    id: jira
+    attributes:
+      label: Jira 키
+      placeholder: "RPA-12"
+    validations:
+      required: false
+  - type: textarea
+    id: what
+    attributes:
+      label: 무엇을 만들려고 하나요?
+      description: 기능 요구사항 ID(FR-xx)가 있으면 함께 적어주세요.
+      placeholder: "FR-03 채팅 UI — 업무정의서 기반 작업 추천 대화 화면"
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: 완료 조건 (Definition of Done)
+      placeholder: |
+        - [ ] 질문 입력 → 추천 액션 목록이 카드로 렌더링
+        - [ ] 로딩/에러 상태 표시
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 우선순위
+      options:
+        - P0 (필수 기능과 한몸)
+        - P1 (가점 효율)
+        - P2 (차별화)
+    validations:
+      required: true
