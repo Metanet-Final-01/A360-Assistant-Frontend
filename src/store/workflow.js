@@ -1,7 +1,10 @@
 import { reactive } from "vue";
+import { uploadDocument } from "../api/documents";
+import { ApiError } from "../api/http";
 
-// NOTE: 아래 분석/추천 로직은 프론트엔드 데모용 목업(mock)입니다.
-// 실제 서비스에서는 이 부분이 백엔드(LLM + RAG + Agent) API 응답으로 대체됩니다.
+// NOTE: 분석(FR-05)·추천(FR-09~12)·챗봇(FR-13~16)은 백엔드에 아직 엔드포인트가 없다
+// (API_명세.md 3번 항목 — SSE 예정). 그 전까지는 아래 목업으로 UI 흐름만 재현한다.
+// 업로드/문서 상태·내용 조회는 실제 백엔드(1-2~1-4)와 연동되어 있다.
 const STEP_LIBRARY = [
   {
     id: "step-3",
@@ -65,7 +68,8 @@ export const workflow = reactive({
   file: null, // { name, size, ext }
   uploadStatus: "idle", // idle | uploading | uploaded | error
   uploadError: "",
-  extraction: null, // { mode, pages, tasks }
+  sessionId: null, // 이후 분석/추천/챗봇 API의 키
+  document: null, // POST /api/documents 응답 원본 (id, status, page_count, warnings, error 등)
 
   // 분석/추천 상태
   analysisStatus: "idle", // idle | analyzing | done
@@ -73,6 +77,7 @@ export const workflow = reactive({
 
   // 챗봇 상태
   chatOpen: false,
+  chatDocked: true,
   chatMessages: [
     {
       role: "assistant",
@@ -88,13 +93,13 @@ function clearTimers() {
   timers = [];
 }
 
-const ALLOWED_EXT = ["pdf", "ppt", "pptx"];
+const ALLOWED_EXT = ["pdf", "pptx"];
 
-export function selectFile(file) {
+export async function selectFile(file) {
   const ext = file.name.split(".").pop().toLowerCase();
   if (!ALLOWED_EXT.includes(ext)) {
     workflow.uploadStatus = "error";
-    workflow.uploadError = "PDF 또는 PPT 파일만 업로드할 수 있습니다.";
+    workflow.uploadError = "PDF 또는 PPTX 파일만 업로드할 수 있습니다.";
     return;
   }
 
@@ -102,28 +107,30 @@ export function selectFile(file) {
   workflow.uploadError = "";
   workflow.file = { name: file.name, size: file.size, ext };
   workflow.uploadStatus = "uploading";
-  workflow.extraction = null;
+  workflow.document = null;
   workflow.analysisStatus = "idle";
   workflow.visibleSteps = [];
 
-  timers.push(
-    setTimeout(() => {
+  try {
+    const document = await uploadDocument(file, workflow.sessionId);
+    workflow.sessionId = document.session_id;
+    workflow.document = document;
+
+    if (document.status === "failed") {
+      workflow.uploadStatus = "error";
+      workflow.uploadError = document.error || "문서 파싱에 실패했습니다.";
+    } else {
       workflow.uploadStatus = "uploaded";
-      timers.push(
-        setTimeout(() => {
-          workflow.extraction = {
-            mode: "텍스트 위주 (표 포함)",
-            pages: 6,
-            tasks: 4,
-          };
-        }, 500),
-      );
-    }, 900),
-  );
+    }
+  } catch (err) {
+    workflow.uploadStatus = "error";
+    workflow.uploadError =
+      err instanceof ApiError ? err.message : "업로드 중 알 수 없는 오류가 발생했습니다.";
+  }
 }
 
 export function startAnalysis() {
-  if (!workflow.file || workflow.analysisStatus === "analyzing") return;
+  if (workflow.document?.status !== "parsed" || workflow.analysisStatus === "analyzing") return;
   workflow.analysisStatus = "analyzing";
   workflow.visibleSteps = [];
 
@@ -147,7 +154,8 @@ export function resetUpload() {
   workflow.file = null;
   workflow.uploadStatus = "idle";
   workflow.uploadError = "";
-  workflow.extraction = null;
+  workflow.sessionId = null;
+  workflow.document = null;
   workflow.analysisStatus = "idle";
   workflow.visibleSteps = [];
 }
@@ -157,6 +165,16 @@ export function toggleChat() {
 }
 
 export function closeChat() {
+  workflow.chatOpen = false;
+}
+
+export function dockChat() {
+  workflow.chatDocked = true;
+  workflow.chatOpen = false;
+}
+
+export function undockChat() {
+  workflow.chatDocked = false;
   workflow.chatOpen = false;
 }
 
@@ -220,6 +238,7 @@ export function logout() {
   clearTimers();
   workflow.isLoggedIn = false;
   workflow.chatOpen = false;
+  workflow.chatDocked = false;
 }
 
 export function login() {

@@ -38,7 +38,7 @@ function downloadJson() {
 <template>
   <section class="panel panel--wide" aria-labelledby="analysis-panel-title">
     <header class="panel__header">
-      <h2 id="analysis-panel-title">② 분석 결과 &amp; ③ A360 작업 추천</h2>
+      <h2 id="analysis-panel-title">분석 결과 &amp; A360 작업 추천</h2>
     </header>
 
     <div class="panel__body">
@@ -97,7 +97,7 @@ function downloadJson() {
       </TransitionGroup>
 
       <div class="export-section" v-if="workflow.analysisStatus === 'done'">
-        <h3 class="export-section__title">⑤ 내보내기</h3>
+        <h3 class="export-section__title">내보내기</h3>
         <div class="export-section__actions">
           <button type="button" class="btn btn--outline" @click="downloadJson">
             JSON 다운로드

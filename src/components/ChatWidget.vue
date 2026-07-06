@@ -1,20 +1,29 @@
 <script setup>
-import { computed, nextTick, reactive, ref, watch } from "vue";
-import { workflow, toggleChat, closeChat, sendChatMessage } from "../store/workflow";
+import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
+import {
+  workflow,
+  toggleChat,
+  closeChat,
+  dockChat,
+  undockChat,
+  sendChatMessage,
+} from "../store/workflow";
 
-const POPUP_WIDTH = 360;
-const POPUP_HEIGHT = 520;
+const POPUP_WIDTH = 540;
+const POPUP_HEIGHT = 780;
 const MARGIN = 24;
+const DOCK_ZONE_ID = "analysis";
 
 const draft = ref("");
 const popupRef = ref(null);
 const messagesRef = ref(null);
 const position = reactive({ x: null, y: null });
 const isDragging = ref(false);
+const isOverDockZone = ref(false);
 let dragOffset = { x: 0, y: 0 };
 
 const popupStyle = computed(() => {
-  if (position.x === null) return {};
+  if (workflow.chatDocked || position.x === null) return {};
   return { left: `${position.x}px`, top: `${position.y}px` };
 });
 
@@ -31,7 +40,7 @@ function scrollToBottom() {
 }
 
 watch(
-  () => workflow.chatOpen,
+  () => workflow.chatOpen || workflow.chatDocked,
   async (isOpen) => {
     if (!isOpen) return;
     initPosition();
@@ -40,8 +49,36 @@ watch(
   },
 );
 
+onMounted(async () => {
+  if (!workflow.chatOpen && !workflow.chatDocked) return;
+  initPosition();
+  await nextTick();
+  scrollToBottom();
+});
+
+function getDockZoneEl() {
+  return document.getElementById(DOCK_ZONE_ID);
+}
+
+function isPointInDockZone(event) {
+  const zoneEl = getDockZoneEl();
+  if (!zoneEl) return false;
+  const rect = zoneEl.getBoundingClientRect();
+  return (
+    event.clientX >= rect.left &&
+    event.clientX <= rect.right &&
+    event.clientY >= rect.top &&
+    event.clientY <= rect.bottom
+  );
+}
+
+function setDockZoneHighlight(active) {
+  const zoneEl = getDockZoneEl();
+  if (zoneEl) zoneEl.classList.toggle("app-main--drop-active", active);
+}
+
 function startDrag(event) {
-  if (!popupRef.value) return;
+  if (!popupRef.value || workflow.chatDocked) return;
   isDragging.value = true;
   const rect = popupRef.value.getBoundingClientRect();
   dragOffset = { x: event.clientX - rect.left, y: event.clientY - rect.top };
@@ -57,12 +94,21 @@ function onDrag(event) {
   const maxY = window.innerHeight - height - 8;
   position.x = Math.min(Math.max(8, event.clientX - dragOffset.x), Math.max(8, maxX));
   position.y = Math.min(Math.max(8, event.clientY - dragOffset.y), Math.max(8, maxY));
+
+  isOverDockZone.value = isPointInDockZone(event);
+  setDockZoneHighlight(isOverDockZone.value);
 }
 
 function stopDrag() {
   isDragging.value = false;
   window.removeEventListener("pointermove", onDrag);
   window.removeEventListener("pointerup", stopDrag);
+  setDockZoneHighlight(false);
+
+  if (isOverDockZone.value) {
+    dockChat();
+  }
+  isOverDockZone.value = false;
 }
 
 async function handleSend() {
@@ -76,7 +122,9 @@ async function handleSend() {
 </script>
 
 <template>
+<div class="chat-widget">
   <button
+    v-if="!workflow.chatDocked"
     type="button"
     class="chat-fab"
     aria-label="AI 챗봇 열기"
@@ -91,16 +139,33 @@ async function handleSend() {
     </svg>
   </button>
 
-  <Teleport to="body">
+  <Teleport to="body" :disabled="workflow.chatDocked">
     <div
-      v-if="workflow.chatOpen"
+      v-if="workflow.chatOpen || workflow.chatDocked"
       ref="popupRef"
       class="chat-popup"
+      :class="{ 'chat-popup--docked': workflow.chatDocked, 'chat-popup--drop-ready': isOverDockZone }"
       :style="popupStyle"
     >
-      <header class="chat-popup__header" @pointerdown="startDrag">
-        <span class="chat-popup__title">AI 챗봇</span>
+      <header
+        class="chat-popup__header"
+        :class="{ 'chat-popup__header--static': workflow.chatDocked }"
+        @pointerdown="startDrag"
+      >
+        <span class="chat-popup__title">
+          {{ workflow.chatDocked ? "AI 챗봇 (대화형 수정)" : "AI 챗봇" }}
+        </span>
         <button
+          v-if="workflow.chatDocked"
+          type="button"
+          class="chat-popup__minimize"
+          aria-label="챗봇 최소화"
+          @click="undockChat"
+        >
+          &minus;
+        </button>
+        <button
+          v-else
           type="button"
           class="chat-popup__close"
           aria-label="챗봇 닫기"
@@ -134,4 +199,5 @@ async function handleSend() {
       <p class="chat-popup__hint">분석 결과에 대한 질문을 입력하면 답변해드립니다.</p>
     </div>
   </Teleport>
+</div>
 </template>

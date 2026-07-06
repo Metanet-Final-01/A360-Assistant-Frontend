@@ -11,8 +11,7 @@ const fileSizeLabel = computed(() =>
 
 const canStartAnalysis = computed(
   () =>
-    workflow.uploadStatus === "uploaded" &&
-    !!workflow.extraction &&
+    workflow.document?.status === "parsed" &&
     workflow.analysisStatus === "idle",
 );
 
@@ -39,7 +38,7 @@ function onFileChange(event) {
 <template>
   <section class="panel" aria-labelledby="upload-panel-title">
     <header class="panel__header">
-      <h2 id="upload-panel-title">① 업무정의서 업로드</h2>
+      <h2 id="upload-panel-title">업무정의서 업로드</h2>
     </header>
 
     <div class="panel__body">
@@ -64,14 +63,14 @@ function onFileChange(event) {
           />
         </svg>
         <p class="dropzone__text">
-          <strong>PDF · PPT</strong> 파일을 여기에 드래그하거나<br />
+          <strong>PDF · PPTX</strong> 파일을 여기에 드래그하거나<br />
           클릭하여 선택하세요
         </p>
         <span class="dropzone__button">파일 선택</span>
         <input
           ref="fileInputRef"
           type="file"
-          accept=".pdf,.ppt,.pptx"
+          accept=".pdf,.pptx"
           class="sr-only"
           @change="onFileChange"
         />
@@ -96,6 +95,22 @@ function onFileChange(event) {
             aria-label="업로드 중"
           ></span>
           <svg
+            v-else-if="workflow.uploadStatus === 'error'"
+            class="doc-card__status doc-card__status--done"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-label="업로드 실패"
+          >
+            <circle cx="12" cy="12" r="10" fill="var(--danger-bg)" />
+            <path
+              d="M9 9l6 6m0-6-6 6"
+              stroke="var(--danger)"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <svg
             v-else
             class="doc-card__status doc-card__status--done"
             viewBox="0 0 24 24"
@@ -114,9 +129,11 @@ function onFileChange(event) {
         </div>
 
         <Transition name="fade-up">
-          <ul class="extraction-meta" v-if="workflow.extraction">
-            <li>· 추출: {{ workflow.extraction.mode }}</li>
-            <li>· 페이지 {{ workflow.extraction.pages }} / Task {{ workflow.extraction.tasks }}건 인식</li>
+          <ul class="extraction-meta" v-if="workflow.document?.status === 'parsed'">
+            <li>· 파싱 완료 · 페이지 {{ workflow.document.page_count }}</li>
+            <li v-for="(warning, idx) in workflow.document.warnings" :key="idx" class="extraction-meta__warning">
+              ⚠ {{ warning }}
+            </li>
           </ul>
         </Transition>
 
