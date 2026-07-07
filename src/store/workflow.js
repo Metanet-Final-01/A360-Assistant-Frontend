@@ -1,10 +1,12 @@
 import { reactive } from "vue";
 import { uploadDocument } from "../api/documents";
-import { ApiError } from "../api/http";
+import { chatStream } from "../api/agent";
+import { register as apiRegister, login as apiLogin, getMe } from "../api/auth";
+import { ApiError, getToken, setToken, clearToken } from "../api/http";
 
-// NOTE: 분석(FR-05)·추천(FR-09~12)·챗봇(FR-13~16)은 백엔드에 아직 엔드포인트가 없다
-// (API_명세.md 3번 항목 — SSE 예정). 그 전까지는 아래 목업으로 UI 흐름만 재현한다.
-// 업로드/문서 상태·내용 조회는 실제 백엔드(1-2~1-4)와 연동되어 있다.
+// NOTE: 분석(FR-05)·추천(FR-09~12)은 백엔드에 아직 엔드포인트가 없다
+// (API_명세.md 3번 항목 — SSE 예정). 그 전까지는 아래 STEP_LIBRARY 목업으로 UI 흐름만 재현한다.
+// 업로드/문서 상태·내용 조회(1-2~1-4)와 챗봇(/api/agent/chat/stream)은 실제 백엔드와 연동되어 있다.
 const STEP_LIBRARY = [
   {
     id: "step-3",
@@ -62,7 +64,9 @@ export function formatBytes(bytes) {
 }
 
 export const workflow = reactive({
-  isLoggedIn: true,
+  isLoggedIn: false,
+  authChecking: true, // 앱 시작 시 저장된 토큰 유효성(GET /api/auth/me) 확인 중
+  userEmail: null,
 
   // 업로드 상태
   file: null, // { name, size, ext }
@@ -81,7 +85,7 @@ export const workflow = reactive({
   chatMessages: [
     {
       role: "assistant",
-      text: "안녕하세요! 업무정의서를 업로드하고 분석을 실행하면, 추천된 작업에 대해 무엇이든 물어보실 수 있어요.",
+      text: "안녕하세요! A360 액션·패키지 사용법 등 궁금한 점을 무엇이든 물어보세요.",
       time: nowTime(),
     },
   ],
@@ -178,43 +182,27 @@ export function undockChat() {
   workflow.chatOpen = false;
 }
 
-function generateReply(text) {
-  if (workflow.visibleSteps.length === 0) {
-    return "아직 분석된 추천 결과가 없어요. 먼저 업무정의서를 업로드하고 분석을 실행해 주세요.";
-  }
-  if (text.includes("패키지")) {
-    return "현재 추천 항목은 A360 기본 패키지만으로 구성되어 있어 추가 패키지가 필요하지 않습니다.";
-  }
-  if (text.includes("변수")) {
-    return "현재 단계에는 별도로 정의된 입력·출력 변수가 없습니다. 필요한 변수가 있다면 알려주세요, 반영해 드릴게요.";
-  }
-  if (text.includes("삭제") || text.includes("제외")) {
-    return '어떤 단계를 제외할지 말씀해 주시면 추천 목록에 반영하겠습니다. (예: "5단계 제외해줘")';
-  }
-  if (text.includes("추가")) {
-    return "추가하고 싶은 조건이나 연계 시스템을 알려주시면 해당 단계를 추천 목록에 반영하겠습니다.";
-  }
-  if (text.includes("근거") || text.includes("출처")) {
-    return "각 추천은 업무정의서 원문과 A360 액션 카탈로그를 RAG로 검색한 결과를 근거로 매칭되었습니다.";
-  }
-  return `현재 문서 기준으로 ${workflow.visibleSteps.length}개 단계가 식별되었습니다. 수정하고 싶은 부분을 구체적으로 말씀해 주시면 반영해 드릴게요.`;
-}
-
-export function sendChatMessage(text) {
+// 챗봇은 무상태(FR-13, 멀티턴 기억 없음) — 매 질문을 /api/agent/chat/stream에 단발로 보낸다.
+export async function sendChatMessage(text) {
   const trimmed = text.trim();
   if (!trimmed) return;
   workflow.chatMessages.push({ role: "user", text: trimmed, time: nowTime() });
 
-  const reply = generateReply(trimmed);
-  timers.push(
-    setTimeout(() => {
-      workflow.chatMessages.push({
-        role: "assistant",
-        text: reply,
-        time: nowTime(),
-      });
-    }, 600),
-  );
+  const assistantMessage = reactive({ role: "assistant", text: "", time: nowTime() });
+  workflow.chatMessages.push(assistantMessage);
+
+  await chatStream(trimmed, {
+    onToken: (token) => {
+      assistantMessage.text += token;
+    },
+    onDone: () => {
+      if (!assistantMessage.text) assistantMessage.text = "답변을 생성하지 못했습니다.";
+    },
+    onError: (message) => {
+      // 이미 받은 토큰이 있으면 지우지 않고 에러 문구만 이어붙인다
+      assistantMessage.text = assistantMessage.text ? `${assistantMessage.text}\n\n⚠ ${message}` : message;
+    },
+  });
 }
 
 export function buildExportPayload() {
@@ -234,13 +222,43 @@ export function buildExportPayload() {
   };
 }
 
-export function logout() {
-  clearTimers();
-  workflow.isLoggedIn = false;
-  workflow.chatOpen = false;
-  workflow.chatDocked = false;
+// 앱 시작 시 1회 호출. 저장된 토큰이 있으면 GET /api/auth/me로 유효성을 확인해 자동 로그인한다.
+export async function bootstrapAuth() {
+  const token = getToken();
+  if (!token) {
+    workflow.authChecking = false;
+    return;
+  }
+  try {
+    const me = await getMe();
+    workflow.userEmail = me.email;
+    workflow.isLoggedIn = true;
+  } catch {
+    clearToken();
+  } finally {
+    workflow.authChecking = false;
+  }
 }
 
-export function login() {
+export async function loginWithPassword(email, password) {
+  const { access_token } = await apiLogin(email, password);
+  setToken(access_token);
+  workflow.userEmail = email;
   workflow.isLoggedIn = true;
+  workflow.chatOpen = false;
+  workflow.chatDocked = true;
+}
+
+// 가입 API는 access_token을 바로 내려주지만(자동 로그인용), 제품 정책상 가입 후에는
+// 로그인 화면으로 보내고 사용자가 직접 로그인하도록 한다 — 그 토큰은 쓰지 않는다.
+export async function registerWithPassword(email, password) {
+  await apiRegister(email, password);
+}
+
+export function logout() {
+  clearTimers();
+  clearToken();
+  workflow.isLoggedIn = false;
+  workflow.userEmail = null;
+  workflow.chatOpen = false;
 }
