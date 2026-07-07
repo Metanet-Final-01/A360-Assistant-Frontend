@@ -125,6 +125,13 @@ async function handleSend() {
   draft.value = "";
   await sendChatMessage(message);
 }
+
+const HTML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+
+function formatMessage(text) {
+  const escaped = text.replace(/[&<>"']/g, (char) => HTML_ESCAPES[char]);
+  return escaped.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+}
 </script>
 
 <template>
@@ -189,11 +196,12 @@ async function handleSend() {
           :class="`chat-message--${message.role}`"
         >
           <div
-            class="chat-message__bubble"
-            :class="{ 'chat-message__bubble--pending': message.role === 'assistant' && !message.text }"
+            v-if="message.role === 'assistant' && !message.text"
+            class="chat-message__bubble chat-message__bubble--pending"
           >
-            {{ message.role === "assistant" && !message.text ? "응답을 생성하는 중…" : message.text }}
+            응답을 생성하는 중…
           </div>
+          <div v-else class="chat-message__bubble" v-html="formatMessage(message.text)"></div>
           <span class="chat-message__time">{{ message.time }}</span>
         </div>
       </div>
