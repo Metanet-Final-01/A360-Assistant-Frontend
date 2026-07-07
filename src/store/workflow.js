@@ -279,6 +279,31 @@ export function startAnalysis() {
   });
 }
 
+export function reorderWorkflowStep(fromIndex, toIndex) {
+  const steps = workflow.visibleSteps;
+  if (
+    fromIndex === toIndex ||
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= steps.length ||
+    toIndex >= steps.length
+  ) {
+    return;
+  }
+  const [moved] = steps.splice(fromIndex, 1);
+  steps.splice(toIndex, 0, moved);
+}
+
+export function updateWorkflowStep(id, patch) {
+  const step = workflow.visibleSteps.find((s) => s.id === id);
+  if (step) Object.assign(step, patch);
+}
+
+export function deleteWorkflowStep(id) {
+  const idx = workflow.visibleSteps.findIndex((s) => s.id === id);
+  if (idx !== -1) workflow.visibleSteps.splice(idx, 1);
+}
+
 export function resetUpload() {
   clearTimers();
   workflow.file = null;
