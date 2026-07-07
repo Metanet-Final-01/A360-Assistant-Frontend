@@ -1,4 +1,4 @@
-import { apiRequest } from "./http";
+import { apiRequest, getToken } from "./http";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
@@ -14,11 +14,15 @@ export function chatOnce(message) {
 // POST /api/agent/chat/stream — SSE(fetch 스트리밍). event 필드로 token/done/error 분기.
 // sources는 스트림에 실리지 않는다 (필요하면 chatOnce 사용).
 export async function chatStream(message, { onToken, onDone, onError }) {
+  const token = getToken();
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
   let response;
   try {
     response = await fetch(`${BASE_URL}/api/agent/chat/stream`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ message }),
     });
   } catch {

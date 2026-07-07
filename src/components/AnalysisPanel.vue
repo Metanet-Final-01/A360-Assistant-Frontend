@@ -1,24 +1,21 @@
 <script setup>
 import { computed, ref } from "vue";
-import { workflow, buildExportPayload } from "../store/workflow";
+import { workflow, buildExportPayload, startAnalysis } from "../store/workflow";
 import FlowModal from "./FlowModal.vue";
 
-const TOTAL_STEP_COUNT = 3;
 const showFlowModal = ref(false);
 
-const skeletonCount = computed(() => {
-  if (workflow.analysisStatus !== "analyzing") return 0;
-  return Math.max(TOTAL_STEP_COUNT - workflow.visibleSteps.length, 0);
-});
+const emptyState = computed(() => workflow.analysisStatus === "idle");
 
-const emptyState = computed(
-  () => workflow.analysisStatus === "idle" && workflow.visibleSteps.length === 0,
-);
+const steps = computed(() => workflow.analysis?.steps ?? []);
+const hasSteps = computed(() => steps.value.length > 0);
+const ambiguities = computed(() => workflow.analysis?.ambiguities ?? []);
 
-function confidenceClass(confidence) {
-  if (confidence >= 0.9) return "confidence-badge--high";
-  if (confidence >= 0.8) return "confidence-badge--mid";
-  return "confidence-badge--low";
+function evidenceLabel(evidence) {
+  if (!evidence) return "";
+  const page = evidence.page != null ? `p.${evidence.page}` : "";
+  const snippet = evidence.snippet ? `«${evidence.snippet}»` : "";
+  return [page, snippet].filter(Boolean).join(" ");
 }
 
 function downloadJson() {
@@ -29,7 +26,7 @@ function downloadJson() {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = "a360-recommendation.json";
+  anchor.download = "a360-analysis.json";
   anchor.click();
   URL.revokeObjectURL(url);
 }
@@ -38,7 +35,7 @@ function downloadJson() {
 <template>
   <section class="panel panel--wide" aria-labelledby="analysis-panel-title">
     <header class="panel__header">
-      <h2 id="analysis-panel-title">분석 결과 &amp; A360 작업 추천</h2>
+      <h2 id="analysis-panel-title">분석 결과</h2>
     </header>
 
     <div class="panel__body">
@@ -51,52 +48,69 @@ function downloadJson() {
             stroke-linecap="round"
           />
         </svg>
-        <p>업무정의서를 업로드하고 분석을 시작하면<br />단계별 A360 작업 추천 결과가 여기에 표시됩니다.</p>
+        <p>업무정의서를 업로드하고 분석을 시작하면<br />단계별 분석 결과가 여기에 표시됩니다.</p>
       </div>
 
-      <TransitionGroup name="fade-up" tag="div" class="rec-list">
-        <article
-          v-for="step in workflow.visibleSteps"
-          :key="step.id"
-          class="rec-card"
-        >
-          <header class="rec-card__header">
-            <h3>{{ step.stepNo }}. {{ step.title }}</h3>
-            <span class="confidence-badge" :class="confidenceClass(step.confidence)">
-              신뢰도 {{ step.confidence.toFixed(2) }}
-            </span>
-          </header>
+      <div v-else-if="workflow.analysisStatus === 'analyzing'" class="analyzing-state">
+        <span class="analyzing-state__spinner" aria-hidden="true"></span>
+        <p>{{ workflow.analysisStage || "분석 중…" }}</p>
+      </div>
 
-          <div class="rec-card__grid">
-            <div class="rec-card__field">
-              <span class="rec-card__field-label">추천 액션</span>
-              <span class="rec-card__field-value rec-card__field-value--accent">{{ step.action }}</span>
-            </div>
-            <div class="rec-card__field">
-              <span class="rec-card__field-label">필요 패키지</span>
-              <span class="rec-card__field-value">{{ step.package }}</span>
-            </div>
-            <div class="rec-card__field">
-              <span class="rec-card__field-label">입력 변수</span>
-              <span class="rec-card__field-value">{{ step.inputVar }}</span>
-            </div>
-            <div class="rec-card__field">
-              <span class="rec-card__field-label">출력 변수</span>
-              <span class="rec-card__field-value">{{ step.outputVar }}</span>
-            </div>
-          </div>
+      <div v-else-if="workflow.analysisStatus === 'error'" class="analyzing-state analyzing-state--error">
+        <p class="upload-error">{{ workflow.analysisError }}</p>
+        <button type="button" class="btn btn--outline" @click="startAnalysis">다시 시도</button>
+      </div>
 
-          <footer class="rec-card__footer">근거 : {{ step.evidence }}</footer>
-        </article>
-
-        <div v-for="n in skeletonCount" :key="`skeleton-${n}`" class="rec-card rec-card--skeleton">
-          <div class="skeleton-line skeleton-line--title"></div>
-          <div class="skeleton-line"></div>
-          <div class="skeleton-line skeleton-line--short"></div>
+      <template v-else-if="workflow.analysisStatus === 'done'">
+        <div class="analysis-summary" v-if="workflow.analysis">
+          <h3 v-if="workflow.analysis.document_title">{{ workflow.analysis.document_title }}</h3>
+          <p>{{ workflow.analysis.summary }}</p>
         </div>
-      </TransitionGroup>
 
-      <div class="export-section" v-if="workflow.analysisStatus === 'done'">
+        <div v-if="!hasSteps" class="empty-state">
+          <p>문서에서 분석 가능한 업무 단계를 찾지 못했습니다.</p>
+        </div>
+
+        <div v-else class="rec-list">
+          <article v-for="step in steps" :key="step.step_id" class="rec-card">
+            <header class="rec-card__header">
+              <h3>{{ step.order }}. {{ step.name }}</h3>
+            </header>
+
+            <p class="rec-card__description">{{ step.description }}</p>
+
+            <div class="rec-card__grid">
+              <div class="rec-card__field">
+                <span class="rec-card__field-label">입력</span>
+                <span class="rec-card__field-value">{{ step.inputs?.join(", ") || "없음" }}</span>
+              </div>
+              <div class="rec-card__field">
+                <span class="rec-card__field-label">출력</span>
+                <span class="rec-card__field-value">{{ step.outputs?.join(", ") || "없음" }}</span>
+              </div>
+              <div class="rec-card__field">
+                <span class="rec-card__field-label">연계 시스템</span>
+                <span class="rec-card__field-value">{{ step.systems?.join(", ") || "없음" }}</span>
+              </div>
+              <div class="rec-card__field" v-if="step.branching">
+                <span class="rec-card__field-label">분기</span>
+                <span class="rec-card__field-value">{{ step.branching }}</span>
+              </div>
+            </div>
+
+            <footer v-if="step.evidence" class="rec-card__footer">근거: {{ evidenceLabel(step.evidence) }}</footer>
+          </article>
+        </div>
+
+        <div v-if="ambiguities.length" class="ambiguities-section">
+          <h3 class="ambiguities-section__title">확인 필요</h3>
+          <ul>
+            <li v-for="(item, idx) in ambiguities" :key="idx">{{ item }}</li>
+          </ul>
+        </div>
+      </template>
+
+      <div class="export-section" v-if="workflow.analysisStatus === 'done' && hasSteps">
         <h3 class="export-section__title">내보내기</h3>
         <div class="export-section__actions">
           <button type="button" class="btn btn--outline" @click="downloadJson">

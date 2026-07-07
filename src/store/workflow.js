@@ -1,47 +1,15 @@
 import { reactive } from "vue";
 import { uploadDocument } from "../api/documents";
 import { chatStream } from "../api/agent";
+import { analyzeSession } from "../api/analysis";
 import { register as apiRegister, login as apiLogin, getMe } from "../api/auth";
 import { ApiError, getToken, setToken, clearToken } from "../api/http";
 
-// NOTE: 분석(FR-05)·추천(FR-09~12)은 백엔드에 아직 엔드포인트가 없다
-// (API_명세.md 3번 항목 — SSE 예정). 그 전까지는 아래 STEP_LIBRARY 목업으로 UI 흐름만 재현한다.
-// 업로드/문서 상태·내용 조회(1-2~1-4)와 챗봇(/api/agent/chat/stream)은 실제 백엔드와 연동되어 있다.
-const STEP_LIBRARY = [
-  {
-    id: "step-3",
-    stepNo: 3,
-    title: "'국내 금' 검색 · 시세 조회",
-    action: "Browser : 요소 클릭",
-    package: "없음",
-    inputVar: "없음",
-    outputVar: "없음",
-    confidence: 0.95,
-    evidence: "RAG 검색 · 패키지/변수 자동 매칭",
-  },
-  {
-    id: "step-5",
-    stepNo: 5,
-    title: "최근 3일치 시세 필터",
-    action: "DataTable : 행 필터",
-    package: "없음",
-    inputVar: "없음",
-    outputVar: "없음",
-    confidence: 0.89,
-    evidence: "RAG 검색 · 패키지/변수 자동 매칭",
-  },
-  {
-    id: "step-6",
-    stepNo: 6,
-    title: "엑셀에 시세표 작성",
-    action: "Excel : 범위 쓰기 / 테두리",
-    package: "없음",
-    inputVar: "없음",
-    outputVar: "없음",
-    confidence: 0.92,
-    evidence: "RAG 검색 · 패키지/변수 자동 매칭",
-  },
-];
+// NOTE: 추천(FR-09~12)은 백엔드에 아직 엔드포인트가 없다 (API_명세.md 3번 항목 — SSE 예정).
+// 분석(FR-05, /api/sessions/{id}/analyze)·챗봇(/api/agent/chat/stream)·
+// 업로드/문서 상태·내용 조회(1-2~1-4)는 실제 백엔드와 연동되어 있다.
+// workflow.visibleSteps + reorder/update/deleteWorkflowStep은 추천 단계(액션·패키지·신뢰도)가
+// 나오면 채워질 흐름도 편집용 상태다 — 지금은 분석 결과(workflow.analysis)와 별개로 비어 있다.
 
 function nowTime() {
   return new Date().toLocaleTimeString("ko-KR", {
@@ -191,8 +159,13 @@ export const workflow = reactive({
   sessionId: null, // 이후 분석/추천/챗봇 API의 키
   document: null, // POST /api/documents 응답 원본 (id, status, page_count, warnings, error 등)
 
-  // 분석/추천 상태
-  analysisStatus: "idle", // idle | analyzing | done
+  // 분석 상태 (POST /api/sessions/{id}/analyze)
+  analysisStatus: "idle", // idle | analyzing | done | error
+  analysisStage: "", // 진행 중 stage 이벤트의 표시용 문구
+  analysisError: "",
+  analysis: null, // done.data 원본: { analysis_id, document_title, summary, steps, ambiguities }
+
+  // 추천 단계(액션/패키지/신뢰도) 전용 흐름도 편집 상태 — recommend() 연동 전까지는 항상 비어 있다
   visibleSteps: [],
 
   // 챗봇 상태
@@ -239,6 +212,9 @@ export async function selectFile(file) {
   workflow.uploadStatus = "uploading";
   workflow.document = null;
   workflow.analysisStatus = "idle";
+  workflow.analysisStage = "";
+  workflow.analysisError = "";
+  workflow.analysis = null;
   workflow.visibleSteps = [];
 
   try {
@@ -259,23 +235,35 @@ export async function selectFile(file) {
   }
 }
 
-export function startAnalysis() {
-  if (workflow.document?.status !== "parsed" || workflow.analysisStatus === "analyzing") return;
+export async function startAnalysis() {
+  if (
+    workflow.document?.status !== "parsed" ||
+    !workflow.sessionId ||
+    workflow.analysisStatus === "analyzing"
+  ) {
+    return;
+  }
   workflow.analysisStatus = "analyzing";
-  workflow.visibleSteps = [];
+  workflow.analysisStage = "";
+  workflow.analysisError = "";
+  workflow.analysis = null;
 
-  STEP_LIBRARY.forEach((step, idx) => {
-    timers.push(
-      setTimeout(
-        () => {
-          workflow.visibleSteps.push(step);
-          if (idx === STEP_LIBRARY.length - 1) {
-            workflow.analysisStatus = "done";
-          }
-        },
-        750 * (idx + 1),
-      ),
-    );
+  await analyzeSession(workflow.sessionId, {
+    onStage: (message) => {
+      workflow.analysisStage = message;
+    },
+    onDone: (data) => {
+      workflow.analysis = data;
+      workflow.analysisStatus = "done";
+    },
+    onError: (code, message) => {
+      // 503 AGENT_UNAVAILABLE은 엔진 랜딩 전의 레거시 케이스라 방어적으로만 남겨둔다 — 재시도 안내로 충분
+      workflow.analysisStatus = "error";
+      workflow.analysisError =
+        code === "AGENT_UNAVAILABLE"
+          ? "분석 엔진이 일시적으로 사용 불가능합니다. 잠시 후 다시 시도해주세요."
+          : message || "분석 중 오류가 발생했습니다.";
+    },
   });
 }
 
@@ -312,6 +300,9 @@ export function resetUpload() {
   workflow.sessionId = null;
   workflow.document = null;
   workflow.analysisStatus = "idle";
+  workflow.analysisStage = "";
+  workflow.analysisError = "";
+  workflow.analysis = null;
   workflow.visibleSteps = [];
 }
 
@@ -411,16 +402,7 @@ export function buildExportPayload() {
   return {
     document: workflow.file?.name ?? null,
     generatedAt: new Date().toISOString(),
-    steps: workflow.visibleSteps.map((step) => ({
-      step: step.stepNo,
-      title: step.title,
-      recommendedAction: step.action,
-      requiredPackage: step.package,
-      inputVariable: step.inputVar,
-      outputVariable: step.outputVar,
-      confidence: step.confidence,
-      evidence: step.evidence,
-    })),
+    analysis: workflow.analysis,
   };
 }
 
