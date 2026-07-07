@@ -5,11 +5,13 @@ import AppHeader from "./components/AppHeader.vue";
 import UploadPanel from "./components/UploadPanel.vue";
 import AnalysisPanel from "./components/AnalysisPanel.vue";
 import ChatWidget from "./components/ChatWidget.vue";
+import ArchivePage from "./components/ArchivePage.vue";
 import LoginPage from "./components/LoginPage.vue";
 import SignupPage from "./components/SignupPage.vue";
 
 const showSignup = ref(false);
 const justRegisteredEmail = ref("");
+const activeMenu = ref("analysis");
 
 onMounted(() => {
   bootstrapAuth();
@@ -36,14 +38,18 @@ function handleLogout() {
   </template>
 
   <div v-else class="app-shell">
-    <AppHeader @logout="handleLogout" />
+    <AppHeader :active-menu="activeMenu" @navigate="activeMenu = $event" @logout="handleLogout" />
 
-    <main class="app-main" id="analysis">
+    <main v-if="activeMenu === 'analysis'" class="app-main" id="analysis">
       <div class="app-main__grid" :class="{ 'app-main__grid--docked': workflow.chatDocked }">
         <UploadPanel />
         <AnalysisPanel />
         <ChatWidget />
       </div>
+    </main>
+
+    <main v-else class="app-main app-main--archive">
+      <ArchivePage />
     </main>
   </div>
 </template>

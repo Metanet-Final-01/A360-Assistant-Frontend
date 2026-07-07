@@ -1,7 +1,11 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from "vue";
 
-const emit = defineEmits(["logout"]);
+const props = defineProps({
+  activeMenu: { type: String, default: "analysis" },
+});
+
+const emit = defineEmits(["logout", "navigate"]);
 
 const isMenuOpen = ref(false);
 const profileRef = ref(null);
@@ -36,8 +40,22 @@ onUnmounted(() => document.removeEventListener("click", handleClickOutside));
     </div>
 
     <nav class="app-header__nav" aria-label="주요 메뉴">
-      <a href="#analysis" class="app-header__nav-item app-header__nav-item--active">분석</a>
-      <!-- 추후 다른 메뉴 항목이 이곳에 추가될 예정 -->
+      <button
+        type="button"
+        class="app-header__nav-item"
+        :class="{ 'app-header__nav-item--active': props.activeMenu === 'analysis' }"
+        @click="emit('navigate', 'analysis')"
+      >
+        분석
+      </button>
+      <button
+        type="button"
+        class="app-header__nav-item"
+        :class="{ 'app-header__nav-item--active': props.activeMenu === 'archive' }"
+        @click="emit('navigate', 'archive')"
+      >
+        아카이브
+      </button>
     </nav>
 
     <div class="app-header__profile-wrap" ref="profileRef">
