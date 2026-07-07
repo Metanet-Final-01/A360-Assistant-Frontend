@@ -8,8 +8,30 @@ import { ApiError, getToken, setToken, clearToken } from "../api/http";
 // NOTE: 추천(FR-09~12)은 백엔드에 아직 엔드포인트가 없다 (API_명세.md 3번 항목 — SSE 예정).
 // 분석(FR-05, /api/sessions/{id}/analyze)·챗봇(/api/agent/chat/stream)·
 // 업로드/문서 상태·내용 조회(1-2~1-4)는 실제 백엔드와 연동되어 있다.
-// workflow.visibleSteps + reorder/update/deleteWorkflowStep은 추천 단계(액션·패키지·신뢰도)가
-// 나오면 채워질 흐름도 편집용 상태다 — 지금은 분석 결과(workflow.analysis)와 별개로 비어 있다.
+// workflow.visibleSteps(흐름도 편집 상태)는 recommend() 연동 전까지는 분석 결과(analysis.steps)를
+// 그대로 옮겨와 채운다 — 추천 전용 필드(신뢰도)는 아직 없어 null로 둔다.
+
+export function evidenceLabel(evidence) {
+  if (!evidence) return "";
+  const page = evidence.page != null ? `p.${evidence.page}` : "";
+  const snippet = evidence.snippet ? `«${evidence.snippet}»` : "";
+  return [page, snippet].filter(Boolean).join(" ");
+}
+
+function mapAnalysisStepsToFlowSteps(steps) {
+  return (steps ?? []).map((step) => ({
+    id: step.step_id,
+    stepNo: step.order,
+    title: step.name,
+    action: step.description ?? "",
+    package: step.systems?.length ? step.systems.join(", ") : "없음",
+    inputVar: step.inputs?.length ? step.inputs.join(", ") : "없음",
+    outputVar: step.outputs?.length ? step.outputs.join(", ") : "없음",
+    confidence: null,
+    branching: step.branching ?? "",
+    evidence: evidenceLabel(step.evidence),
+  }));
+}
 
 function nowTime() {
   return new Date().toLocaleTimeString("ko-KR", {
@@ -165,7 +187,8 @@ export const workflow = reactive({
   analysisError: "",
   analysis: null, // done.data 원본: { analysis_id, document_title, summary, steps, ambiguities }
 
-  // 추천 단계(액션/패키지/신뢰도) 전용 흐름도 편집 상태 — recommend() 연동 전까지는 항상 비어 있다
+  // 흐름도(FlowModal) 편집 상태 — 분석 완료 시 analysis.steps로부터 채워지며,
+  // 드래그 순서 변경·수정·삭제는 이 배열에서만 이뤄진다 (analysis 원본은 그대로 둠)
   visibleSteps: [],
 
   // 챗봇 상태
@@ -255,6 +278,7 @@ export async function startAnalysis() {
     onDone: (data) => {
       workflow.analysis = data;
       workflow.analysisStatus = "done";
+      workflow.visibleSteps = mapAnalysisStepsToFlowSteps(data.steps);
     },
     onError: (code, message) => {
       // 503 AGENT_UNAVAILABLE은 엔진 랜딩 전의 레거시 케이스라 방어적으로만 남겨둔다 — 재시도 안내로 충분
@@ -280,6 +304,25 @@ export function reorderWorkflowStep(fromIndex, toIndex) {
   }
   const [moved] = steps.splice(fromIndex, 1);
   steps.splice(toIndex, 0, moved);
+}
+
+export function addWorkflowStep() {
+  const steps = workflow.visibleSteps;
+  const nextStepNo = steps.length ? Math.max(...steps.map((s) => s.stepNo ?? 0)) + 1 : 1;
+  const step = {
+    id: makeId("step"),
+    stepNo: nextStepNo,
+    title: "",
+    action: "",
+    package: "없음",
+    inputVar: "없음",
+    outputVar: "없음",
+    confidence: null,
+    branching: "",
+    evidence: "",
+  };
+  steps.push(step);
+  return step;
 }
 
 export function updateWorkflowStep(id, patch) {
@@ -398,11 +441,21 @@ export async function sendArchiveChatMessage(sessionId, text) {
   });
 }
 
+// 흐름도에서 순서 변경·수정·삭제한 내용을 반영해 내보내도록 steps는 원본이 아니라
+// 편집 상태(workflow.visibleSteps)를 사용한다.
 export function buildExportPayload() {
   return {
     document: workflow.file?.name ?? null,
     generatedAt: new Date().toISOString(),
-    analysis: workflow.analysis,
+    analysis: workflow.analysis
+      ? {
+          analysis_id: workflow.analysis.analysis_id,
+          document_title: workflow.analysis.document_title,
+          summary: workflow.analysis.summary,
+          steps: workflow.visibleSteps,
+          ambiguities: workflow.analysis.ambiguities,
+        }
+      : null,
   };
 }
 
