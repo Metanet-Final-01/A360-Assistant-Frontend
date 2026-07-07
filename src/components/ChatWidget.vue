@@ -8,6 +8,7 @@ import {
   undockChat,
   sendChatMessage,
 } from "../store/workflow";
+import { formatMessage } from "../utils/chatFormat";
 
 const POPUP_WIDTH = 540;
 const POPUP_HEIGHT = 780;
@@ -126,12 +127,6 @@ async function handleSend() {
   await sendChatMessage(message);
 }
 
-const HTML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
-
-function formatMessage(text) {
-  const escaped = text.replace(/[&<>"']/g, (char) => HTML_ESCAPES[char]);
-  return escaped.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-}
 </script>
 
 <template>

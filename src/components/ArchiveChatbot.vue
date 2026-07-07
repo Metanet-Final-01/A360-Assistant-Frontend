@@ -7,6 +7,7 @@ import {
   deleteArchiveSession,
   sendArchiveChatMessage,
 } from "../store/workflow";
+import { formatMessage } from "../utils/chatFormat";
 
 const PAGE_SIZE = 8;
 
@@ -21,7 +22,9 @@ const messagesRef = ref(null);
 const filteredSessions = computed(() => {
   const q = searchQuery.value.trim();
   if (!q) return workflow.archiveSessions;
-  return workflow.archiveSessions.filter((session) => session.title.includes(q));
+  return workflow.archiveSessions.filter(
+    (session) => session.title.includes(q) || session.messages.some((message) => message.text.includes(q)),
+  );
 });
 
 const pageCount = computed(() => Math.max(1, Math.ceil(filteredSessions.value.length / PAGE_SIZE)));
@@ -121,12 +124,6 @@ async function handleSend() {
   await sendArchiveChatMessage(activeSession.value.id, message);
 }
 
-const HTML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
-
-function formatMessage(text) {
-  const escaped = text.replace(/[&<>"']/g, (char) => HTML_ESCAPES[char]);
-  return escaped.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-}
 </script>
 
 <template>
@@ -149,24 +146,33 @@ function formatMessage(text) {
           class="archive-chat__item"
           :class="{ 'archive-chat__item--active': session.id === workflow.activeArchiveSessionId }"
         >
-          <button type="button" class="archive-chat__item-main" @click="selectSession(session.id)">
+          <button
+            v-if="editingId !== session.id"
+            type="button"
+            class="archive-chat__item-main"
+            @click="selectSession(session.id)"
+          >
             <div class="archive-chat__item-top">
-              <input
-                v-if="editingId === session.id"
-                v-model="editingTitle"
-                type="text"
-                class="archive-chat__item-title-input"
-                autofocus
-                @click.stop
-                @keydown.enter="commitRename"
-                @keydown.esc="cancelRename"
-                @blur="commitRename"
-              />
-              <span v-else class="archive-chat__item-title">{{ session.title }}</span>
+              <span class="archive-chat__item-title">{{ session.title }}</span>
               <span class="archive-chat__item-date">{{ session.dateLabel }}</span>
             </div>
             <p class="archive-chat__item-preview">{{ previewOf(session) }}</p>
           </button>
+          <div v-else class="archive-chat__item-main">
+            <div class="archive-chat__item-top">
+              <input
+                v-model="editingTitle"
+                type="text"
+                class="archive-chat__item-title-input"
+                autofocus
+                @keydown.enter="commitRename"
+                @keydown.esc="cancelRename"
+                @blur="commitRename"
+              />
+              <span class="archive-chat__item-date">{{ session.dateLabel }}</span>
+            </div>
+            <p class="archive-chat__item-preview">{{ previewOf(session) }}</p>
+          </div>
 
           <div class="archive-chat__item-menu-wrap">
             <button
