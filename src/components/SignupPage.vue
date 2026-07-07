@@ -1,9 +1,10 @@
 <script setup>
 import { ref } from "vue";
-import { login } from "../store/workflow";
+import { registerWithPassword } from "../store/workflow";
+import { ApiError } from "../api/http";
 import AuthHeader from "./AuthHeader.vue";
 
-defineEmits(["login"]);
+const emit = defineEmits(["login"]);
 
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 
@@ -13,13 +14,14 @@ const confirmPassword = ref("");
 const showPassword = ref(false);
 const showConfirmPassword = ref(false);
 const signupError = ref("");
+const isSubmitting = ref(false);
 
 function toggleShow(field) {
   if (field === "password") showPassword.value = !showPassword.value;
   else showConfirmPassword.value = !showConfirmPassword.value;
 }
 
-function handleSubmit() {
+async function handleSubmit() {
   if (!email.value.trim() || !password.value.trim() || !confirmPassword.value.trim()) {
     signupError.value = "모든 항목을 입력해주세요.";
     return;
@@ -33,7 +35,17 @@ function handleSubmit() {
     return;
   }
   signupError.value = "";
-  login();
+  isSubmitting.value = true;
+  try {
+    const registeredEmail = email.value.trim();
+    await registerWithPassword(registeredEmail, password.value);
+    window.alert("회원가입이 완료되었습니다. 로그인해주세요.");
+    emit("login", registeredEmail);
+  } catch (err) {
+    signupError.value = err instanceof ApiError ? err.message : "회원가입 중 오류가 발생했습니다.";
+  } finally {
+    isSubmitting.value = false;
+  }
 }
 </script>
 
@@ -169,7 +181,9 @@ function handleSubmit() {
 
           <p v-if="signupError" class="upload-error">{{ signupError }}</p>
 
-          <button type="submit" class="btn btn--primary login-submit">회원가입</button>
+          <button type="submit" class="btn btn--primary login-submit" :disabled="isSubmitting">
+            {{ isSubmitting ? "가입 중…" : "회원가입" }}
+          </button>
         </form>
 
         <p class="login-divider__text login-signin-prompt">이미 계정이 있으신가요?</p>

@@ -111,13 +111,19 @@ function stopDrag() {
   isOverDockZone.value = false;
 }
 
+watch(
+  () => workflow.chatMessages.map((message) => message.text).join(""),
+  async () => {
+    await nextTick();
+    scrollToBottom();
+  },
+);
+
 async function handleSend() {
-  if (!draft.value.trim()) return;
-  sendChatMessage(draft.value);
+  const message = draft.value.trim();
+  if (!message) return;
   draft.value = "";
-  await nextTick();
-  scrollToBottom();
-  setTimeout(scrollToBottom, 700);
+  await sendChatMessage(message);
 }
 </script>
 
@@ -182,7 +188,12 @@ async function handleSend() {
           class="chat-message"
           :class="`chat-message--${message.role}`"
         >
-          <div class="chat-message__bubble">{{ message.text }}</div>
+          <div
+            class="chat-message__bubble"
+            :class="{ 'chat-message__bubble--pending': message.role === 'assistant' && !message.text }"
+          >
+            {{ message.role === "assistant" && !message.text ? "응답을 생성하는 중…" : message.text }}
+          </div>
           <span class="chat-message__time">{{ message.time }}</span>
         </div>
       </div>
@@ -196,7 +207,7 @@ async function handleSend() {
         />
         <button type="submit">전송</button>
       </form>
-      <p class="chat-popup__hint">분석 결과에 대한 질문을 입력하면 답변해드립니다.</p>
+      <p class="chat-popup__hint">A360 액션·패키지 사용법 등을 질문하면 답변해드립니다.</p>
     </div>
   </Teleport>
 </div>

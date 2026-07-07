@@ -1,26 +1,38 @@
 <script setup>
 import { ref } from "vue";
-import { login } from "../store/workflow";
+import { loginWithPassword } from "../store/workflow";
+import { ApiError } from "../api/http";
 import AuthHeader from "./AuthHeader.vue";
 
+const props = defineProps({
+  prefillEmail: { type: String, default: "" },
+});
 defineEmits(["signup"]);
 
-const email = ref("");
+const email = ref(props.prefillEmail);
 const password = ref("");
 const showPassword = ref(false);
 const loginError = ref("");
+const isSubmitting = ref(false);
 
 function togglePasswordVisibility() {
   showPassword.value = !showPassword.value;
 }
 
-function handleSubmit() {
+async function handleSubmit() {
   if (!email.value.trim() || !password.value.trim()) {
     loginError.value = "이메일과 비밀번호를 모두 입력해주세요.";
     return;
   }
   loginError.value = "";
-  login();
+  isSubmitting.value = true;
+  try {
+    await loginWithPassword(email.value.trim(), password.value);
+  } catch (err) {
+    loginError.value = err instanceof ApiError ? err.message : "로그인 중 오류가 발생했습니다.";
+  } finally {
+    isSubmitting.value = false;
+  }
 }
 </script>
 
@@ -110,7 +122,9 @@ function handleSubmit() {
 
           <p v-if="loginError" class="upload-error">{{ loginError }}</p>
 
-          <button type="submit" class="btn btn--primary login-submit">로그인</button>
+          <button type="submit" class="btn btn--primary login-submit" :disabled="isSubmitting">
+            {{ isSubmitting ? "로그인 중…" : "로그인" }}
+          </button>
         </form>
 
         <div class="login-divider">
