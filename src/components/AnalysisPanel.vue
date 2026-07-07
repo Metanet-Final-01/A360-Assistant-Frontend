@@ -7,16 +7,11 @@ const showFlowModal = ref(false);
 
 const emptyState = computed(() => workflow.analysisStatus === "idle");
 
-const steps = computed(() => workflow.analysis?.steps ?? []);
+// 흐름도(FlowModal)에서 순서 변경·수정·삭제한 내용이 이 패널에도 그대로 반영되도록
+// analysis.steps 원본이 아니라 편집 상태인 workflow.visibleSteps를 그대로 사용한다.
+const steps = computed(() => workflow.visibleSteps);
 const hasSteps = computed(() => steps.value.length > 0);
 const ambiguities = computed(() => workflow.analysis?.ambiguities ?? []);
-
-function evidenceLabel(evidence) {
-  if (!evidence) return "";
-  const page = evidence.page != null ? `p.${evidence.page}` : "";
-  const snippet = evidence.snippet ? `«${evidence.snippet}»` : "";
-  return [page, snippet].filter(Boolean).join(" ");
-}
 
 function downloadJson() {
   const payload = buildExportPayload();
@@ -72,25 +67,25 @@ function downloadJson() {
         </div>
 
         <div v-else class="rec-list">
-          <article v-for="step in steps" :key="step.step_id" class="rec-card">
+          <article v-for="step in steps" :key="step.id" class="rec-card">
             <header class="rec-card__header">
-              <h3>{{ step.order }}. {{ step.name }}</h3>
+              <h3>{{ step.stepNo }}. {{ step.title }}</h3>
             </header>
 
-            <p class="rec-card__description">{{ step.description }}</p>
+            <p class="rec-card__description">{{ step.action }}</p>
 
             <div class="rec-card__grid">
               <div class="rec-card__field">
                 <span class="rec-card__field-label">입력</span>
-                <span class="rec-card__field-value">{{ step.inputs?.join(", ") || "없음" }}</span>
+                <span class="rec-card__field-value">{{ step.inputVar }}</span>
               </div>
               <div class="rec-card__field">
                 <span class="rec-card__field-label">출력</span>
-                <span class="rec-card__field-value">{{ step.outputs?.join(", ") || "없음" }}</span>
+                <span class="rec-card__field-value">{{ step.outputVar }}</span>
               </div>
               <div class="rec-card__field">
                 <span class="rec-card__field-label">연계 시스템</span>
-                <span class="rec-card__field-value">{{ step.systems?.join(", ") || "없음" }}</span>
+                <span class="rec-card__field-value">{{ step.package }}</span>
               </div>
               <div class="rec-card__field" v-if="step.branching">
                 <span class="rec-card__field-label">분기</span>
@@ -98,7 +93,7 @@ function downloadJson() {
               </div>
             </div>
 
-            <footer v-if="step.evidence" class="rec-card__footer">근거: {{ evidenceLabel(step.evidence) }}</footer>
+            <footer v-if="step.evidence" class="rec-card__footer">근거: {{ step.evidence }}</footer>
           </article>
         </div>
 

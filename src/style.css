@@ -809,10 +809,34 @@ input {
   padding: 20px 24px 24px;
 }
 
+.flow-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
 .flow-hint {
-  margin: 0 0 16px;
+  margin: 0;
   color: var(--text-muted);
   font-size: 0.85rem;
+}
+
+.flow-add-btn {
+  flex-shrink: 0;
+  border: 1px solid var(--brand-teal-dark);
+  background: #ffffff;
+  color: var(--brand-teal-dark);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.flow-add-btn:hover {
+  background: var(--brand-teal-light);
 }
 
 .flow-diagram {
@@ -916,15 +940,6 @@ input {
   font-size: 0.8rem;
   font-weight: 700;
   color: var(--brand-teal-dark);
-}
-
-.flow-card__category-badge {
-  flex-shrink: 0;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 800;
-  white-space: nowrap;
 }
 
 .flow-card__meta {
@@ -1060,7 +1075,7 @@ input {
   position: relative;
   width: 2px;
   height: 14px;
-  margin: 0 0 0 28px;
+  margin: 0 auto;
   background: var(--brand-teal-dark);
 }
 
@@ -1073,30 +1088,6 @@ input {
   border-left: 4px solid transparent;
   border-right: 4px solid transparent;
   border-top: 6px solid var(--brand-teal-dark);
-}
-
-.flow-legend {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border);
-}
-
-.flow-legend__label {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  font-weight: 700;
-  margin-right: 2px;
-}
-
-.flow-legend__badge {
-  padding: 4px 12px;
-  border-radius: 999px;
-  font-size: 0.76rem;
-  font-weight: 800;
 }
 
 /* ---------- Chat widget ---------- */

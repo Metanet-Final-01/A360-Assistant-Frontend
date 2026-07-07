@@ -1,8 +1,13 @@
 <script setup>
-import { computed, reactive, ref } from "vue";
-import { reorderWorkflowStep, updateWorkflowStep, deleteWorkflowStep } from "../store/workflow";
+import { nextTick, reactive, ref } from "vue";
+import {
+  reorderWorkflowStep,
+  updateWorkflowStep,
+  deleteWorkflowStep,
+  addWorkflowStep,
+} from "../store/workflow";
 
-const props = defineProps({
+defineProps({
   steps: {
     type: Array,
     required: true,
@@ -13,6 +18,7 @@ defineEmits(["close"]);
 const dragIndex = ref(null);
 const openMenuId = ref(null);
 const editingId = ref(null);
+const pendingNewStepId = ref(null);
 const editForm = reactive({
   title: "",
   action: "",
@@ -26,48 +32,6 @@ function confidenceClass(confidence) {
   if (confidence >= 0.9) return "confidence-badge--high";
   if (confidence >= 0.8) return "confidence-badge--mid";
   return "confidence-badge--low";
-}
-
-// action 필드 앞부분("Browser : 요소 클릭" -> "Browser")을 패키지 범주 배지로 보여준다.
-const CATEGORY_LABELS = {
-  Browser: "브라우저",
-  Mouse: "마우스",
-  Keyboard: "키보드",
-  DataTable: "데이터테이블",
-  Excel: "엑셀",
-  Mail: "메일",
-  Email: "메일",
-};
-
-function actionCategory(action) {
-  if (!action) return "기타";
-  const prefix = action.split(":")[0].trim();
-  return CATEGORY_LABELS[prefix] || prefix || "기타";
-}
-
-const CATEGORY_PALETTE = [
-  { fg: "var(--mid)", bg: "var(--mid-bg)" },
-  { fg: "var(--brand-teal-dark)", bg: "var(--brand-teal-light)" },
-  { fg: "var(--success)", bg: "var(--success-bg)" },
-  { fg: "var(--warning)", bg: "var(--warning-bg)" },
-  { fg: "var(--brand-navy)", bg: "var(--bg)" },
-];
-
-const categoryColorMap = computed(() => {
-  const map = new Map();
-  props.steps.forEach((step) => {
-    const category = actionCategory(step.action);
-    if (!map.has(category)) {
-      map.set(category, CATEGORY_PALETTE[map.size % CATEGORY_PALETTE.length]);
-    }
-  });
-  return map;
-});
-
-function categoryStyle(action) {
-  const category = actionCategory(action);
-  const style = categoryColorMap.value.get(category) || CATEGORY_PALETTE[0];
-  return { color: style.fg, background: style.bg };
 }
 
 function onDragStart(index, event) {
@@ -108,18 +72,34 @@ function startEdit(step) {
 }
 
 function cancelEdit() {
+  // 새로 추가했다가 저장하지 않고 취소한 빈 단계는 목록에 남기지 않는다.
+  if (pendingNewStepId.value && pendingNewStepId.value === editingId.value) {
+    deleteWorkflowStep(editingId.value);
+    pendingNewStepId.value = null;
+  }
   editingId.value = null;
 }
 
 function saveEdit(id) {
   updateWorkflowStep(id, { ...editForm });
+  if (pendingNewStepId.value === id) pendingNewStepId.value = null;
   editingId.value = null;
 }
 
 function removeStep(id) {
   openMenuId.value = null;
   if (editingId.value === id) editingId.value = null;
+  if (pendingNewStepId.value === id) pendingNewStepId.value = null;
   deleteWorkflowStep(id);
+}
+
+async function addStep() {
+  openMenuId.value = null;
+  const step = addWorkflowStep();
+  pendingNewStepId.value = step.id;
+  startEdit(step);
+  await nextTick();
+  document.getElementById(`flow-card-${step.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 </script>
 
@@ -127,14 +107,17 @@ function removeStep(id) {
   <div class="modal-overlay" @click.self="$emit('close')">
     <div class="modal modal--flow" role="dialog" aria-modal="true" aria-labelledby="flow-modal-title">
       <header class="modal__header">
-        <h2 id="flow-modal-title">추천 작업 흐름도</h2>
+        <h2 id="flow-modal-title">업무 흐름도</h2>
         <button type="button" class="modal__close" aria-label="닫기" @click="$emit('close')">✕</button>
       </header>
 
       <div class="modal__body modal__body--flow" @click="closeMenuOnOutsideClick">
-        <template v-if="steps.length">
+        <div class="flow-toolbar">
           <p class="flow-hint">카드를 드래그해 순서를 바꾸고, 점 3개 메뉴에서 수정·삭제할 수 있습니다.</p>
+          <button type="button" class="flow-add-btn" @click="addStep">+ 흐름 추가</button>
+        </div>
 
+        <template v-if="steps.length">
           <div class="flow-diagram">
             <div class="flow-pill">시작</div>
             <div class="flow-arrow" aria-hidden="true"></div>
@@ -143,6 +126,7 @@ function removeStep(id) {
               <li
                 v-for="(step, idx) in steps"
                 :key="step.id"
+                :id="`flow-card-${step.id}`"
                 class="flow-card"
                 :class="{ 'flow-card--dragging': dragIndex === idx }"
                 draggable="true"
@@ -191,9 +175,6 @@ function removeStep(id) {
                     <template v-else>
                       <header class="flow-card__header">
                         <h3>{{ step.stepNo }}. {{ step.title }}</h3>
-                        <span class="flow-card__category-badge" :style="categoryStyle(step.action)">
-                          {{ actionCategory(step.action) }}
-                        </span>
                       </header>
                       <p class="flow-card__action">{{ step.action }}</p>
                       <dl class="flow-card__meta">
@@ -215,7 +196,11 @@ function removeStep(id) {
                   </div>
 
                   <div v-if="editingId !== step.id" class="flow-card__top-right">
-                    <span class="confidence-badge" :class="confidenceClass(step.confidence)">
+                    <span
+                      v-if="typeof step.confidence === 'number'"
+                      class="confidence-badge"
+                      :class="confidenceClass(step.confidence)"
+                    >
                       신뢰도 {{ step.confidence.toFixed(2) }}
                     </span>
                     <div class="flow-card__menu-wrap">
@@ -250,18 +235,6 @@ function removeStep(id) {
 
             <div class="flow-arrow" aria-hidden="true"></div>
             <div class="flow-pill">완료</div>
-          </div>
-
-          <div class="flow-legend">
-            <span class="flow-legend__label">패키지:</span>
-            <span
-              v-for="[category, style] in categoryColorMap"
-              :key="category"
-              class="flow-legend__badge"
-              :style="{ color: style.fg, background: style.bg }"
-            >
-              {{ category }}
-            </span>
           </div>
         </template>
 
