@@ -1,5 +1,5 @@
 import { reactive } from "vue";
-import { uploadDocument } from "../api/documents";
+import { uploadDocument, parseDocument } from "../api/documents";
 import { chatStream } from "../api/agent";
 import { analyzeSession } from "../api/analysis";
 import { register as apiRegister, login as apiLogin, getMe } from "../api/auth";
@@ -176,7 +176,7 @@ export const workflow = reactive({
 
   // 업로드 상태
   file: null, // { name, size, ext }
-  uploadStatus: "idle", // idle | uploading | uploaded | error
+  uploadStatus: "idle", // idle | uploading | parsing | uploaded | error
   uploadError: "",
   sessionId: null, // 이후 분석/추천/챗봇 API의 키
   document: null, // POST /api/documents 응답 원본 (id, status, page_count, warnings, error 등)
@@ -248,9 +248,28 @@ export async function selectFile(file) {
     if (document.status === "failed") {
       workflow.uploadStatus = "error";
       workflow.uploadError = document.error || "문서 파싱에 실패했습니다.";
-    } else {
-      workflow.uploadStatus = "uploaded";
+      return;
     }
+    if (document.status === "parsed") {
+      // 이미 파싱된 문서(예: 텍스트로 바로 생성된 경우) — 별도 파싱 호출 불필요.
+      workflow.uploadStatus = "uploaded";
+      return;
+    }
+
+    // 업로드는 검증·저장만 하고 즉시 반환한다(status="uploaded") — 파싱은 별도
+    // SSE 스트림(POST /documents/{id}/parse)으로 이어서 소비해야 status가
+    // "parsed"로 바뀐다. 이걸 안 하면 canStartAnalysis가 영원히 false로 남는다.
+    workflow.uploadStatus = "parsing";
+    await parseDocument(document.id, {
+      onDone: (data) => {
+        workflow.document = data;
+        workflow.uploadStatus = "uploaded";
+      },
+      onError: (_code, message) => {
+        workflow.uploadStatus = "error";
+        workflow.uploadError = message || "문서 파싱에 실패했습니다.";
+      },
+    });
   } catch (err) {
     workflow.uploadStatus = "error";
     workflow.uploadError =

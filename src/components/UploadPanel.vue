@@ -90,9 +90,9 @@ function onFileChange(event) {
             <span class="doc-card__size">{{ fileSizeLabel }}</span>
           </div>
           <span
-            v-if="workflow.uploadStatus === 'uploading'"
+            v-if="workflow.uploadStatus === 'uploading' || workflow.uploadStatus === 'parsing'"
             class="doc-card__status doc-card__status--loading"
-            aria-label="업로드 중"
+            :aria-label="workflow.uploadStatus === 'parsing' ? '파싱 중' : '업로드 중'"
           ></span>
           <svg
             v-else-if="workflow.uploadStatus === 'error'"
