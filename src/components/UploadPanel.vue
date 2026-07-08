@@ -1,9 +1,11 @@
 <script setup>
 import { computed, ref } from "vue";
-import { workflow, selectFile, startAnalysis, resetUpload, formatBytes } from "../store/workflow";
+import { workflow, selectFile, submitTextRequest, startAnalysis, resetUpload, formatBytes } from "../store/workflow";
 
 const isDragging = ref(false);
 const fileInputRef = ref(null);
+const inputMode = ref("file"); // file | text
+const textDraft = ref("");
 
 const fileSizeLabel = computed(() =>
   workflow.file ? formatBytes(workflow.file.size) : "",
@@ -33,6 +35,17 @@ function onFileChange(event) {
   handleFiles(event.target.files);
   event.target.value = "";
 }
+
+function handleTextSubmit() {
+  if (!textDraft.value.trim()) return;
+  submitTextRequest(textDraft.value);
+}
+
+function switchMode(mode) {
+  inputMode.value = mode;
+  resetUpload();
+  textDraft.value = "";
+}
 </script>
 
 <template>
@@ -42,7 +55,31 @@ function onFileChange(event) {
     </header>
 
     <div class="panel__body">
+      <div class="upload-mode-toggle" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="inputMode === 'file'"
+          class="upload-mode-toggle__btn"
+          :class="{ 'upload-mode-toggle__btn--active': inputMode === 'file' }"
+          @click="switchMode('file')"
+        >
+          파일 업로드
+        </button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="inputMode === 'text'"
+          class="upload-mode-toggle__btn"
+          :class="{ 'upload-mode-toggle__btn--active': inputMode === 'text' }"
+          @click="switchMode('text')"
+        >
+          텍스트로 입력
+        </button>
+      </div>
+
       <div
+        v-if="inputMode === 'file' && !workflow.file"
         class="dropzone"
         :class="{ 'dropzone--active': isDragging }"
         role="button"
@@ -63,17 +100,34 @@ function onFileChange(event) {
           />
         </svg>
         <p class="dropzone__text">
-          <strong>PDF · PPTX</strong> 파일을 여기에 드래그하거나<br />
+          <strong>PDF · PPT · PPTX · DOCX</strong> 파일을 여기에 드래그하거나<br />
           클릭하여 선택하세요
         </p>
         <span class="dropzone__button">파일 선택</span>
         <input
           ref="fileInputRef"
           type="file"
-          accept=".pdf,.pptx"
+          accept=".pdf,.ppt,.pptx,.docx"
           class="sr-only"
           @change="onFileChange"
         />
+      </div>
+
+      <div v-else-if="inputMode === 'text' && !workflow.file" class="text-input-area">
+        <textarea
+          v-model="textDraft"
+          class="text-input-area__field"
+          rows="6"
+          placeholder="처리하고 싶은 업무 내용을 자연어로 설명해주세요. 예: 매일 아침 네이버 금융에서 국내 금 시세를 조회해 엑셀로 정리하고 담당자에게 메일로 보낸다."
+        ></textarea>
+        <button
+          type="button"
+          class="btn btn--primary"
+          :disabled="!textDraft.trim()"
+          @click="handleTextSubmit"
+        >
+          분석 시작하기
+        </button>
       </div>
 
       <p v-if="workflow.uploadStatus === 'error'" class="upload-error">
@@ -81,7 +135,7 @@ function onFileChange(event) {
       </p>
 
       <div class="uploaded-doc" v-if="workflow.file">
-        <h3 class="uploaded-doc__label">업로드된 문서</h3>
+        <h3 class="uploaded-doc__label">{{ inputMode === "text" ? "입력된 요청" : "업로드된 문서" }}</h3>
 
         <div class="doc-card">
           <span class="doc-card__icon">{{ workflow.file.ext.toUpperCase() }}</span>
@@ -130,7 +184,10 @@ function onFileChange(event) {
 
         <Transition name="fade-up">
           <ul class="extraction-meta" v-if="workflow.document?.status === 'parsed'">
-            <li>· 파싱 완료 · 페이지 {{ workflow.document.page_count }}</li>
+            <li v-if="workflow.document.page_count != null">
+              · 파싱 완료 · 페이지 {{ workflow.document.page_count }}
+            </li>
+            <li v-else>· 처리 완료</li>
             <li v-for="(warning, idx) in workflow.document.warnings" :key="idx" class="extraction-meta__warning">
               ⚠ {{ warning }}
             </li>
@@ -149,7 +206,7 @@ function onFileChange(event) {
             <span v-else>분석 시작</span>
           </button>
           <button type="button" class="btn btn--text" @click="resetUpload">
-            새 문서 업로드
+            {{ inputMode === "text" ? "새 요청 입력" : "새 문서 업로드" }}
           </button>
         </div>
       </div>

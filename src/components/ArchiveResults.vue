@@ -1,25 +1,23 @@
 <script setup>
 import { computed, ref } from "vue";
-import { workflow, selectArchiveResult, deleteArchiveResult } from "../store/workflow";
+import { workflow, selectArchiveResult, renameArchiveResult, deleteArchiveResult } from "../store/workflow";
 import FlowModal from "./FlowModal.vue";
 
 const PAGE_SIZE = 6;
 
 const searchQuery = ref("");
-const typeFilter = ref("전체");
 const currentPage = ref(1);
 const openMenuId = ref(null);
+const editingId = ref(null);
+const editingTitle = ref("");
 const showFlowModal = ref(false);
-
-const TYPE_OPTIONS = ["전체", "PDF", "XLSX", "DOCX"];
 
 const filteredResults = computed(() => {
   const q = searchQuery.value.trim();
-  return workflow.archiveResults.filter((result) => {
-    const matchesType = typeFilter.value === "전체" || result.fileExt.toUpperCase() === typeFilter.value;
-    const matchesQuery = !q || result.title.includes(q) || result.fileName.includes(q);
-    return matchesType && matchesQuery;
-  });
+  if (!q) return workflow.archiveResults;
+  return workflow.archiveResults.filter(
+    (result) => result.title.includes(q) || result.fileName.includes(q),
+  );
 });
 
 const pageCount = computed(() => Math.max(1, Math.ceil(filteredResults.value.length / PAGE_SIZE)));
@@ -55,6 +53,24 @@ function handleDocumentClick(event) {
   }
 }
 
+function startRename(result, event) {
+  event.stopPropagation();
+  editingId.value = result.id;
+  editingTitle.value = result.title;
+  openMenuId.value = null;
+}
+
+function commitRename() {
+  if (editingId.value) {
+    renameArchiveResult(editingId.value, editingTitle.value);
+  }
+  editingId.value = null;
+}
+
+function cancelRename() {
+  editingId.value = null;
+}
+
 function removeResult(id, event) {
   event.stopPropagation();
   deleteArchiveResult(id);
@@ -83,17 +99,12 @@ function downloadResultJson() {
     <aside class="archive-chat__sidebar">
       <header class="archive-chat__sidebar-header">분석 결과 목록</header>
 
-      <div class="archive-results__filter-row">
-        <div class="archive-chat__search">
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.6" />
-            <path d="M20 20l-3.8-3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-          </svg>
-          <input v-model="searchQuery" type="text" placeholder="제목 또는 파일명 검색" aria-label="제목 또는 파일명 검색" />
-        </div>
-        <select v-model="typeFilter" class="archive-results__type-select" aria-label="파일 형식 필터">
-          <option v-for="option in TYPE_OPTIONS" :key="option" :value="option">{{ option }}</option>
-        </select>
+      <div class="archive-chat__search">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.6" />
+          <path d="M20 20l-3.8-3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+        </svg>
+        <input v-model="searchQuery" type="text" placeholder="제목 또는 파일명 검색" aria-label="제목 또는 파일명 검색" />
       </div>
 
       <ul class="archive-chat__list">
@@ -103,19 +114,39 @@ function downloadResultJson() {
           class="archive-chat__item"
           :class="{ 'archive-chat__item--active': result.id === workflow.activeArchiveResultId }"
         >
-          <button type="button" class="archive-results__item-main" @click="selectResult(result.id)">
+          <button
+            v-if="editingId !== result.id"
+            type="button"
+            class="archive-results__item-main"
+            @click="selectResult(result.id)"
+          >
             <span class="archive-results__item-icon" :class="`archive-results__item-icon--${result.fileExt}`">
               {{ result.fileExt.toUpperCase() }}
             </span>
             <div class="archive-results__item-body">
               <span class="archive-results__item-title">{{ result.title }}</span>
               <span class="archive-results__item-filename">{{ result.fileName }}</span>
-              <div class="archive-results__item-meta">
-                <span class="archive-results__item-date">{{ result.dateLabel }}</span>
-                <span class="confidence-badge confidence-badge--high">{{ result.status }}</span>
-              </div>
+              <span class="archive-results__item-date">{{ result.dateLabel }}</span>
             </div>
           </button>
+          <div v-else class="archive-results__item-main">
+            <span class="archive-results__item-icon" :class="`archive-results__item-icon--${result.fileExt}`">
+              {{ result.fileExt.toUpperCase() }}
+            </span>
+            <div class="archive-results__item-body">
+              <input
+                v-model="editingTitle"
+                type="text"
+                class="archive-chat__item-title-input"
+                autofocus
+                @keydown.enter="commitRename"
+                @keydown.esc="cancelRename"
+                @blur="commitRename"
+              />
+              <span class="archive-results__item-filename">{{ result.fileName }}</span>
+              <span class="archive-results__item-date">{{ result.dateLabel }}</span>
+            </div>
+          </div>
 
           <div class="archive-chat__item-menu-wrap">
             <button
@@ -128,6 +159,7 @@ function downloadResultJson() {
             </button>
             <Transition name="fade-up">
               <div v-if="openMenuId === result.id" class="archive-chat__item-menu" role="menu">
+                <button type="button" role="menuitem" @click="startRename(result, $event)">제목 수정</button>
                 <button
                   type="button"
                   role="menuitem"
@@ -211,5 +243,5 @@ function downloadResultJson() {
     </section>
   </div>
 
-  <FlowModal v-if="showFlowModal" :steps="steps" readonly @close="showFlowModal = false" />
+  <FlowModal v-if="showFlowModal" :steps="steps" @close="showFlowModal = false" />
 </template>
