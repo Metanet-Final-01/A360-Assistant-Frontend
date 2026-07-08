@@ -12,6 +12,10 @@ defineProps({
     type: Array,
     required: true,
   },
+  readonly: {
+    type: Boolean,
+    default: false,
+  },
 });
 defineEmits(["close"]);
 
@@ -113,8 +117,14 @@ async function addStep() {
 
       <div class="modal__body modal__body--flow" @click="closeMenuOnOutsideClick">
         <div class="flow-toolbar">
-          <p class="flow-hint">카드를 드래그해 순서를 바꾸고, 점 3개 메뉴에서 수정·삭제할 수 있습니다.</p>
-          <button type="button" class="flow-add-btn" @click="addStep">+ 흐름 추가</button>
+          <p class="flow-hint">
+            {{
+              readonly
+                ? "저장된 분석 결과의 업무 흐름입니다."
+                : "카드를 드래그해 순서를 바꾸고, 점 3개 메뉴에서 수정·삭제할 수 있습니다."
+            }}
+          </p>
+          <button v-if="!readonly" type="button" class="flow-add-btn" @click="addStep">+ 흐름 추가</button>
         </div>
 
         <template v-if="steps.length">
@@ -129,14 +139,14 @@ async function addStep() {
                 :id="`flow-card-${step.id}`"
                 class="flow-card"
                 :class="{ 'flow-card--dragging': dragIndex === idx }"
-                draggable="true"
-                @dragstart="onDragStart(idx, $event)"
+                :draggable="!readonly"
+                @dragstart="!readonly && onDragStart(idx, $event)"
                 @dragover.prevent
-                @drop="onDrop(idx)"
+                @drop="!readonly && onDrop(idx)"
                 @dragend="onDragEnd"
               >
                 <div class="flow-card__row">
-                  <div class="flow-card__handle" aria-hidden="true" title="드래그해서 순서 변경">⠿</div>
+                  <div v-if="!readonly" class="flow-card__handle" aria-hidden="true" title="드래그해서 순서 변경">⠿</div>
 
                   <div class="flow-card__content">
                     <template v-if="editingId === step.id">
@@ -203,7 +213,7 @@ async function addStep() {
                     >
                       신뢰도 {{ step.confidence.toFixed(2) }}
                     </span>
-                    <div class="flow-card__menu-wrap">
+                    <div v-if="!readonly" class="flow-card__menu-wrap">
                       <button
                         type="button"
                         class="flow-card__menu-btn"

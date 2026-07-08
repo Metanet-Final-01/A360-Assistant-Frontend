@@ -13,8 +13,9 @@
   },
   "dependencies": {
     "@vitejs/plugin-vue": "latest",
+    "dompurify": "^3.4.11",
+    "markdown-it": "^14.3.0",
     "vite": "latest",
     "vue": "latest"
-  },
-  "devDependencies": {}
+  }
 }

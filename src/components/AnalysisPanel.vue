@@ -104,17 +104,17 @@ function downloadJson() {
           </ul>
         </div>
       </template>
+    </div>
 
-      <div class="export-section" v-if="workflow.analysisStatus === 'done' && hasSteps">
-        <h3 class="export-section__title">내보내기</h3>
-        <div class="export-section__actions">
-          <button type="button" class="btn btn--outline" @click="downloadJson">
-            JSON 다운로드
-          </button>
-          <button type="button" class="btn btn--outline" @click="showFlowModal = true">
-            흐름도 보기
-          </button>
-        </div>
+    <div class="export-section" v-if="workflow.analysisStatus === 'done' && hasSteps">
+      <h3 class="export-section__title">내보내기</h3>
+      <div class="export-section__actions">
+        <button type="button" class="btn btn--outline" @click="downloadJson">
+          JSON 다운로드
+        </button>
+        <button type="button" class="btn btn--outline" @click="showFlowModal = true">
+          흐름도 보기
+        </button>
       </div>
     </div>
   </section>
