@@ -1,5 +1,5 @@
 import { reactive } from "vue";
-import { uploadDocument } from "../api/documents";
+import { uploadDocument, parseDocument } from "../api/documents";
 import { chatStream } from "../api/agent";
 import { analyzeSession } from "../api/analysis";
 import { register as apiRegister, login as apiLogin, getMe } from "../api/auth";
@@ -156,6 +156,19 @@ const ARCHIVE_SEED_SESSIONS = [
   },
 ];
 
+function createInitialChatMessages() {
+  return [{ role: "assistant", text: GREETING, time: nowTime() }];
+}
+
+function createArchiveSessions() {
+  return ARCHIVE_SEED_SESSIONS.map((seed) => ({
+    id: makeId("chat"),
+    title: seed.title,
+    dateLabel: seed.dateLabel,
+    messages: seed.messages.map((message) => ({ ...message })),
+  }));
+}
+
 export function formatBytes(bytes) {
   if (!bytes && bytes !== 0) return "";
   if (bytes < 1024) return `${bytes}B`;
@@ -194,21 +207,10 @@ export const workflow = reactive({
   // 챗봇 상태
   chatOpen: false,
   chatDocked: true,
-  chatMessages: [
-    {
-      role: "assistant",
-      text: GREETING,
-      time: nowTime(),
-    },
-  ],
+  chatMessages: createInitialChatMessages(),
 
   // 아카이브 > 챗봇 상태 (대화 기록 목록 + 상세 대화)
-  archiveSessions: ARCHIVE_SEED_SESSIONS.map((seed) => ({
-    id: makeId("chat"),
-    title: seed.title,
-    dateLabel: seed.dateLabel,
-    messages: seed.messages.map((message) => ({ ...message })),
-  })),
+  archiveSessions: createArchiveSessions(),
   activeArchiveSessionId: null,
 });
 workflow.activeArchiveSessionId = workflow.archiveSessions[0]?.id ?? null;
@@ -248,9 +250,26 @@ export async function selectFile(file) {
     if (document.status === "failed") {
       workflow.uploadStatus = "error";
       workflow.uploadError = document.error || "문서 파싱에 실패했습니다.";
-    } else {
-      workflow.uploadStatus = "uploaded";
+      return;
     }
+
+    if (document.status === "parsed") {
+      workflow.uploadStatus = "uploaded";
+      return;
+    }
+
+    // status === "uploaded" — 업로드와 파싱이 분리되어 있어 이어서 SSE로 파싱을 진행해야
+    // document.status가 "parsed"가 되고 분석 시작 버튼이 활성화된다.
+    await parseDocument(document.id, {
+      onDone: (data) => {
+        workflow.document = data;
+        workflow.uploadStatus = "uploaded";
+      },
+      onError: (message) => {
+        workflow.uploadStatus = "error";
+        workflow.uploadError = message;
+      },
+    });
   } catch (err) {
     workflow.uploadStatus = "error";
     workflow.uploadError =
@@ -493,9 +512,12 @@ export async function registerWithPassword(email, password) {
 }
 
 export function logout() {
-  clearTimers();
+  resetUpload();
   clearToken();
   workflow.isLoggedIn = false;
   workflow.userEmail = null;
   workflow.chatOpen = false;
+  workflow.chatMessages = createInitialChatMessages();
+  workflow.archiveSessions = createArchiveSessions();
+  workflow.activeArchiveSessionId = workflow.archiveSessions[0]?.id ?? null;
 }
