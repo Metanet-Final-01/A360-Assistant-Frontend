@@ -1,36 +1,24 @@
 import { reactive } from "vue";
-import { uploadDocument, parseDocument } from "../api/documents";
+import { uploadDocument, parseDocument, createDocumentFromText } from "../api/documents";
 import { chatStream } from "../api/agent";
 import { analyzeSession } from "../api/analysis";
+import { recommendSession, listRecommendations, saveRecommendation } from "../api/recommend";
+import { createSession } from "../api/sessions";
 import { register as apiRegister, login as apiLogin, getMe } from "../api/auth";
 import { ApiError, getToken, setToken, clearToken } from "../api/http";
 
-// NOTE: 추천(FR-09~12)은 백엔드에 아직 엔드포인트가 없다 (API_명세.md 3번 항목 — SSE 예정).
-// 분석(FR-05, /api/sessions/{id}/analyze)·챗봇(/api/agent/chat/stream)·
-// 업로드/문서 상태·내용 조회(1-2~1-4)는 실제 백엔드와 연동되어 있다.
-// workflow.visibleSteps(흐름도 편집 상태)는 recommend() 연동 전까지는 분석 결과(analysis.steps)를
-// 그대로 옮겨와 채운다 — 추천 전용 필드(신뢰도)는 아직 없어 null로 둔다.
+// NOTE: 분석(/api/sessions/{id}/analyze)·추천/흐름도(/api/sessions/{id}/recommend 등, RPA-61)·
+// 멀티턴 챗(/api/agent/chat[/stream], session_id)·업로드/파싱/텍스트 입력(RPA-42/43/44)은
+// 전부 실제 백엔드와 연동되어 있다. workflow.recommendation.recommendation이 흐름도
+// 트리(steps→actions→children) 원본이고, FlowModal이 이를 렌더·편집한다 — 수정은 항상
+// 새 버전 저장(POST .../recommendations)이라 실행취소는 프론트가 들고 있는 이전 트리를
+// 다시 저장하는 것으로 구현한다(workflow.recommendUndoStack).
 
 export function evidenceLabel(evidence) {
   if (!evidence) return "";
   const page = evidence.page != null ? `p.${evidence.page}` : "";
   const snippet = evidence.snippet ? `«${evidence.snippet}»` : "";
   return [page, snippet].filter(Boolean).join(" ");
-}
-
-function mapAnalysisStepsToFlowSteps(steps) {
-  return (steps ?? []).map((step) => ({
-    id: step.step_id,
-    stepNo: step.order,
-    title: step.name,
-    action: step.description ?? "",
-    package: step.systems?.length ? step.systems.join(", ") : "없음",
-    inputVar: step.inputs?.length ? step.inputs.join(", ") : "없음",
-    outputVar: step.outputs?.length ? step.outputs.join(", ") : "없음",
-    confidence: null,
-    branching: step.branching ?? "",
-    evidence: evidenceLabel(step.evidence),
-  }));
 }
 
 function nowTime() {
@@ -569,7 +557,6 @@ function createArchiveResults() {
     fileName: seed.fileName,
     fileExt: seed.fileExt,
     dateLabel: seed.dateLabel,
-    status: "완료",
     analysis: {
       document_title: seed.documentTitle,
       summary: seed.summary,
@@ -610,9 +597,13 @@ export const workflow = reactive({
   analysisError: "",
   analysis: null, // done.data 원본: { analysis_id, document_title, summary, steps, ambiguities }
 
-  // 흐름도(FlowModal) 편집 상태 — 분석 완료 시 analysis.steps로부터 채워지며,
-  // 드래그 순서 변경·수정·삭제는 이 배열에서만 이뤄진다 (analysis 원본은 그대로 둠)
-  visibleSteps: [],
+  // 흐름도(추천안) 상태 (POST /api/sessions/{id}/recommend 등, RPA-61)
+  recommendStatus: "idle", // idle | generating | done | error
+  recommendStage: "",
+  recommendError: "",
+  recommendation: null, // { id, version, parent_version, source, change_summary, created_at, recommendation: {schema_version, steps, variables, notes} }
+  recommendVersions: [], // GET .../recommendations 메타 목록 (최신 순, 트리 내용은 없음)
+  recommendUndoStack: [], // 편집 직전 트리 스냅샷들 — 실행취소 시 pop해서 다시 저장
 
   // 챗봇 상태
   chatOpen: false,
@@ -636,13 +627,28 @@ function clearTimers() {
   timers = [];
 }
 
-const ALLOWED_EXT = ["pdf", "pptx"];
+const ALLOWED_EXT = ["pdf", "pptx", "ppt", "docx"];
+
+// 새 문서/텍스트 요청을 시작할 때 이전 분석·추천 결과를 전부 지운다 (새 세션 기준으로 다시 쌓임)
+function resetPipelineState() {
+  workflow.document = null;
+  workflow.analysisStatus = "idle";
+  workflow.analysisStage = "";
+  workflow.analysisError = "";
+  workflow.analysis = null;
+  workflow.recommendStatus = "idle";
+  workflow.recommendStage = "";
+  workflow.recommendError = "";
+  workflow.recommendation = null;
+  workflow.recommendVersions = [];
+  workflow.recommendUndoStack = [];
+}
 
 export async function selectFile(file) {
   const ext = file.name.split(".").pop().toLowerCase();
   if (!ALLOWED_EXT.includes(ext)) {
     workflow.uploadStatus = "error";
-    workflow.uploadError = "PDF 또는 PPTX 파일만 업로드할 수 있습니다.";
+    workflow.uploadError = "PDF · PPT · PPTX · DOCX 파일만\n업로드할 수 있습니다.";
     return;
   }
 
@@ -650,12 +656,7 @@ export async function selectFile(file) {
   workflow.uploadError = "";
   workflow.file = { name: file.name, size: file.size, ext };
   workflow.uploadStatus = "uploading";
-  workflow.document = null;
-  workflow.analysisStatus = "idle";
-  workflow.analysisStage = "";
-  workflow.analysisError = "";
-  workflow.analysis = null;
-  workflow.visibleSteps = [];
+  resetPipelineState();
 
   try {
     const document = await uploadDocument(file, workflow.sessionId);
@@ -692,6 +693,33 @@ export async function selectFile(file) {
   }
 }
 
+// 파일 없이 자연어로 업무를 설명해 곧장 분석 단계로 들어간다 (RPA-43). 파싱이 필요 없어
+// 응답이 바로 status="parsed"로 온다 — parseDocument() 호출이 필요 없다.
+export async function submitTextRequest(text) {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+
+  clearTimers();
+  workflow.uploadError = "";
+  workflow.file = { name: "텍스트 입력", size: trimmed.length, ext: "txt" };
+  workflow.uploadStatus = "uploading";
+  resetPipelineState();
+
+  try {
+    const document = await createDocumentFromText(trimmed, workflow.sessionId);
+    workflow.sessionId = document.session_id;
+    workflow.document = document;
+    workflow.uploadStatus = document.status === "failed" ? "error" : "uploaded";
+    if (document.status === "failed") {
+      workflow.uploadError = document.error || "요청을 처리하지 못했습니다.";
+    }
+  } catch (err) {
+    workflow.uploadStatus = "error";
+    workflow.uploadError =
+      err instanceof ApiError ? err.message : "요청 처리 중 알 수 없는 오류가 발생했습니다.";
+  }
+}
+
 export async function startAnalysis() {
   if (
     workflow.document?.status !== "parsed" ||
@@ -704,6 +732,13 @@ export async function startAnalysis() {
   workflow.analysisStage = "";
   workflow.analysisError = "";
   workflow.analysis = null;
+  // 새 분석은 이전 추천안(흐름도)을 무효화한다 — 다른 분석 결과에 종속된 트리라 이어 쓸 수 없다
+  workflow.recommendStatus = "idle";
+  workflow.recommendStage = "";
+  workflow.recommendError = "";
+  workflow.recommendation = null;
+  workflow.recommendVersions = [];
+  workflow.recommendUndoStack = [];
 
   await analyzeSession(workflow.sessionId, {
     onStage: (message) => {
@@ -712,7 +747,6 @@ export async function startAnalysis() {
     onDone: (data) => {
       workflow.analysis = data;
       workflow.analysisStatus = "done";
-      workflow.visibleSteps = mapAnalysisStepsToFlowSteps(data.steps);
     },
     onError: (code, message) => {
       // 503 AGENT_UNAVAILABLE은 엔진 랜딩 전의 레거시 케이스라 방어적으로만 남겨둔다 — 재시도 안내로 충분
@@ -725,48 +759,77 @@ export async function startAnalysis() {
   });
 }
 
-export function reorderWorkflowStep(fromIndex, toIndex) {
-  const steps = workflow.visibleSteps;
+// 흐름도(추천안) 생성 — 최신 분석 결과 기준으로 A360 액션 트리를 만들어 v1로 저장한다 (RPA-61)
+export async function startRecommend() {
   if (
-    fromIndex === toIndex ||
-    fromIndex < 0 ||
-    toIndex < 0 ||
-    fromIndex >= steps.length ||
-    toIndex >= steps.length
+    workflow.analysisStatus !== "done" ||
+    !workflow.sessionId ||
+    workflow.recommendStatus === "generating"
   ) {
     return;
   }
-  const [moved] = steps.splice(fromIndex, 1);
-  steps.splice(toIndex, 0, moved);
+  workflow.recommendStatus = "generating";
+  workflow.recommendStage = "";
+  workflow.recommendError = "";
+
+  await recommendSession(workflow.sessionId, {
+    onStage: (message) => {
+      workflow.recommendStage = message;
+    },
+    onDone: (data) => {
+      workflow.recommendation = data;
+      workflow.recommendStatus = "done";
+      workflow.recommendUndoStack = [];
+      loadRecommendationHistory();
+    },
+    onError: (code, message) => {
+      workflow.recommendStatus = "error";
+      workflow.recommendError =
+        code === "AGENT_UNAVAILABLE"
+          ? "추천 엔진이 일시적으로 사용 불가능합니다. 잠시 후 다시 시도해주세요."
+          : message || "추천안 생성 중 오류가 발생했습니다.";
+    },
+  });
 }
 
-export function addWorkflowStep() {
-  const steps = workflow.visibleSteps;
-  const nextStepNo = steps.length ? Math.max(...steps.map((s) => s.stepNo ?? 0)) + 1 : 1;
-  const step = {
-    id: makeId("step"),
-    stepNo: nextStepNo,
-    title: "",
-    action: "",
-    package: "없음",
-    inputVar: "없음",
-    outputVar: "없음",
-    confidence: null,
-    branching: "",
-    evidence: "",
-  };
-  steps.push(step);
-  return step;
+export async function loadRecommendationHistory() {
+  if (!workflow.sessionId) return;
+  try {
+    const { versions } = await listRecommendations(workflow.sessionId);
+    workflow.recommendVersions = versions;
+  } catch {
+    // 버전 이력 조회 실패는 핵심 기능이 아니므로 조용히 무시
+  }
 }
 
-export function updateWorkflowStep(id, patch) {
-  const step = workflow.visibleSteps.find((s) => s.id === id);
-  if (step) Object.assign(step, patch);
+async function persistRecommendationTree(tree, changeSummary, source) {
+  try {
+    const saved = await saveRecommendation(workflow.sessionId, {
+      recommendation: tree,
+      parentVersion: workflow.recommendation?.version,
+      source,
+      changeSummary,
+    });
+    workflow.recommendation = { ...saved, recommendation: tree };
+    loadRecommendationHistory();
+  } catch (err) {
+    workflow.recommendError =
+      err instanceof ApiError ? err.message : "추천안 저장 중 오류가 발생했습니다.";
+  }
 }
 
-export function deleteWorkflowStep(id) {
-  const idx = workflow.visibleSteps.findIndex((s) => s.id === id);
-  if (idx !== -1) workflow.visibleSteps.splice(idx, 1);
+// FlowModal에서 드래그/수정/삭제로 트리를 바꾼 뒤 호출 — 항상 새 버전으로 저장한다(수정=UPDATE 아님).
+export async function saveRecommendationEdit(newTree, changeSummary) {
+  if (!workflow.sessionId || !workflow.recommendation) return;
+  workflow.recommendUndoStack.push(JSON.parse(JSON.stringify(workflow.recommendation.recommendation)));
+  await persistRecommendationTree(newTree, changeSummary ?? null, "drag");
+}
+
+// 직전 트리 스냅샷을 다시 저장해서 "취소"한다 — 백엔드엔 삭제가 없고 항상 새 버전만 쌓인다.
+export async function undoRecommendationEdit() {
+  if (!workflow.sessionId || workflow.recommendUndoStack.length === 0) return;
+  const previous = workflow.recommendUndoStack.pop();
+  await persistRecommendationTree(previous, "실행 취소", "drag");
 }
 
 export function resetUpload() {
@@ -775,12 +838,7 @@ export function resetUpload() {
   workflow.uploadStatus = "idle";
   workflow.uploadError = "";
   workflow.sessionId = null;
-  workflow.document = null;
-  workflow.analysisStatus = "idle";
-  workflow.analysisStage = "";
-  workflow.analysisError = "";
-  workflow.analysis = null;
-  workflow.visibleSteps = [];
+  resetPipelineState();
 }
 
 export function toggleChat() {
@@ -802,6 +860,19 @@ export function undockChat() {
 }
 
 // 챗봇은 무상태(FR-13, 멀티턴 기억 없음) — 매 질문을 /api/agent/chat/stream에 단발로 보낸다.
+// 문서 업로드로 이미 세션이 있으면 그 세션에, 없으면 챗 전용 빈 세션을 만들어 이어서 쓴다.
+// 이렇게 하면 이 위젯의 대화가 항상 같은 session_id로 유지되어 백엔드가 멀티턴 이력을 쌓는다.
+async function ensureChatSessionId() {
+  if (workflow.sessionId) return workflow.sessionId;
+  try {
+    const { session_id } = await createSession();
+    workflow.sessionId = session_id;
+  } catch {
+    // 세션 생성 실패 시 무상태로 폴백 — session_id 없이 보내면 백엔드가 그냥 단발로 처리한다
+  }
+  return workflow.sessionId;
+}
+
 export async function sendChatMessage(text) {
   const trimmed = text.trim();
   if (!trimmed) return;
@@ -810,18 +881,24 @@ export async function sendChatMessage(text) {
   const assistantMessage = reactive({ role: "assistant", text: "", time: nowTime() });
   workflow.chatMessages.push(assistantMessage);
 
-  await chatStream(trimmed, {
-    onToken: (token) => {
-      assistantMessage.text += token;
+  const sessionId = await ensureChatSessionId();
+
+  await chatStream(
+    trimmed,
+    {
+      onToken: (token) => {
+        assistantMessage.text += token;
+      },
+      onDone: () => {
+        if (!assistantMessage.text) assistantMessage.text = "답변을 생성하지 못했습니다.";
+      },
+      onError: (message) => {
+        // 이미 받은 토큰이 있으면 지우지 않고 에러 문구만 이어붙인다
+        assistantMessage.text = assistantMessage.text ? `${assistantMessage.text}\n\n⚠ ${message}` : message;
+      },
     },
-    onDone: () => {
-      if (!assistantMessage.text) assistantMessage.text = "답변을 생성하지 못했습니다.";
-    },
-    onError: (message) => {
-      // 이미 받은 토큰이 있으면 지우지 않고 에러 문구만 이어붙인다
-      assistantMessage.text = assistantMessage.text ? `${assistantMessage.text}\n\n⚠ ${message}` : message;
-    },
-  });
+    sessionId,
+  );
 }
 
 export function selectArchiveSession(id) {
@@ -846,6 +923,13 @@ export function deleteArchiveSession(id) {
 
 export function selectArchiveResult(id) {
   workflow.activeArchiveResultId = id;
+}
+
+export function renameArchiveResult(id, title) {
+  const trimmed = title.trim();
+  if (!trimmed) return;
+  const result = workflow.archiveResults.find((r) => r.id === id);
+  if (result) result.title = trimmed;
 }
 
 export function deleteArchiveResult(id) {
@@ -888,21 +972,12 @@ export async function sendArchiveChatMessage(sessionId, text) {
   });
 }
 
-// 흐름도에서 순서 변경·수정·삭제한 내용을 반영해 내보내도록 steps는 원본이 아니라
-// 편집 상태(workflow.visibleSteps)를 사용한다.
 export function buildExportPayload() {
   return {
     document: workflow.file?.name ?? null,
     generatedAt: new Date().toISOString(),
-    analysis: workflow.analysis
-      ? {
-          analysis_id: workflow.analysis.analysis_id,
-          document_title: workflow.analysis.document_title,
-          summary: workflow.analysis.summary,
-          steps: workflow.visibleSteps,
-          ambiguities: workflow.analysis.ambiguities,
-        }
-      : null,
+    analysis: workflow.analysis,
+    recommendation: workflow.recommendation?.recommendation ?? null,
   };
 }
 

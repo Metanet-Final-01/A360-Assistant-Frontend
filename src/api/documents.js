@@ -66,6 +66,16 @@ export async function parseDocument(documentId, { onStage, onDone, onError }) {
   }
 }
 
+// POST /api/documents/text — 파일 없이 자연어 업무 요청으로 문서를 등록한다.
+// 파싱이 필요 없어 status="parsed"로 바로 응답 — parseDocument() 호출 없이 곧장 분석 가능.
+export function createDocumentFromText(text, sessionId) {
+  return apiRequest("/api/documents/text", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, session_id: sessionId ?? null }),
+  });
+}
+
 // GET /api/documents/{id} — 문서 메타데이터/상태 재조회
 export function getDocument(documentId) {
   return apiRequest(`/api/documents/${documentId}`);

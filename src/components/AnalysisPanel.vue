@@ -1,15 +1,19 @@
 <script setup>
 import { computed, ref } from "vue";
-import { workflow, buildExportPayload, startAnalysis } from "../store/workflow";
-import FlowModal from "./FlowModal.vue";
+import {
+  workflow,
+  buildExportPayload,
+  startAnalysis,
+  startRecommend,
+  undoRecommendationEdit,
+  evidenceLabel,
+} from "../store/workflow";
+import RecommendationFlowModal from "./RecommendationFlowModal.vue";
 
 const showFlowModal = ref(false);
 
 const emptyState = computed(() => workflow.analysisStatus === "idle");
-
-// 흐름도(FlowModal)에서 순서 변경·수정·삭제한 내용이 이 패널에도 그대로 반영되도록
-// analysis.steps 원본이 아니라 편집 상태인 workflow.visibleSteps를 그대로 사용한다.
-const steps = computed(() => workflow.visibleSteps);
+const steps = computed(() => workflow.analysis?.steps ?? []);
 const hasSteps = computed(() => steps.value.length > 0);
 const ambiguities = computed(() => workflow.analysis?.ambiguities ?? []);
 
@@ -67,25 +71,25 @@ function downloadJson() {
         </div>
 
         <div v-else class="rec-list">
-          <article v-for="step in steps" :key="step.id" class="rec-card">
+          <article v-for="step in steps" :key="step.step_id" class="rec-card">
             <header class="rec-card__header">
-              <h3>{{ step.stepNo }}. {{ step.title }}</h3>
+              <h3>{{ step.order }}. {{ step.name }}</h3>
             </header>
 
-            <p class="rec-card__description">{{ step.action }}</p>
+            <p class="rec-card__description">{{ step.description }}</p>
 
             <div class="rec-card__grid">
               <div class="rec-card__field">
                 <span class="rec-card__field-label">입력</span>
-                <span class="rec-card__field-value">{{ step.inputVar }}</span>
+                <span class="rec-card__field-value">{{ step.inputs?.join(", ") || "없음" }}</span>
               </div>
               <div class="rec-card__field">
                 <span class="rec-card__field-label">출력</span>
-                <span class="rec-card__field-value">{{ step.outputVar }}</span>
+                <span class="rec-card__field-value">{{ step.outputs?.join(", ") || "없음" }}</span>
               </div>
               <div class="rec-card__field">
                 <span class="rec-card__field-label">연계 시스템</span>
-                <span class="rec-card__field-value">{{ step.package }}</span>
+                <span class="rec-card__field-value">{{ step.systems?.join(", ") || "없음" }}</span>
               </div>
               <div class="rec-card__field" v-if="step.branching">
                 <span class="rec-card__field-label">분기</span>
@@ -93,7 +97,7 @@ function downloadJson() {
               </div>
             </div>
 
-            <footer v-if="step.evidence" class="rec-card__footer">근거: {{ step.evidence }}</footer>
+            <footer v-if="step.evidence" class="rec-card__footer">근거: {{ evidenceLabel(step.evidence) }}</footer>
           </article>
         </div>
 
@@ -102,6 +106,37 @@ function downloadJson() {
           <ul>
             <li v-for="(item, idx) in ambiguities" :key="idx">{{ item }}</li>
           </ul>
+        </div>
+
+        <div v-if="hasSteps" class="recommend-section">
+          <h3 class="export-section__title">A360 흐름도 추천</h3>
+
+          <div v-if="workflow.recommendStatus === 'idle'" class="recommend-section__actions">
+            <button type="button" class="btn btn--primary" @click="startRecommend">추천안 생성</button>
+          </div>
+
+          <div v-else-if="workflow.recommendStatus === 'generating'" class="analyzing-state">
+            <span class="analyzing-state__spinner" aria-hidden="true"></span>
+            <p>{{ workflow.recommendStage || "추천안을 생성하는 중…" }}</p>
+          </div>
+
+          <div v-else-if="workflow.recommendStatus === 'error'" class="analyzing-state analyzing-state--error">
+            <p class="upload-error">{{ workflow.recommendError }}</p>
+            <button type="button" class="btn btn--outline" @click="startRecommend">다시 시도</button>
+          </div>
+
+          <div v-else-if="workflow.recommendStatus === 'done'" class="recommend-section__actions">
+            <span class="recommend-section__version">v{{ workflow.recommendation?.version }}</span>
+            <button type="button" class="btn btn--outline" @click="showFlowModal = true">흐름도 보기</button>
+            <button
+              type="button"
+              class="btn btn--text"
+              :disabled="workflow.recommendUndoStack.length === 0"
+              @click="undoRecommendationEdit"
+            >
+              실행 취소
+            </button>
+          </div>
         </div>
       </template>
     </div>
@@ -112,16 +147,9 @@ function downloadJson() {
         <button type="button" class="btn btn--outline" @click="downloadJson">
           JSON 다운로드
         </button>
-        <button type="button" class="btn btn--outline" @click="showFlowModal = true">
-          흐름도 보기
-        </button>
       </div>
     </div>
   </section>
 
-  <FlowModal
-    v-if="showFlowModal"
-    :steps="workflow.visibleSteps"
-    @close="showFlowModal = false"
-  />
+  <RecommendationFlowModal v-if="showFlowModal" @close="showFlowModal = false" />
 </template>

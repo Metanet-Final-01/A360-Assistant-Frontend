@@ -14,12 +14,14 @@ export function clearToken() {
 }
 
 // 백엔드는 4xx/5xx 응답에서 detail: {code, message} 형태로 내려준다 (API_명세.md 참고)
+// 모든 응답엔 X-Request-ID 헤더가 붙는다 — 에러 문의 시 서버 로그 추적용으로 함께 들고 다닌다.
 export class ApiError extends Error {
-  constructor(code, message, status) {
+  constructor(code, message, status, requestId) {
     super(message);
     this.name = "ApiError";
     this.code = code;
     this.status = status;
+    this.requestId = requestId ?? null;
   }
 }
 
@@ -35,6 +37,7 @@ function describeValidationError(first) {
 }
 
 async function toApiError(response) {
+  const requestId = response.headers.get("X-Request-ID");
   let detail = null;
   try {
     const body = await response.json();
@@ -44,12 +47,17 @@ async function toApiError(response) {
   }
 
   if (Array.isArray(detail)) {
-    return new ApiError("VALIDATION_ERROR", describeValidationError(detail[0]), response.status);
+    return new ApiError("VALIDATION_ERROR", describeValidationError(detail[0]), response.status, requestId);
   }
   if (detail && typeof detail === "object") {
-    return new ApiError(detail.code ?? "UNKNOWN", detail.message ?? response.statusText, response.status);
+    return new ApiError(detail.code ?? "UNKNOWN", detail.message ?? response.statusText, response.status, requestId);
   }
-  return new ApiError("UNKNOWN", typeof detail === "string" ? detail : response.statusText, response.status);
+  return new ApiError(
+    "UNKNOWN",
+    typeof detail === "string" ? detail : response.statusText,
+    response.status,
+    requestId,
+  );
 }
 
 export async function apiRequest(path, options = {}) {
