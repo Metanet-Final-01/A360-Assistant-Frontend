@@ -10,8 +10,11 @@ const props = defineProps({
   dockedTitle: { type: String, default: "AI 챗봇 (대화형 수정)" },
   floatingTitle: { type: String, default: "AI 챗봇" },
   hint: { type: String, default: "A360 액션·패키지 사용법 등을 질문하면 답변해드립니다." },
+  // 대화 압축 버튼 노출 여부 — 메인 챗 위젯만 켠다 (긴 멀티턴 이력을 요약본으로 대체)
+  showCompact: { type: Boolean, default: false },
+  compacting: { type: Boolean, default: false },
 });
-const emit = defineEmits(["toggle", "close", "dock", "undock", "send"]);
+const emit = defineEmits(["toggle", "close", "dock", "undock", "send", "compact"]);
 
 const POPUP_WIDTH = 540;
 const POPUP_HEIGHT = 780;
@@ -211,7 +214,19 @@ async function handleSend() {
         />
         <button type="submit">전송</button>
       </form>
-      <p class="chat-popup__hint">{{ hint }}</p>
+      <div class="chat-popup__footer">
+        <p class="chat-popup__hint">{{ hint }}</p>
+        <button
+          v-if="showCompact"
+          type="button"
+          class="chat-popup__compact"
+          title="지금까지의 대화를 요약본으로 압축합니다"
+          :disabled="compacting"
+          @click="emit('compact')"
+        >
+          {{ compacting ? "압축 중…" : "대화 압축" }}
+        </button>
+      </div>
     </div>
   </Teleport>
 </div>

@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { reactive, ref } from "vue";
-import { chatStream } from "../api/agent";
+import { turnStream } from "../api/agent";
 import { createSession } from "../api/sessions";
 import { createInitialChatMessages, nowTime } from "../utils/chatMessages";
 import { usePipelineStore } from "./pipeline";
@@ -9,6 +9,8 @@ export const useChatStore = defineStore("chat", () => {
   const chatOpen = ref(false);
   const chatDocked = ref(true);
   const chatMessages = ref(createInitialChatMessages());
+  const isCompacting = ref(false);
+  const lastCompact = ref(null); // 최신 압축본(고정 섹션 JSON) — 압축 상태/게이지 표시용
 
   function toggleChat() {
     chatOpen.value = !chatOpen.value;
@@ -28,9 +30,9 @@ export const useChatStore = defineStore("chat", () => {
     chatOpen.value = false;
   }
 
-  // 챗봇은 멀티턴 — session_id를 실어 보내면 백엔드가 그 세션의 대화 이력을 주입하고 이번 턴을 저장한다.
-  // 문서 업로드로 이미 세션이 있으면 그 세션에, 없으면 챗 전용 빈 세션을 만들어 이어서 쓴다.
-  // 이렇게 하면 이 위젯의 대화가 항상 같은 session_id로 유지되어 백엔드가 멀티턴 이력을 쌓는다.
+  // /turn은 URL에 session_id가 필수다 — 문서 업로드로 이미 세션이 있으면 그 세션에,
+  // 없으면 챗 전용 빈 세션을 만들어 이어서 쓴다. 같은 session_id로 계속 보내면 백엔드가
+  // 대화 이력을 주입·저장해 멀티턴이 된다. (레거시 무상태 챗 엔드포인트는 제거됨)
   async function ensureChatSessionId() {
     const pipeline = usePipelineStore();
     if (pipeline.sessionId) return pipeline.sessionId;
@@ -38,12 +40,16 @@ export const useChatStore = defineStore("chat", () => {
       const { session_id } = await createSession();
       pipeline.sessionId = session_id;
     } catch {
-      // 세션 생성 실패 시 무상태로 폴백 — session_id 없이 보내면 백엔드가 그냥 단발로 처리한다
+      // 세션 생성 실패 — /turn을 부를 수 없으므로 호출부에서 에러 문구를 보여준다
     }
     return pipeline.sessionId;
   }
 
-  async function sendChatMessage(text) {
+  // operation="chat"이면 일반 턴, "compact"면 LLM 라우터를 우회해 대화 압축 노드로 직행한다.
+  // 챗 턴이라도 에이전트가 분석/흐름도를 산출할 수 있어(예: "흐름도 만들어줘") done.data의
+  // 산출물을 파이프라인 스토어에 반영한다 — 분석 패널·흐름도 모달이 그대로 갱신된다.
+  async function sendTurn(text, operation) {
+    const pipeline = usePipelineStore();
     const trimmed = text.trim();
     if (!trimmed) return;
     chatMessages.value.push({ role: "user", text: trimmed, time: nowTime() });
@@ -52,40 +58,64 @@ export const useChatStore = defineStore("chat", () => {
     chatMessages.value.push(assistantMessage);
 
     const sessionId = await ensureChatSessionId();
+    if (!sessionId) {
+      assistantMessage.text = "세션을 만들지 못해 메시지를 보낼 수 없습니다. 잠시 후 다시 시도해주세요.";
+      return;
+    }
 
-    await chatStream(
-      trimmed,
-      {
-        onToken: (token) => {
-          assistantMessage.text += token;
-        },
-        onDone: () => {
-          if (!assistantMessage.text) assistantMessage.text = "답변을 생성하지 못했습니다.";
-        },
-        onError: (message) => {
-          // 이미 받은 토큰이 있으면 지우지 않고 에러 문구만 이어붙인다
-          assistantMessage.text = assistantMessage.text ? `${assistantMessage.text}\n\n⚠ ${message}` : message;
-        },
+    await turnStream(sessionId, trimmed, {
+      operation,
+      onToken: (token) => {
+        assistantMessage.text += token;
       },
-      sessionId,
-    );
+      onDone: (data) => {
+        // 분석/추천/압축 턴은 token 스트림 없이 done에만 answer가 실릴 수 있다
+        if (!assistantMessage.text) {
+          assistantMessage.text = data?.answer || "답변을 생성하지 못했습니다.";
+        }
+        if (data?.compact) lastCompact.value = data.compact;
+        pipeline.applyTurnArtifacts(data);
+      },
+      onError: (code, message) => {
+        // 이미 받은 토큰이 있으면 지우지 않고 에러 문구만 이어붙인다
+        assistantMessage.text = assistantMessage.text ? `${assistantMessage.text}\n\n⚠ ${message}` : message;
+      },
+    });
+  }
+
+  async function sendChatMessage(text) {
+    await sendTurn(text, "chat");
+  }
+
+  // 대화 압축 버튼 — 결정론 신호(operation="compact")로 압축 노드에 직행시킨다.
+  // 압축본은 백엔드 session_compacts에 저장되고 다음 턴부터 오래된 이력을 대체한다.
+  async function compactConversation() {
+    if (isCompacting.value) return;
+    isCompacting.value = true;
+    await sendTurn("지금까지 대화 요약해줘", "compact");
+    isCompacting.value = false;
   }
 
   // 로그아웃 시 대화창을 접고 인사말만 남은 상태로 되돌린다
   function resetForLogout() {
     chatOpen.value = false;
     chatMessages.value = createInitialChatMessages();
+    isCompacting.value = false;
+    lastCompact.value = null;
   }
 
   return {
     chatOpen,
     chatDocked,
     chatMessages,
+    isCompacting,
+    lastCompact,
     toggleChat,
     closeChat,
     dockChat,
     undockChat,
     sendChatMessage,
+    compactConversation,
     resetForLogout,
   };
 });

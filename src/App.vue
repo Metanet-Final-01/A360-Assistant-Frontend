@@ -37,8 +37,8 @@ function handleLogout() {
   <div v-if="auth.authChecking" class="app-loading">로그인 확인 중…</div>
 
   <template v-else-if="!auth.isLoggedIn">
-    <SignupPage v-if="showSignup" @login="handleSignupComplete" />
-    <LoginPage v-else :prefill-email="justRegisteredEmail" @signup="showSignup = true" />
+    <LoginPage :prefill-email="justRegisteredEmail" @signup="showSignup = true" />
+    <SignupPage v-if="showSignup" @login="handleSignupComplete" @close="showSignup = false" />
   </template>
 
   <div v-else class="app-shell">
@@ -54,11 +54,14 @@ function handleLogout() {
             :open="chat.chatOpen"
             :docked="chat.chatDocked"
             dock-zone-id="analysis"
+            show-compact
+            :compacting="chat.isCompacting"
             @toggle="chat.toggleChat"
             @close="chat.closeChat"
             @dock="chat.dockChat"
             @undock="chat.undockChat"
             @send="chat.sendChatMessage"
+            @compact="chat.compactConversation"
           />
         </div>
       </main>
