@@ -1,8 +1,10 @@
 <script setup>
 import { ref } from "vue";
-import { loginWithPassword } from "../store/workflow";
+import { useAuthStore } from "../stores/auth";
 import { ApiError } from "../api/http";
 import AuthHeader from "./AuthHeader.vue";
+
+const auth = useAuthStore();
 
 const props = defineProps({
   prefillEmail: { type: String, default: "" },
@@ -27,7 +29,7 @@ async function handleSubmit() {
   loginError.value = "";
   isSubmitting.value = true;
   try {
-    await loginWithPassword(email.value.trim(), password.value);
+    await auth.loginWithPassword(email.value.trim(), password.value);
   } catch (err) {
     loginError.value = err instanceof ApiError ? err.message : "로그인 중 오류가 발생했습니다.";
   } finally {

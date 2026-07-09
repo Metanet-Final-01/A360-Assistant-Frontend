@@ -1,6 +1,9 @@
 <script setup>
 import { computed, ref } from "vue";
-import { workflow, selectFile, submitTextRequest, startAnalysis, resetUpload, formatBytes } from "../store/workflow";
+import { usePipelineStore } from "../stores/pipeline";
+import { formatBytes } from "../utils/format";
+
+const pipeline = usePipelineStore();
 
 const isDragging = ref(false);
 const fileInputRef = ref(null);
@@ -8,13 +11,13 @@ const inputMode = ref("file"); // file | text
 const textDraft = ref("");
 
 const fileSizeLabel = computed(() =>
-  workflow.file ? formatBytes(workflow.file.size) : "",
+  pipeline.file ? formatBytes(pipeline.file.size) : "",
 );
 
 const canStartAnalysis = computed(
   () =>
-    workflow.document?.status === "parsed" &&
-    workflow.analysisStatus === "idle",
+    pipeline.document?.status === "parsed" &&
+    pipeline.analysisStatus === "idle",
 );
 
 function openFileDialog() {
@@ -23,7 +26,7 @@ function openFileDialog() {
 
 function handleFiles(fileList) {
   const file = fileList?.[0];
-  if (file) selectFile(file);
+  if (file) pipeline.selectFile(file);
 }
 
 function onDrop(event) {
@@ -38,12 +41,12 @@ function onFileChange(event) {
 
 function handleTextSubmit() {
   if (!textDraft.value.trim()) return;
-  submitTextRequest(textDraft.value);
+  pipeline.submitTextRequest(textDraft.value);
 }
 
 function switchMode(mode) {
   inputMode.value = mode;
-  resetUpload();
+  pipeline.resetUpload();
   textDraft.value = "";
 }
 </script>
@@ -79,7 +82,7 @@ function switchMode(mode) {
       </div>
 
       <div
-        v-if="inputMode === 'file' && !workflow.file"
+        v-if="inputMode === 'file' && !pipeline.file"
         class="dropzone"
         :class="{ 'dropzone--active': isDragging }"
         role="button"
@@ -113,7 +116,7 @@ function switchMode(mode) {
         />
       </div>
 
-      <div v-else-if="inputMode === 'text' && !workflow.file" class="text-input-area">
+      <div v-else-if="inputMode === 'text' && !pipeline.file" class="text-input-area">
         <textarea
           v-model="textDraft"
           class="text-input-area__field"
@@ -130,26 +133,26 @@ function switchMode(mode) {
         </button>
       </div>
 
-      <p v-if="workflow.uploadStatus === 'error'" class="upload-error">
-        {{ workflow.uploadError }}
+      <p v-if="pipeline.uploadStatus === 'error'" class="upload-error">
+        {{ pipeline.uploadError }}
       </p>
 
-      <div class="uploaded-doc" v-if="workflow.file">
+      <div class="uploaded-doc" v-if="pipeline.file">
         <h3 class="uploaded-doc__label">{{ inputMode === "text" ? "입력된 요청" : "업로드된 문서" }}</h3>
 
         <div class="doc-card">
-          <span class="doc-card__icon">{{ workflow.file.ext.toUpperCase() }}</span>
+          <span class="doc-card__icon">{{ pipeline.file.ext.toUpperCase() }}</span>
           <div class="doc-card__info">
-            <span class="doc-card__name">{{ workflow.file.name }}</span>
+            <span class="doc-card__name">{{ pipeline.file.name }}</span>
             <span class="doc-card__size">{{ fileSizeLabel }}</span>
           </div>
           <span
-            v-if="workflow.uploadStatus === 'uploading'"
+            v-if="pipeline.uploadStatus === 'uploading'"
             class="doc-card__status doc-card__status--loading"
             aria-label="업로드 중"
           ></span>
           <svg
-            v-else-if="workflow.uploadStatus === 'error'"
+            v-else-if="pipeline.uploadStatus === 'error'"
             class="doc-card__status doc-card__status--done"
             viewBox="0 0 24 24"
             fill="none"
@@ -183,12 +186,12 @@ function switchMode(mode) {
         </div>
 
         <Transition name="fade-up">
-          <ul class="extraction-meta" v-if="workflow.document?.status === 'parsed'">
-            <li v-if="workflow.document.page_count != null">
-              · 파싱 완료 · 페이지 {{ workflow.document.page_count }}
+          <ul class="extraction-meta" v-if="pipeline.document?.status === 'parsed'">
+            <li v-if="pipeline.document.page_count != null">
+              · 파싱 완료 · 페이지 {{ pipeline.document.page_count }}
             </li>
             <li v-else>· 처리 완료</li>
-            <li v-for="(warning, idx) in workflow.document.warnings" :key="idx" class="extraction-meta__warning">
+            <li v-for="(warning, idx) in pipeline.document.warnings" :key="idx" class="extraction-meta__warning">
               ⚠ {{ warning }}
             </li>
           </ul>
@@ -199,13 +202,13 @@ function switchMode(mode) {
             type="button"
             class="btn btn--primary"
             :disabled="!canStartAnalysis"
-            @click="startAnalysis"
+            @click="pipeline.startAnalysis"
           >
-            <span v-if="workflow.analysisStatus === 'analyzing'">분석 진행 중…</span>
-            <span v-else-if="workflow.analysisStatus === 'done'">분석 완료</span>
+            <span v-if="pipeline.analysisStatus === 'analyzing'">분석 진행 중…</span>
+            <span v-else-if="pipeline.analysisStatus === 'done'">분석 완료</span>
             <span v-else>분석 시작</span>
           </button>
-          <button type="button" class="btn btn--text" @click="resetUpload">
+          <button type="button" class="btn btn--text" @click="pipeline.resetUpload">
             {{ inputMode === "text" ? "새 요청 입력" : "새 문서 업로드" }}
           </button>
         </div>

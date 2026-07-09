@@ -364,7 +364,7 @@ input {
 
 .app-main {
   flex: 1;
-  padding: 28px;
+  padding: 52px 28px 28px;
 }
 
 .app-main__grid {

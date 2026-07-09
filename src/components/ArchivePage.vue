@@ -1,18 +1,10 @@
 <script setup>
 import { computed, ref } from "vue";
-import {
-  workflow,
-  selectArchiveResult,
-  renameArchiveResult,
-  deleteArchiveResult,
-  sendArchiveChatMessage,
-  toggleArchiveChat,
-  closeArchiveChat,
-  dockArchiveChat,
-  undockArchiveChat,
-} from "../store/workflow";
+import { useArchiveStore } from "../stores/archive";
 import FlowModal from "./FlowModal.vue";
 import ChatWidget from "./ChatWidget.vue";
+
+const archive = useArchiveStore();
 
 const PAGE_SIZE = 6;
 
@@ -25,8 +17,8 @@ const showFlowModal = ref(false);
 
 const filteredResults = computed(() => {
   const q = searchQuery.value.trim();
-  if (!q) return workflow.archiveResults;
-  return workflow.archiveResults.filter(
+  if (!q) return archive.archiveResults;
+  return archive.archiveResults.filter(
     (result) => result.title.includes(q) || result.fileName.includes(q),
   );
 });
@@ -39,7 +31,7 @@ const pagedResults = computed(() => {
 });
 
 const activeResult = computed(
-  () => workflow.archiveResults.find((result) => result.id === workflow.activeArchiveResultId) ?? null,
+  () => archive.archiveResults.find((result) => result.id === archive.activeArchiveResultId) ?? null,
 );
 
 const steps = computed(() => activeResult.value?.analysis.steps ?? []);
@@ -49,7 +41,7 @@ function goToPage(page) {
 }
 
 function selectResult(id) {
-  selectArchiveResult(id);
+  archive.selectArchiveResult(id);
   openMenuId.value = null;
 }
 
@@ -73,7 +65,7 @@ function startRename(result, event) {
 
 function commitRename() {
   if (editingId.value) {
-    renameArchiveResult(editingId.value, editingTitle.value);
+    archive.renameArchiveResult(editingId.value, editingTitle.value);
   }
   editingId.value = null;
 }
@@ -84,7 +76,7 @@ function cancelRename() {
 
 function removeResult(id, event) {
   event.stopPropagation();
-  deleteArchiveResult(id);
+  archive.deleteArchiveResult(id);
   openMenuId.value = null;
 }
 
@@ -108,7 +100,7 @@ function downloadResultJson() {
 <template>
   <div
     class="app-main__grid"
-    :class="{ 'app-main__grid--docked': workflow.archiveChatDocked }"
+    :class="{ 'app-main__grid--docked': archive.archiveChatDocked }"
     @click="handleDocumentClick"
   >
     <aside class="archive-chat__sidebar">
@@ -127,7 +119,7 @@ function downloadResultJson() {
           v-for="result in pagedResults"
           :key="result.id"
           class="archive-chat__item"
-          :class="{ 'archive-chat__item--active': result.id === workflow.activeArchiveResultId }"
+          :class="{ 'archive-chat__item--active': result.id === archive.activeArchiveResultId }"
         >
           <button
             v-if="editingId !== result.id"
@@ -260,17 +252,17 @@ function downloadResultJson() {
     <ChatWidget
       v-if="activeResult"
       :messages="activeResult.messages"
-      :open="workflow.archiveChatOpen"
-      :docked="workflow.archiveChatDocked"
+      :open="archive.archiveChatOpen"
+      :docked="archive.archiveChatDocked"
       dock-zone-id="archive"
       docked-title="챗봇 대화 내역"
       floating-title="챗봇 대화 내역"
       hint="이 분석 결과에 대해 궁금한 점을 물어보세요."
-      @toggle="toggleArchiveChat"
-      @close="closeArchiveChat"
-      @dock="dockArchiveChat"
-      @undock="undockArchiveChat"
-      @send="sendArchiveChatMessage"
+      @toggle="archive.toggleArchiveChat"
+      @close="archive.closeArchiveChat"
+      @dock="archive.dockArchiveChat"
+      @undock="archive.undockArchiveChat"
+      @send="archive.sendArchiveChatMessage"
     />
   </div>
 

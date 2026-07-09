@@ -1,6 +1,8 @@
 <script setup>
 import { ref } from "vue";
-import { workflow } from "../store/workflow";
+import { useAuthStore } from "../stores/auth";
+
+const auth = useAuthStore();
 
 const props = defineProps({
   activeMenu: { type: String, default: "analysis" },
@@ -111,8 +113,8 @@ function toggleCollapsed() {
           </span>
           <div class="app-sidebar__profile-info">
             <span class="app-sidebar__profile-name">로그인 계정</span>
-            <span class="app-sidebar__profile-email" :title="workflow.userEmail || ''">
-              {{ workflow.userEmail || "-" }}
+            <span class="app-sidebar__profile-email" :title="auth.userEmail || ''">
+              {{ auth.userEmail || "-" }}
             </span>
           </div>
           <button
