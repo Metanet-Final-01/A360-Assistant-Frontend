@@ -1,12 +1,9 @@
 <script setup>
 import { computed, ref } from "vue";
-import {
-  workflow,
-  saveRecommendationEdit,
-  revertToRecommendationVersion,
-  loadRecommendationHistory,
-} from "../store/workflow";
+import { usePipelineStore } from "../stores/pipeline";
 import FlowActionNode from "./FlowActionNode.vue";
+
+const pipeline = usePipelineStore();
 
 defineEmits(["close"]);
 
@@ -22,7 +19,7 @@ const packageColor = computed(() => {
       if (a.children?.length) walk(a.children);
     });
   }
-  (workflow.recommendation?.recommendation?.steps ?? []).forEach((stepRec) => walk(stepRec.actions));
+  (pipeline.recommendation?.recommendation?.steps ?? []).forEach((stepRec) => walk(stepRec.actions));
   return map;
 });
 
@@ -32,7 +29,7 @@ function colorFor(pkg) {
 
 // 업무 단계 구분 없이 모든 액션(중첩 포함)을 순서대로 박스 하나씩으로 펼친 단일 시퀀스.
 const actionBoxes = computed(() => {
-  const steps = workflow.recommendation?.recommendation?.steps ?? [];
+  const steps = pipeline.recommendation?.recommendation?.steps ?? [];
   const boxes = [];
   let seq = 0;
   function walk(actions) {
@@ -61,13 +58,13 @@ const isSaving = ref(false);
 
 const stepInfoById = computed(() => {
   const map = new Map();
-  (workflow.analysis?.steps ?? []).forEach((s) => map.set(s.step_id, s));
+  (pipeline.analysis?.steps ?? []).forEach((s) => map.set(s.step_id, s));
   return map;
 });
 
 function enterEdit() {
   editedTree.value = clone(
-    workflow.recommendation?.recommendation ?? { steps: [], variables: [], notes: null },
+    pipeline.recommendation?.recommendation ?? { steps: [], variables: [], notes: null },
   );
   changeSummaries.value = [];
   mode.value = "edit";
@@ -86,19 +83,19 @@ function discardEdit() {
 async function saveEdit() {
   if (isSaving.value) return;
   isSaving.value = true;
-  await saveRecommendationEdit(
+  await pipeline.saveRecommendationEdit(
     clone(editedTree.value),
     changeSummaries.value.join(", ").slice(0, 500) || null,
   );
   isSaving.value = false;
-  if (!workflow.recommendSaveError) discardEdit();
+  if (!pipeline.recommendSaveError) discardEdit();
 }
 
 // ----- 버전 이력 -----
 const showHistory = ref(false);
 const revertingVersion = ref(null);
 
-loadRecommendationHistory();
+pipeline.loadRecommendationHistory();
 
 const SOURCE_LABEL = { llm: "자동 생성", drag: "직접 편집", chat: "챗 수정", feedback: "피드백" };
 
@@ -108,13 +105,13 @@ function versionDescription(v) {
 
 // 백엔드에 개별 버전 조회 API가 없어, 이 브라우저 세션에서 트리를 캐시해 둔 버전만 되돌릴 수 있다.
 function canRevert(v) {
-  return v.version !== workflow.recommendation?.version && !!workflow.recommendTreesByVersion[v.version];
+  return v.version !== pipeline.recommendation?.version && !!pipeline.recommendTreesByVersion[v.version];
 }
 
 async function revertTo(version) {
   if (revertingVersion.value !== null) return;
   revertingVersion.value = version;
-  await revertToRecommendationVersion(version);
+  await pipeline.revertToRecommendationVersion(version);
   revertingVersion.value = null;
 }
 
@@ -133,8 +130,8 @@ function formatDate(iso) {
       <header class="modal__header">
         <h2 id="rec-flow-modal-title">
           추천 작업 흐름도
-          <span v-if="workflow.recommendation?.version" class="flow-version-badge">
-            v{{ workflow.recommendation.version }}
+          <span v-if="pipeline.recommendation?.version" class="flow-version-badge">
+            v{{ pipeline.recommendation.version }}
           </span>
         </h2>
         <button type="button" class="modal__close" aria-label="닫기" @click="$emit('close')">✕</button>
@@ -152,7 +149,7 @@ function formatDate(iso) {
               <button
                 type="button"
                 class="btn btn--primary"
-                :disabled="!workflow.recommendation"
+                :disabled="!pipeline.recommendation"
                 @click="enterEdit"
               >
                 편집
@@ -160,18 +157,18 @@ function formatDate(iso) {
             </div>
           </div>
 
-          <p v-if="workflow.recommendSaveError" class="upload-error">{{ workflow.recommendSaveError }}</p>
+          <p v-if="pipeline.recommendSaveError" class="upload-error">{{ pipeline.recommendSaveError }}</p>
 
           <div v-if="showHistory" class="flow-history">
             <h3 class="flow-history__title">버전 이력</h3>
-            <p v-if="!workflow.recommendVersions.length" class="flow-history__empty">
+            <p v-if="!pipeline.recommendVersions.length" class="flow-history__empty">
               저장된 버전이 없습니다.
             </p>
             <ol v-else class="flow-history__list">
-              <li v-for="v in workflow.recommendVersions" :key="v.id" class="flow-history__item">
+              <li v-for="v in pipeline.recommendVersions" :key="v.id" class="flow-history__item">
                 <div class="flow-history__meta">
                   <strong>v{{ v.version }}</strong>
-                  <span v-if="v.version === workflow.recommendation?.version" class="flow-history__current">
+                  <span v-if="v.version === pipeline.recommendation?.version" class="flow-history__current">
                     현재
                   </span>
                   <span class="flow-history__desc">{{ versionDescription(v) }}</span>
@@ -218,8 +215,8 @@ function formatDate(iso) {
           </template>
           <p v-else class="modal__empty">표시할 추천 결과가 없습니다.</p>
 
-          <p v-if="workflow.recommendation?.recommendation?.notes" class="flow-notes">
-            <strong>참고:</strong> {{ workflow.recommendation.recommendation.notes }}
+          <p v-if="pipeline.recommendation?.recommendation?.notes" class="flow-notes">
+            <strong>참고:</strong> {{ pipeline.recommendation.recommendation.notes }}
           </p>
         </template>
 
@@ -245,7 +242,7 @@ function formatDate(iso) {
             </div>
           </div>
 
-          <p v-if="workflow.recommendSaveError" class="upload-error">{{ workflow.recommendSaveError }}</p>
+          <p v-if="pipeline.recommendSaveError" class="upload-error">{{ pipeline.recommendSaveError }}</p>
 
           <template v-if="editedTree?.steps?.length">
             <section v-for="stepRec in editedTree.steps" :key="stepRec.step_id" class="flow-step-group">

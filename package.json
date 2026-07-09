@@ -15,6 +15,7 @@
     "@vitejs/plugin-vue": "latest",
     "dompurify": "^3.4.11",
     "markdown-it": "^14.3.0",
+    "pinia": "^3.0.4",
     "vite": "latest",
     "vue": "latest"
   }

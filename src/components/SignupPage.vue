@@ -1,8 +1,10 @@
 <script setup>
 import { ref } from "vue";
-import { registerWithPassword } from "../store/workflow";
+import { useAuthStore } from "../stores/auth";
 import { ApiError } from "../api/http";
 import AuthHeader from "./AuthHeader.vue";
+
+const auth = useAuthStore();
 
 const emit = defineEmits(["login"]);
 
@@ -38,7 +40,7 @@ async function handleSubmit() {
   isSubmitting.value = true;
   try {
     const registeredEmail = email.value.trim();
-    await registerWithPassword(registeredEmail, password.value);
+    await auth.registerWithPassword(registeredEmail, password.value);
     window.alert("회원가입이 완료되었습니다. 로그인해주세요.");
     emit("login", registeredEmail);
   } catch (err) {

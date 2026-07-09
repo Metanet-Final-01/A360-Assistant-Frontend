@@ -1,15 +1,7 @@
 <script setup>
 import { onMounted, ref } from "vue";
-import {
-  workflow,
-  logout,
-  bootstrapAuth,
-  toggleChat,
-  closeChat,
-  dockChat,
-  undockChat,
-  sendChatMessage,
-} from "./store/workflow";
+import { useAuthStore } from "./stores/auth";
+import { useChatStore } from "./stores/chat";
 import AppSidebar from "./components/AppSidebar.vue";
 import UploadPanel from "./components/UploadPanel.vue";
 import AnalysisPanel from "./components/AnalysisPanel.vue";
@@ -18,12 +10,15 @@ import ArchivePage from "./components/ArchivePage.vue";
 import LoginPage from "./components/LoginPage.vue";
 import SignupPage from "./components/SignupPage.vue";
 
+const auth = useAuthStore();
+const chat = useChatStore();
+
 const showSignup = ref(false);
 const justRegisteredEmail = ref("");
 const activeMenu = ref("analysis");
 
 onMounted(() => {
-  bootstrapAuth();
+  auth.bootstrapAuth();
 });
 
 function handleSignupComplete(email) {
@@ -34,14 +29,14 @@ function handleSignupComplete(email) {
 function handleLogout() {
   showSignup.value = false;
   justRegisteredEmail.value = "";
-  logout();
+  auth.logout();
 }
 </script>
 
 <template>
-  <div v-if="workflow.authChecking" class="app-loading">로그인 확인 중…</div>
+  <div v-if="auth.authChecking" class="app-loading">로그인 확인 중…</div>
 
-  <template v-else-if="!workflow.isLoggedIn">
+  <template v-else-if="!auth.isLoggedIn">
     <SignupPage v-if="showSignup" @login="handleSignupComplete" />
     <LoginPage v-else :prefill-email="justRegisteredEmail" @signup="showSignup = true" />
   </template>
@@ -51,19 +46,19 @@ function handleLogout() {
 
     <div class="app-content">
       <main v-if="activeMenu === 'analysis'" class="app-main" id="analysis">
-        <div class="app-main__grid" :class="{ 'app-main__grid--docked': workflow.chatDocked }">
+        <div class="app-main__grid" :class="{ 'app-main__grid--docked': chat.chatDocked }">
           <UploadPanel />
           <AnalysisPanel />
           <ChatWidget
-            :messages="workflow.chatMessages"
-            :open="workflow.chatOpen"
-            :docked="workflow.chatDocked"
+            :messages="chat.chatMessages"
+            :open="chat.chatOpen"
+            :docked="chat.chatDocked"
             dock-zone-id="analysis"
-            @toggle="toggleChat"
-            @close="closeChat"
-            @dock="dockChat"
-            @undock="undockChat"
-            @send="sendChatMessage"
+            @toggle="chat.toggleChat"
+            @close="chat.closeChat"
+            @dock="chat.dockChat"
+            @undock="chat.undockChat"
+            @send="chat.sendChatMessage"
           />
         </div>
       </main>

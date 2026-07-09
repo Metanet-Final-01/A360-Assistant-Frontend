@@ -1,24 +1,20 @@
 <script setup>
 import { computed, ref } from "vue";
-import {
-  workflow,
-  buildExportPayload,
-  startAnalysis,
-  startRecommend,
-  undoRecommendationEdit,
-  evidenceLabel,
-} from "../store/workflow";
+import { usePipelineStore } from "../stores/pipeline";
+import { evidenceLabel } from "../utils/format";
 import RecommendationFlowModal from "./RecommendationFlowModal.vue";
+
+const pipeline = usePipelineStore();
 
 const showFlowModal = ref(false);
 
-const emptyState = computed(() => workflow.analysisStatus === "idle");
-// steps는 workflow.analysis.steps와 동일한 참조 — splice/push로 직접 수정하면 그대로 반영된다.
+const emptyState = computed(() => pipeline.analysisStatus === "idle");
+// steps는 pipeline.analysis.steps와 동일한 참조 — splice/push로 직접 수정하면 그대로 반영된다.
 // 편집은 이 세션에서만 유지되고 백엔드에는 저장되지 않는다(추천안 생성은 항상 서버에 저장된
 // 원본 분석 결과를 기준으로 하므로, 여기서 단계를 고쳐도 추천안 생성 결과에는 반영되지 않는다).
-const steps = computed(() => workflow.analysis?.steps ?? []);
+const steps = computed(() => pipeline.analysis?.steps ?? []);
 const hasSteps = computed(() => steps.value.length > 0);
-const ambiguities = computed(() => workflow.analysis?.ambiguities ?? []);
+const ambiguities = computed(() => pipeline.analysis?.ambiguities ?? []);
 
 const dragIndex = ref(null);
 const dragVisualHidden = ref(false);
@@ -243,7 +239,7 @@ function startAddStep() {
 }
 
 function downloadJson() {
-  const payload = buildExportPayload();
+  const payload = pipeline.buildExportPayload();
   const blob = new Blob([JSON.stringify(payload, null, 2)], {
     type: "application/json",
   });
@@ -275,20 +271,20 @@ function downloadJson() {
         <p>업무정의서를 업로드하고 분석을 시작하면<br />단계별 분석 결과가 여기에 표시됩니다.</p>
       </div>
 
-      <div v-else-if="workflow.analysisStatus === 'analyzing'" class="analyzing-state">
+      <div v-else-if="pipeline.analysisStatus === 'analyzing'" class="analyzing-state">
         <span class="analyzing-state__spinner" aria-hidden="true"></span>
-        <p>{{ workflow.analysisStage || "분석 중…" }}</p>
+        <p>{{ pipeline.analysisStage || "분석 중…" }}</p>
       </div>
 
-      <div v-else-if="workflow.analysisStatus === 'error'" class="analyzing-state analyzing-state--error">
-        <p class="upload-error">{{ workflow.analysisError }}</p>
-        <button type="button" class="btn btn--outline" @click="startAnalysis">다시 시도</button>
+      <div v-else-if="pipeline.analysisStatus === 'error'" class="analyzing-state analyzing-state--error">
+        <p class="upload-error">{{ pipeline.analysisError }}</p>
+        <button type="button" class="btn btn--outline" @click="pipeline.startAnalysis">다시 시도</button>
       </div>
 
-      <template v-else-if="workflow.analysisStatus === 'done'">
-        <div class="analysis-summary" v-if="workflow.analysis">
-          <h3 v-if="workflow.analysis.document_title">{{ workflow.analysis.document_title }}</h3>
-          <p>{{ workflow.analysis.summary }}</p>
+      <template v-else-if="pipeline.analysisStatus === 'done'">
+        <div class="analysis-summary" v-if="pipeline.analysis">
+          <h3 v-if="pipeline.analysis.document_title">{{ pipeline.analysis.document_title }}</h3>
+          <p>{{ pipeline.analysis.summary }}</p>
         </div>
 
         <div v-if="!hasSteps" class="empty-state">
@@ -417,38 +413,38 @@ function downloadJson() {
       </template>
     </div>
 
-    <div v-if="workflow.analysisStatus === 'done' && hasSteps" class="panel__footer">
+    <div v-if="pipeline.analysisStatus === 'done' && hasSteps" class="panel__footer">
       <div class="recommend-section">
         <h3 class="export-section__title">A360 흐름도 추천</h3>
 
-        <div v-if="workflow.recommendStatus === 'idle'" class="recommend-section__actions">
-          <button type="button" class="btn btn--primary" @click="startRecommend">추천안 생성</button>
+        <div v-if="pipeline.recommendStatus === 'idle'" class="recommend-section__actions">
+          <button type="button" class="btn btn--primary" @click="pipeline.startRecommend">추천안 생성</button>
         </div>
 
-        <div v-else-if="workflow.recommendStatus === 'generating'" class="recommend-section__actions">
+        <div v-else-if="pipeline.recommendStatus === 'generating'" class="recommend-section__actions">
           <button type="button" class="btn btn--primary" disabled>생성 중…</button>
         </div>
 
-        <div v-else-if="workflow.recommendStatus === 'error'" class="analyzing-state analyzing-state--error">
-          <p class="upload-error">{{ workflow.recommendError }}</p>
-          <button type="button" class="btn btn--outline" @click="startRecommend">다시 시도</button>
+        <div v-else-if="pipeline.recommendStatus === 'error'" class="analyzing-state analyzing-state--error">
+          <p class="upload-error">{{ pipeline.recommendError }}</p>
+          <button type="button" class="btn btn--outline" @click="pipeline.startRecommend">다시 시도</button>
         </div>
 
-        <template v-else-if="workflow.recommendStatus === 'done'">
+        <template v-else-if="pipeline.recommendStatus === 'done'">
           <div class="recommend-section__actions">
-            <span class="recommend-section__version">v{{ workflow.recommendation?.version }}</span>
+            <span class="recommend-section__version">v{{ pipeline.recommendation?.version }}</span>
             <button type="button" class="btn btn--outline" @click="showFlowModal = true">흐름도 보기</button>
             <button
               type="button"
               class="btn btn--text"
-              :disabled="workflow.recommendUndoStack.length === 0"
-              @click="undoRecommendationEdit"
+              :disabled="pipeline.recommendUndoStack.length === 0"
+              @click="pipeline.undoRecommendationEdit"
             >
               실행 취소
             </button>
           </div>
-          <p v-if="workflow.recommendSaveError" class="upload-error recommend-section__save-error">
-            {{ workflow.recommendSaveError }}
+          <p v-if="pipeline.recommendSaveError" class="upload-error recommend-section__save-error">
+            {{ pipeline.recommendSaveError }}
           </p>
         </template>
       </div>
@@ -464,11 +460,11 @@ function downloadJson() {
     </div>
   </section>
 
-  <div v-if="workflow.recommendStatus === 'generating'" class="modal-overlay" role="alertdialog" aria-live="polite" aria-busy="true">
+  <div v-if="pipeline.recommendStatus === 'generating'" class="modal-overlay" role="alertdialog" aria-live="polite" aria-busy="true">
     <div class="modal modal--recommend-loading">
       <div class="modal__body modal__body--center">
         <span class="analyzing-state__spinner" aria-hidden="true"></span>
-        <p>{{ workflow.recommendStage || "추천안을 생성하는 중…" }}</p>
+        <p>{{ pipeline.recommendStage || "추천안을 생성하는 중…" }}</p>
       </div>
     </div>
   </div>
