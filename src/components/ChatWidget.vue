@@ -1,19 +1,21 @@
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
-import {
-  workflow,
-  toggleChat,
-  closeChat,
-  dockChat,
-  undockChat,
-  sendChatMessage,
-} from "../store/workflow";
 import { formatMessage } from "../utils/chatFormat";
+
+const props = defineProps({
+  messages: { type: Array, required: true },
+  open: { type: Boolean, default: false },
+  docked: { type: Boolean, default: true },
+  dockZoneId: { type: String, required: true },
+  dockedTitle: { type: String, default: "AI 챗봇 (대화형 수정)" },
+  floatingTitle: { type: String, default: "AI 챗봇" },
+  hint: { type: String, default: "A360 액션·패키지 사용법 등을 질문하면 답변해드립니다." },
+});
+const emit = defineEmits(["toggle", "close", "dock", "undock", "send"]);
 
 const POPUP_WIDTH = 540;
 const POPUP_HEIGHT = 780;
 const MARGIN = 24;
-const DOCK_ZONE_ID = "analysis";
 
 const draft = ref("");
 const popupRef = ref(null);
@@ -24,7 +26,7 @@ const isOverDockZone = ref(false);
 let dragOffset = { x: 0, y: 0 };
 
 const popupStyle = computed(() => {
-  if (workflow.chatDocked || position.x === null) return {};
+  if (props.docked || position.x === null) return {};
   return { left: `${position.x}px`, top: `${position.y}px` };
 });
 
@@ -41,7 +43,7 @@ function scrollToBottom() {
 }
 
 watch(
-  () => workflow.chatOpen || workflow.chatDocked,
+  () => props.open || props.docked,
   async (isOpen) => {
     if (!isOpen) return;
     initPosition();
@@ -51,14 +53,14 @@ watch(
 );
 
 onMounted(async () => {
-  if (!workflow.chatOpen && !workflow.chatDocked) return;
+  if (!props.open && !props.docked) return;
   initPosition();
   await nextTick();
   scrollToBottom();
 });
 
 function getDockZoneEl() {
-  return document.getElementById(DOCK_ZONE_ID);
+  return document.getElementById(props.dockZoneId);
 }
 
 function isPointInDockZone(event) {
@@ -79,7 +81,7 @@ function setDockZoneHighlight(active) {
 }
 
 function startDrag(event) {
-  if (!popupRef.value || workflow.chatDocked) return;
+  if (!popupRef.value || props.docked) return;
   isDragging.value = true;
   const rect = popupRef.value.getBoundingClientRect();
   dragOffset = { x: event.clientX - rect.left, y: event.clientY - rect.top };
@@ -107,13 +109,13 @@ function stopDrag() {
   setDockZoneHighlight(false);
 
   if (isOverDockZone.value) {
-    dockChat();
+    emit("dock");
   }
   isOverDockZone.value = false;
 }
 
 watch(
-  () => workflow.chatMessages.map((message) => message.text).join(""),
+  () => props.messages.map((message) => message.text).join(""),
   async () => {
     await nextTick();
     scrollToBottom();
@@ -124,19 +126,18 @@ async function handleSend() {
   const message = draft.value.trim();
   if (!message) return;
   draft.value = "";
-  await sendChatMessage(message);
+  emit("send", message);
 }
-
 </script>
 
 <template>
 <div class="chat-widget">
   <button
-    v-if="!workflow.chatDocked"
+    v-if="!docked"
     type="button"
     class="chat-fab"
     aria-label="AI 챗봇 열기"
-    @click="toggleChat"
+    @click="emit('toggle')"
   >
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <rect x="4" y="7" width="16" height="12" rx="4" fill="#ffffff" />
@@ -147,28 +148,28 @@ async function handleSend() {
     </svg>
   </button>
 
-  <Teleport to="body" :disabled="workflow.chatDocked">
+  <Teleport to="body" :disabled="docked">
     <div
-      v-if="workflow.chatOpen || workflow.chatDocked"
+      v-if="open || docked"
       ref="popupRef"
       class="chat-popup"
-      :class="{ 'chat-popup--docked': workflow.chatDocked, 'chat-popup--drop-ready': isOverDockZone }"
+      :class="{ 'chat-popup--docked': docked, 'chat-popup--drop-ready': isOverDockZone }"
       :style="popupStyle"
     >
       <header
         class="chat-popup__header"
-        :class="{ 'chat-popup__header--static': workflow.chatDocked }"
+        :class="{ 'chat-popup__header--static': docked }"
         @pointerdown="startDrag"
       >
         <span class="chat-popup__title">
-          {{ workflow.chatDocked ? "AI 챗봇 (대화형 수정)" : "AI 챗봇" }}
+          {{ docked ? dockedTitle : floatingTitle }}
         </span>
         <button
-          v-if="workflow.chatDocked"
+          v-if="docked"
           type="button"
           class="chat-popup__minimize"
           aria-label="챗봇 최소화"
-          @click="undockChat"
+          @click="emit('undock')"
         >
           &minus;
         </button>
@@ -177,7 +178,7 @@ async function handleSend() {
           type="button"
           class="chat-popup__close"
           aria-label="챗봇 닫기"
-          @click="closeChat"
+          @click="emit('close')"
         >
           ✕
         </button>
@@ -185,7 +186,7 @@ async function handleSend() {
 
       <div class="chat-popup__messages" ref="messagesRef">
         <div
-          v-for="(message, idx) in workflow.chatMessages"
+          v-for="(message, idx) in messages"
           :key="idx"
           class="chat-message"
           :class="`chat-message--${message.role}`"
@@ -210,7 +211,7 @@ async function handleSend() {
         />
         <button type="submit">전송</button>
       </form>
-      <p class="chat-popup__hint">A360 액션·패키지 사용법 등을 질문하면 답변해드립니다.</p>
+      <p class="chat-popup__hint">{{ hint }}</p>
     </div>
   </Teleport>
 </div>
