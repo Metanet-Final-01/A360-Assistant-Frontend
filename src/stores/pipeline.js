@@ -1,12 +1,15 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { uploadDocument, parseDocument, createDocumentFromText } from "../api/documents";
-import { analyzeSession } from "../api/analysis";
-import { recommendSession, listRecommendations, saveRecommendation } from "../api/recommend";
+import { turnStream } from "../api/agent";
+import { listRecommendations, saveRecommendation } from "../api/recommend";
 import { ApiError } from "../api/http";
 
-// NOTE: 분석(/api/sessions/{id}/analyze)·추천/흐름도(/api/sessions/{id}/recommend 등, RPA-61)는
-// 전부 실제 백엔드와 연동되어 있다. recommendation.recommendation이 흐름도 트리(steps→actions→children)
+// NOTE: 분석·추천 생성은 에이전트 단일 진입점 POST /api/sessions/{id}/turn으로 통합됐다
+// (RPA-64/67 — 레거시 /analyze·/recommend는 제거). 버튼은 합성 메시지를 보내고, done.data의
+// 산출물 필드(analysis_result/recommendation)를 보고 상태를 갱신한다(applyTurnArtifacts —
+// 챗에서 만들어진 분석/흐름도도 같은 경로로 반영된다).
+// recommendation.recommendation이 흐름도 트리(steps→actions→children)
 // 원본이고, RecommendationFlowModal이 이를 렌더·편집한다 — 편집은 모달의 로컬 복사본에서만 하고
 // "저장" 버튼을 눌렀을 때 한 번만 새 버전으로 저장한다(POST .../recommendations, 호출마다 무조건
 // 새 버전 INSERT). 백엔드에 개별 버전 조회 API가 없어 실행취소·버전 되돌리기는 프론트가 들고 있는
@@ -22,13 +25,13 @@ export const usePipelineStore = defineStore("pipeline", () => {
   const sessionId = ref(null); // 이후 분석/추천/챗봇 API의 키
   const document = ref(null); // POST /api/documents 응답 원본 (id, status, page_count, warnings, error 등)
 
-  // 분석 상태 (POST /api/sessions/{id}/analyze)
+  // 분석 상태 (POST /api/sessions/{id}/turn, done.data.analysis_result)
   const analysisStatus = ref("idle"); // idle | analyzing | done | error
   const analysisStage = ref(""); // 진행 중 stage 이벤트의 표시용 문구
   const analysisError = ref("");
-  const analysis = ref(null); // done.data 원본: { analysis_id, document_title, summary, steps, ambiguities }
+  const analysis = ref(null); // analysis_result + analysis_id: { analysis_id, document_title, summary, steps, ambiguities }
 
-  // 흐름도(추천안) 상태 (POST /api/sessions/{id}/recommend 등, RPA-61)
+  // 흐름도(추천안) 상태 (생성: /turn, 버전 저장·조회: /recommendations REST — RPA-61 유지)
   const recommendStatus = ref("idle"); // idle | generating | done | error
   const recommendStage = ref("");
   const recommendError = ref("");
@@ -137,6 +140,38 @@ export const usePipelineStore = defineStore("pipeline", () => {
     }
   }
 
+  // /turn done.data에 실려 온 산출물을 상태에 반영한다 — 버튼발 턴이든 챗발 턴이든 공통.
+  // 백엔드가 type과 무관하게 non-null 산출물을 전부 저장하므로("분석 없이 바로 흐름도" 턴은
+  // 분석+흐름도가 같이 온다) 프론트도 필드 존재 여부로 반영한다.
+  function applyTurnArtifacts(data) {
+    if (!data) return;
+    if (data.analysis_result) {
+      analysis.value = { ...data.analysis_result, analysis_id: data.analysis_id ?? null };
+      analysisStatus.value = "done";
+      analysisError.value = "";
+    }
+    if (data.recommendation) {
+      recommendation.value = {
+        id: data.id,
+        version: data.version,
+        parent_version: data.parent_version,
+        source: data.source,
+        change_summary: data.change_summary,
+        created_at: data.created_at,
+        recommendation: data.recommendation,
+      };
+      recommendStatus.value = "done";
+      recommendError.value = "";
+      recommendTreesByVersion.value[data.version] = JSON.parse(JSON.stringify(data.recommendation));
+      loadRecommendationHistory();
+    }
+  }
+
+  // 분석 시작 버튼 — intent 필드가 없으므로 합성 메시지로 에이전트의 분석 브랜치를 태운다
+  const ANALYZE_MESSAGE = "이 업무정의서를 분석해서 업무 단계를 정리해줘";
+  // 추천안 생성 버튼 합성 메시지 (작업 명세의 문구 그대로)
+  const RECOMMEND_MESSAGE = "이 업무정의서로 자동화 흐름도 만들어줘";
+
   async function startAnalysis() {
     if (document.value?.status !== "parsed" || !sessionId.value || analysisStatus.value === "analyzing") {
       return;
@@ -155,16 +190,19 @@ export const usePipelineStore = defineStore("pipeline", () => {
     recommendTreesByVersion.value = {};
     recommendSaveError.value = "";
 
-    await analyzeSession(sessionId.value, {
+    await turnStream(sessionId.value, ANALYZE_MESSAGE, {
       onStage: (message) => {
         analysisStage.value = message;
       },
       onDone: (data) => {
-        analysis.value = data;
-        analysisStatus.value = "done";
+        applyTurnArtifacts(data);
+        if (!data?.analysis_result) {
+          // 에이전트가 분석 대신 일반 답변으로 흐른 경우 — 성공 done이어도 분석 산출물이 없다
+          analysisStatus.value = "error";
+          analysisError.value = data?.answer || "분석 결과를 받지 못했습니다. 다시 시도해주세요.";
+        }
       },
       onError: (code, message) => {
-        // 503 AGENT_UNAVAILABLE은 엔진 랜딩 전의 레거시 케이스라 방어적으로만 남겨둔다 — 재시도 안내로 충분
         analysisStatus.value = "error";
         analysisError.value =
           code === "AGENT_UNAVAILABLE"
@@ -174,7 +212,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     });
   }
 
-  // 흐름도(추천안) 생성 — 최신 분석 결과 기준으로 A360 액션 트리를 만들어 v1로 저장한다 (RPA-61)
+  // 흐름도(추천안) 생성 버튼 — 합성 메시지 턴. 생성본은 백엔드가 새 버전으로 저장까지 한다.
   async function startRecommend() {
     if (analysisStatus.value !== "done" || !sessionId.value || recommendStatus.value === "generating") {
       return;
@@ -184,18 +222,17 @@ export const usePipelineStore = defineStore("pipeline", () => {
     recommendError.value = "";
     recommendSaveError.value = "";
 
-    await recommendSession(sessionId.value, {
+    await turnStream(sessionId.value, RECOMMEND_MESSAGE, {
       onStage: (message) => {
         recommendStage.value = message;
       },
       onDone: (data) => {
-        recommendation.value = data;
-        recommendStatus.value = "done";
-        recommendUndoStack.value = [];
-        recommendTreesByVersion.value = {
-          [data.version]: JSON.parse(JSON.stringify(data.recommendation)),
-        };
-        loadRecommendationHistory();
+        if (data?.recommendation) recommendUndoStack.value = []; // 새 생성 기준으로 실행취소 초기화
+        applyTurnArtifacts(data);
+        if (!data?.recommendation) {
+          recommendStatus.value = "error";
+          recommendError.value = data?.answer || "추천안을 받지 못했습니다. 다시 시도해주세요.";
+        }
       },
       onError: (code, message) => {
         recommendStatus.value = "error";
@@ -302,6 +339,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     recommendSaveError,
     selectFile,
     submitTextRequest,
+    applyTurnArtifacts,
     startAnalysis,
     startRecommend,
     loadRecommendationHistory,

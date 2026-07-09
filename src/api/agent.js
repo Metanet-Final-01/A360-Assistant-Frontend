@@ -1,39 +1,58 @@
-import { apiRequest, getToken } from "./http";
+import { getToken } from "./http";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
-// POST /api/agent/chat — 비스트리밍 질의응답 (한 번에 답 + sources).
-// sessionId를 주면 그 세션의 대화 이력을 주입·저장한다(멀티턴). 생략/null이면 무상태.
-// 빈 문자열은 백엔드가 400으로 거부하니 절대 넘기지 말 것 — 없으면 그냥 undefined/null로 둔다.
-export function chatOnce(message, sessionId) {
-  return apiRequest("/api/agent/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, session_id: sessionId ?? null }),
-  });
+async function readErrorDetail(response) {
+  try {
+    const body = await response.json();
+    const detail = body?.detail;
+    if (detail && typeof detail === "object" && !Array.isArray(detail)) {
+      return { code: detail.code ?? "UNKNOWN", message: detail.message ?? response.statusText };
+    }
+  } catch {
+    // 본문이 JSON이 아니거나 detail이 없는 경우
+  }
+  return { code: "UNKNOWN", message: response.statusText };
 }
 
-// POST /api/agent/chat/stream — SSE(fetch 스트리밍). event 필드로 token/done/error 분기.
-// sources는 스트림에 실리지 않는다 (필요하면 chatOnce 사용). sessionId 규칙은 chatOnce와 동일.
-export async function chatStream(message, { onToken, onDone, onError }, sessionId) {
+// POST /api/sessions/{sessionId}/turn — 에이전트 단일 진입점 (RPA-64/67). 챗·분석·추천이
+// 전부 이 SSE 하나로 통합됐다 (레거시 /api/agent/chat[/stream]·/analyze·/recommend는 404).
+// intent 필드는 없다 — 에이전트가 message로 브랜치를 판단하므로, 버튼 동작은 프론트가
+// 합성 메시지로 보낸다. operation="compact"만 결정론 신호(LLM 라우터 우회, 압축 노드 직행).
+//
+// 이벤트: token(챗 답변 스트리밍) / stage·partial(진행 상황) / done / error.
+// done.data = { type: "answer"|"analysis"|"recommendation"|"compact", answer, sources,
+//   session_id, analysis_id·analysis_result(분석 산출 시), id·version 등 저장 메타와
+//   recommendation(흐름도 산출 시), compact(압축 시) } — type과 무관하게 non-null 산출물은
+// 백엔드가 모두 저장하므로(예: "분석 없이 바로 흐름도" 턴은 분석+흐름도 둘 다 옴) 프론트도
+// data의 필드 존재 여부로 반영해야 한다.
+//
+// onError(code, message): HTTP 레벨 에러는 detail.code(예: AGENT_UNAVAILABLE)를 전달하고,
+// 스트림 중간의 error 이벤트는 서버가 code를 안 주므로 null로 전달한다.
+export async function turnStream(sessionId, message, { operation = "chat", onToken, onStage, onDone, onError }) {
   const token = getToken();
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
 
   let response;
   try {
-    response = await fetch(`${BASE_URL}/api/agent/chat/stream`, {
+    response = await fetch(`${BASE_URL}/api/sessions/${sessionId}/turn`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ message, session_id: sessionId ?? null }),
+      body: JSON.stringify({ message, operation }),
     });
   } catch {
-    onError("백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.");
+    onError("NETWORK_ERROR", "백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.");
     return;
   }
 
-  if (!response.ok || !response.body) {
-    onError("챗봇 응답을 받아오지 못했습니다.");
+  if (!response.ok) {
+    const { code, message: errorMessage } = await readErrorDetail(response);
+    onError(code, errorMessage);
+    return;
+  }
+  if (!response.body) {
+    onError("UNKNOWN", "응답을 받아오지 못했습니다.");
     return;
   }
 
@@ -60,13 +79,14 @@ export async function chatStream(message, { onToken, onDone, onError }, sessionI
           continue;
         }
 
-        if (event.event === "token") onToken(event.message ?? "");
-        else if (event.event === "done") onDone?.(event.data);
-        else if (event.event === "error") onError(event.message ?? "알 수 없는 오류가 발생했습니다.");
+        if (event.event === "token") onToken?.(event.message ?? "");
+        else if (event.event === "stage" || event.event === "partial") onStage?.(event.message ?? "");
+        else if (event.event === "done") onDone(event.data);
+        else if (event.event === "error") onError(null, event.message ?? "알 수 없는 오류가 발생했습니다.");
       }
     }
   } catch {
     // 서버가 정상 error 이벤트 없이 스트림을 중간에 끊는 경우 (예: 백엔드 미처리 예외)
-    onError("응답을 받는 중 연결이 끊어졌습니다. 다시 시도해주세요.");
+    onError(null, "응답을 받는 중 연결이 끊어졌습니다. 다시 시도해주세요.");
   }
 }

@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { reactive, ref } from "vue";
-import { chatStream } from "../api/agent";
+import { turnStream } from "../api/agent";
 import { createSession } from "../api/sessions";
 import { createInitialChatMessages, nowTime } from "../utils/chatMessages";
 import { evidenceLabel } from "../utils/format";
@@ -476,7 +476,7 @@ export const useArchiveStore = defineStore("archive", () => {
         const { session_id } = await createSession();
         result.backendSessionId = session_id;
       } catch {
-        // 세션 생성 실패 시 무상태로 폴백 — session_id 없이 보내면 백엔드가 단발로 처리한다
+        // 세션 생성 실패 — /turn은 URL에 session_id가 필수라 무상태 폴백이 불가능하다
       }
     }
 
@@ -484,21 +484,22 @@ export const useArchiveStore = defineStore("archive", () => {
     const assistantMessage = reactive({ role: "assistant", text: "", time: nowTime() });
     result.messages.push(assistantMessage);
 
-    await chatStream(
-      trimmed,
-      {
-        onToken: (token) => {
-          assistantMessage.text += token;
-        },
-        onDone: () => {
-          if (!assistantMessage.text) assistantMessage.text = "답변을 생성하지 못했습니다.";
-        },
-        onError: (message) => {
-          assistantMessage.text = assistantMessage.text ? `${assistantMessage.text}\n\n⚠ ${message}` : message;
-        },
+    if (!result.backendSessionId) {
+      assistantMessage.text = "세션을 만들지 못해 메시지를 보낼 수 없습니다. 잠시 후 다시 시도해주세요.";
+      return;
+    }
+
+    await turnStream(result.backendSessionId, trimmed, {
+      onToken: (token) => {
+        assistantMessage.text += token;
       },
-      result.backendSessionId,
-    );
+      onDone: (data) => {
+        if (!assistantMessage.text) assistantMessage.text = data?.answer || "답변을 생성하지 못했습니다.";
+      },
+      onError: (code, message) => {
+        assistantMessage.text = assistantMessage.text ? `${assistantMessage.text}\n\n⚠ ${message}` : message;
+      },
+    });
   }
 
   // 로그아웃 시 목업 데이터를 초기 상태로 되돌린다
