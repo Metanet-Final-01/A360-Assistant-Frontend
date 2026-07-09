@@ -1,7 +1,16 @@
 <script setup>
 import { onMounted, ref } from "vue";
-import { workflow, logout, bootstrapAuth } from "./store/workflow";
-import AppHeader from "./components/AppHeader.vue";
+import {
+  workflow,
+  logout,
+  bootstrapAuth,
+  toggleChat,
+  closeChat,
+  dockChat,
+  undockChat,
+  sendChatMessage,
+} from "./store/workflow";
+import AppSidebar from "./components/AppSidebar.vue";
 import UploadPanel from "./components/UploadPanel.vue";
 import AnalysisPanel from "./components/AnalysisPanel.vue";
 import ChatWidget from "./components/ChatWidget.vue";
@@ -38,18 +47,30 @@ function handleLogout() {
   </template>
 
   <div v-else class="app-shell">
-    <AppHeader :active-menu="activeMenu" @navigate="activeMenu = $event" @logout="handleLogout" />
+    <AppSidebar :active-menu="activeMenu" @navigate="activeMenu = $event" @logout="handleLogout" />
 
-    <main v-if="activeMenu === 'analysis'" class="app-main" id="analysis">
-      <div class="app-main__grid" :class="{ 'app-main__grid--docked': workflow.chatDocked }">
-        <UploadPanel />
-        <AnalysisPanel />
-        <ChatWidget />
-      </div>
-    </main>
+    <div class="app-content">
+      <main v-if="activeMenu === 'analysis'" class="app-main" id="analysis">
+        <div class="app-main__grid" :class="{ 'app-main__grid--docked': workflow.chatDocked }">
+          <UploadPanel />
+          <AnalysisPanel />
+          <ChatWidget
+            :messages="workflow.chatMessages"
+            :open="workflow.chatOpen"
+            :docked="workflow.chatDocked"
+            dock-zone-id="analysis"
+            @toggle="toggleChat"
+            @close="closeChat"
+            @dock="dockChat"
+            @undock="undockChat"
+            @send="sendChatMessage"
+          />
+        </div>
+      </main>
 
-    <main v-else class="app-main app-main--archive">
-      <ArchivePage />
-    </main>
+      <main v-else class="app-main app-main--archive" id="archive">
+        <ArchivePage />
+      </main>
+    </div>
   </div>
 </template>

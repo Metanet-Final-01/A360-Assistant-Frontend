@@ -10,9 +10,11 @@ import { ApiError, getToken, setToken, clearToken } from "../api/http";
 // NOTE: 분석(/api/sessions/{id}/analyze)·추천/흐름도(/api/sessions/{id}/recommend 등, RPA-61)·
 // 멀티턴 챗(/api/agent/chat[/stream], session_id)·업로드/파싱/텍스트 입력(RPA-42/43/44)은
 // 전부 실제 백엔드와 연동되어 있다. workflow.recommendation.recommendation이 흐름도
-// 트리(steps→actions→children) 원본이고, FlowModal이 이를 렌더·편집한다 — 수정은 항상
-// 새 버전 저장(POST .../recommendations)이라 실행취소는 프론트가 들고 있는 이전 트리를
-// 다시 저장하는 것으로 구현한다(workflow.recommendUndoStack).
+// 트리(steps→actions→children) 원본이고, RecommendationFlowModal이 이를 렌더·편집한다 —
+// 편집은 모달의 로컬 복사본에서만 하고 "저장" 버튼을 눌렀을 때 한 번만 새 버전으로 저장한다
+// (POST .../recommendations, 호출마다 무조건 새 버전 INSERT). 백엔드에 개별 버전 조회 API가
+// 없어 실행취소·버전 되돌리기는 프론트가 들고 있는 트리(recommendUndoStack·
+// recommendTreesByVersion)를 다시 저장하는 것으로 구현한다.
 
 export function evidenceLabel(evidence) {
   if (!evidence) return "";
@@ -36,128 +38,11 @@ function makeId(prefix) {
 
 const GREETING = "안녕하세요! A360 액션·패키지 사용법 등 궁금한 점을 무엇이든 물어보세요.";
 
-// 아카이브 > 챗봇 탭에 표시할 샘플 대화 기록 (실제 대화 저장 API가 아직 없어 프런트 상태로만 시작 데이터를 구성)
-const ARCHIVE_SEED_SESSIONS = [
-  {
-    title: "A360 액션·패키지 사용법 문의",
-    dateLabel: nowTime(),
-    messages: [
-      { role: "assistant", text: GREETING, time: "오후 12:06" },
-      { role: "user", text: "자기소개해봐.", time: "오후 12:07" },
-      {
-        role: "assistant",
-        text: "안녕하세요. 저는 Automation Anywhere Automation 360(A360) 작업을 도와드리는 추천 어시스턴트입니다.\n\n다만 현재 제공된 근거 문서가 없어, A360의 특정 패키지나 액션을 사실로 단정해서 안내할 수는 없습니다.\n\n근거 문서가 있는 경우에만 그 내용에 맞춰 정확히 추천드릴 수 있어요.\n\n원하시면 제가 다음처럼 도와드릴 수 있습니다:\n- 업무 내용을 A360 자동화 관점으로 정리\n- 어떤 종류의 패키지/액션이 필요할지 방향 제안\n- 구현 시 고려할 입력값, 예외 처리, 순서 정리\n\n근거 문서 제목: 없음(검색된 문서 없음)",
-        time: "오후 12:07",
-      },
-    ],
-  },
-  {
-    title: "A360 근거 문서 관련 문의",
-    dateLabel: "어제",
-    messages: [
-      { role: "assistant", text: GREETING, time: "오전 10:12" },
-      { role: "user", text: "A360이 근거 문서를 제공하지 않는 경우는 어떤 상황인가요?", time: "오전 10:13" },
-      {
-        role: "assistant",
-        text: "업로드된 업무정의서에서 관련 내용을 찾지 못했거나, 검색된 문서의 유사도가 기준을 넘지 못한 경우입니다. 이럴 땐 추측성 답변 대신 문서 재업로드나 질문을 구체화해 주시길 안내드려요.",
-        time: "오전 10:13",
-      },
-    ],
-  },
-  {
-    title: "특정 패키지 액션 사실 확인",
-    dateLabel: "2025.07.02",
-    messages: [
-      { role: "assistant", text: GREETING, time: "오후 3:41" },
-      { role: "user", text: "특정 패키지의 액션이 사실인지 궁금합니다.", time: "오후 3:42" },
-      {
-        role: "assistant",
-        text: "근거 문서에 명시된 패키지·액션만 사실로 안내해 드립니다. 확인하고 싶은 패키지명과 액션명을 알려주시면 근거 문서 기준으로 답변드릴게요.",
-        time: "오후 3:42",
-      },
-    ],
-  },
-  {
-    title: "추천 근거 문서 상세 요청",
-    dateLabel: "2025.06.30",
-    messages: [
-      { role: "assistant", text: GREETING, time: "오전 9:05" },
-      { role: "user", text: "추천 결과에 대한 근거 문서를 더 자세히 알고 싶어요.", time: "오전 9:06" },
-      {
-        role: "assistant",
-        text: "각 추천 항목의 근거는 분석 결과 화면의 '근거' 항목에서 확인하실 수 있어요. 특정 단계의 근거를 더 자세히 보고 싶으시면 단계 번호를 알려주세요.",
-        time: "오전 9:06",
-      },
-    ],
-  },
-  {
-    title: "A360 자동화 관점 정리 요청",
-    dateLabel: "2025.06.28",
-    messages: [
-      { role: "assistant", text: GREETING, time: "오후 1:22" },
-      { role: "user", text: "A360 자동화 관점으로 업무 내용을 정리해줘.", time: "오후 1:23" },
-      {
-        role: "assistant",
-        text: "업무 내용을 단계별로 나눠 자동화 관점(트리거, 입력값, 처리 로직, 출력값, 예외 처리)으로 정리해 드릴게요. 업무 내용을 붙여넣어 주세요.",
-        time: "오후 1:23",
-      },
-    ],
-  },
-  {
-    title: "패키지/액션 필요 항목 제안",
-    dateLabel: "2025.06.27",
-    messages: [
-      { role: "assistant", text: GREETING, time: "오전 11:47" },
-      { role: "user", text: "업무 수행을 위해 필요한 패키지/액션을 제안해줘.", time: "오전 11:48" },
-      {
-        role: "assistant",
-        text: "업무 흐름을 알려주시면 단계별로 필요한 패키지와 액션 후보를 정리해 드릴게요.",
-        time: "오전 11:48",
-      },
-    ],
-  },
-  {
-    title: "액션 입력값 예시 문의",
-    dateLabel: "2025.06.25",
-    messages: [
-      { role: "assistant", text: GREETING, time: "오후 4:15" },
-      { role: "user", text: "특정 액션의 입력값 예시를 알고 싶습니다.", time: "오후 4:16" },
-      {
-        role: "assistant",
-        text: "어떤 액션인지 알려주시면 근거 문서를 참고해 입력값 예시를 안내해 드릴게요.",
-        time: "오후 4:16",
-      },
-    ],
-  },
-  {
-    title: "패키지 순서 정리 요청",
-    dateLabel: "2025.06.24",
-    messages: [
-      { role: "assistant", text: GREETING, time: "오전 8:50" },
-      { role: "user", text: "업무 흐름에 맞는 패키지 순서를 정리해주세요.", time: "오전 8:51" },
-      {
-        role: "assistant",
-        text: "업무 흐름의 단계를 순서대로 알려주시면, 각 단계에 맞는 패키지 실행 순서를 정리해 드릴게요.",
-        time: "오전 8:51",
-      },
-    ],
-  },
-];
-
 function createInitialChatMessages() {
   return [{ role: "assistant", text: GREETING, time: nowTime() }];
 }
 
-function createArchiveSessions() {
-  return ARCHIVE_SEED_SESSIONS.map((seed) => ({
-    id: makeId("chat"),
-    title: seed.title,
-    dateLabel: seed.dateLabel,
-    messages: seed.messages.map((message) => ({ ...message })),
-  }));
-}
-
-// 아카이브 > 분석 결과 탭에 표시할 샘플 분석 결과 목록 (결과 조회/보관 API가 아직 없어
+// 아카이브 화면에 표시할 샘플 분석 결과 목록 (결과 조회/보관 API가 아직 없어
 // 프런트 상태로만 시작 데이터를 구성 — 실제 연동 전까지 목업으로 화면을 채운다)
 function makeResultStep({ stepNo, title, action, pkg, inputVar, outputVar, page, snippet, branching = "" }) {
   return {
@@ -563,6 +448,10 @@ function createArchiveResults() {
       steps: seed.steps.map((step) => ({ ...step })),
       ambiguities: [],
     },
+    // 분석 결과 하나당 챗봇 대화 하나가 대응된다 — 대화를 이어가면 그 결과 전용 백엔드
+    // 세션을 만들어 여기 저장한다 (같은 결과는 항상 같은 session_id로 보내 멀티턴을 쌓는다).
+    backendSessionId: null,
+    messages: createInitialChatMessages(),
   }));
 }
 
@@ -604,21 +493,20 @@ export const workflow = reactive({
   recommendation: null, // { id, version, parent_version, source, change_summary, created_at, recommendation: {schema_version, steps, variables, notes} }
   recommendVersions: [], // GET .../recommendations 메타 목록 (최신 순, 트리 내용은 없음)
   recommendUndoStack: [], // 편집 직전 트리 스냅샷들 — 실행취소 시 pop해서 다시 저장
+  recommendTreesByVersion: {}, // 이 세션에서 확보한 버전별 트리 캐시 — 버전 이력 "되돌리기"의 원본 (백엔드엔 개별 버전 조회 API가 없다)
+  recommendSaveError: "", // 편집/실행취소 저장 실패 시 메시지 — done 화면은 유지한 채 이 메시지만 보여준다
 
   // 챗봇 상태
   chatOpen: false,
   chatDocked: true,
   chatMessages: createInitialChatMessages(),
 
-  // 아카이브 > 챗봇 상태 (대화 기록 목록 + 상세 대화)
-  archiveSessions: createArchiveSessions(),
-  activeArchiveSessionId: null,
-
-  // 아카이브 > 분석 결과 상태 (결과 목록 + 선택된 결과 상세)
+  // 아카이브 상태 (결과 목록 + 선택된 결과 상세 + 그 결과에 대응하는 챗봇 대화)
   archiveResults: createArchiveResults(),
   activeArchiveResultId: null,
+  archiveChatOpen: false,
+  archiveChatDocked: true,
 });
-workflow.activeArchiveSessionId = workflow.archiveSessions[0]?.id ?? null;
 workflow.activeArchiveResultId = workflow.archiveResults[0]?.id ?? null;
 
 let timers = [];
@@ -642,6 +530,8 @@ function resetPipelineState() {
   workflow.recommendation = null;
   workflow.recommendVersions = [];
   workflow.recommendUndoStack = [];
+  workflow.recommendTreesByVersion = {};
+  workflow.recommendSaveError = "";
 }
 
 export async function selectFile(file) {
@@ -739,6 +629,8 @@ export async function startAnalysis() {
   workflow.recommendation = null;
   workflow.recommendVersions = [];
   workflow.recommendUndoStack = [];
+  workflow.recommendTreesByVersion = {};
+  workflow.recommendSaveError = "";
 
   await analyzeSession(workflow.sessionId, {
     onStage: (message) => {
@@ -771,6 +663,7 @@ export async function startRecommend() {
   workflow.recommendStatus = "generating";
   workflow.recommendStage = "";
   workflow.recommendError = "";
+  workflow.recommendSaveError = "";
 
   await recommendSession(workflow.sessionId, {
     onStage: (message) => {
@@ -780,6 +673,9 @@ export async function startRecommend() {
       workflow.recommendation = data;
       workflow.recommendStatus = "done";
       workflow.recommendUndoStack = [];
+      workflow.recommendTreesByVersion = {
+        [data.version]: JSON.parse(JSON.stringify(data.recommendation)),
+      };
       loadRecommendationHistory();
     },
     onError: (code, message) => {
@@ -811,14 +707,20 @@ async function persistRecommendationTree(tree, changeSummary, source) {
       changeSummary,
     });
     workflow.recommendation = { ...saved, recommendation: tree };
+    workflow.recommendTreesByVersion[saved.version] = JSON.parse(JSON.stringify(tree));
+    workflow.recommendSaveError = "";
     loadRecommendationHistory();
   } catch (err) {
-    workflow.recommendError =
+    // recommendStatus는 그대로 "done"으로 둔다 — 여기서 "error"로 바꾸면 이미 만들어진
+    // 흐름도 보기/실행 취소 화면이 사라지고 "다시 시도"가 전체 재생성 버튼으로 바뀐다.
+    // 대신 recommendSaveError로만 실패를 알린다(과거엔 이 필드가 없어 실패가 조용히 묻혔다).
+    workflow.recommendSaveError =
       err instanceof ApiError ? err.message : "추천안 저장 중 오류가 발생했습니다.";
   }
 }
 
-// FlowModal에서 드래그/수정/삭제로 트리를 바꾼 뒤 호출 — 항상 새 버전으로 저장한다(수정=UPDATE 아님).
+// 흐름도 모달(RecommendationFlowModal) 편집 모드에서 "저장" 버튼을 눌렀을 때 호출 —
+// 항상 새 버전으로 저장한다(수정=UPDATE 아님). 미세 조작마다 부르면 버전이 폭발하니 주의.
 export async function saveRecommendationEdit(newTree, changeSummary) {
   if (!workflow.sessionId || !workflow.recommendation) return;
   workflow.recommendUndoStack.push(JSON.parse(JSON.stringify(workflow.recommendation.recommendation)));
@@ -828,8 +730,19 @@ export async function saveRecommendationEdit(newTree, changeSummary) {
 // 직전 트리 스냅샷을 다시 저장해서 "취소"한다 — 백엔드엔 삭제가 없고 항상 새 버전만 쌓인다.
 export async function undoRecommendationEdit() {
   if (!workflow.sessionId || workflow.recommendUndoStack.length === 0) return;
-  const previous = workflow.recommendUndoStack.pop();
+  // 저장이 실패할 수 있으니 성공했을 때만 pop한다 — 미리 pop하면 실패 시 스냅샷을 잃는다.
+  const previous = workflow.recommendUndoStack[workflow.recommendUndoStack.length - 1];
   await persistRecommendationTree(previous, "실행 취소", "drag");
+  if (!workflow.recommendSaveError) workflow.recommendUndoStack.pop();
+}
+
+// 버전 이력 UI의 "이 버전으로 되돌리기" — 백엔드는 append-only이고 개별 버전 조회 API가 없어,
+// 이 브라우저 세션에서 캐시해 둔 해당 버전 트리를 새 버전으로 다시 저장한다. 캐시에 없는
+// 버전(예: 페이지 새로고침 이전에 만든 버전)은 모달이 되돌리기 버튼 자체를 숨긴다.
+export async function revertToRecommendationVersion(version) {
+  const tree = workflow.recommendTreesByVersion[version];
+  if (!tree || workflow.recommendation?.version === version) return;
+  await saveRecommendationEdit(JSON.parse(JSON.stringify(tree)), `v${version} 버전으로 되돌리기`);
 }
 
 export function resetUpload() {
@@ -859,7 +772,7 @@ export function undockChat() {
   workflow.chatOpen = false;
 }
 
-// 챗봇은 무상태(FR-13, 멀티턴 기억 없음) — 매 질문을 /api/agent/chat/stream에 단발로 보낸다.
+// 챗봇은 멀티턴 — session_id를 실어 보내면 백엔드가 그 세션의 대화 이력을 주입하고 이번 턴을 저장한다.
 // 문서 업로드로 이미 세션이 있으면 그 세션에, 없으면 챗 전용 빈 세션을 만들어 이어서 쓴다.
 // 이렇게 하면 이 위젯의 대화가 항상 같은 session_id로 유지되어 백엔드가 멀티턴 이력을 쌓는다.
 async function ensureChatSessionId() {
@@ -901,24 +814,22 @@ export async function sendChatMessage(text) {
   );
 }
 
-export function selectArchiveSession(id) {
-  workflow.activeArchiveSessionId = id;
+export function toggleArchiveChat() {
+  workflow.archiveChatOpen = !workflow.archiveChatOpen;
 }
 
-export function renameArchiveSession(id, title) {
-  const trimmed = title.trim();
-  if (!trimmed) return;
-  const session = workflow.archiveSessions.find((s) => s.id === id);
-  if (session) session.title = trimmed;
+export function closeArchiveChat() {
+  workflow.archiveChatOpen = false;
 }
 
-export function deleteArchiveSession(id) {
-  const idx = workflow.archiveSessions.findIndex((s) => s.id === id);
-  if (idx === -1) return;
-  workflow.archiveSessions.splice(idx, 1);
-  if (workflow.activeArchiveSessionId === id) {
-    workflow.activeArchiveSessionId = workflow.archiveSessions[0]?.id ?? null;
-  }
+export function dockArchiveChat() {
+  workflow.archiveChatDocked = true;
+  workflow.archiveChatOpen = false;
+}
+
+export function undockArchiveChat() {
+  workflow.archiveChatDocked = false;
+  workflow.archiveChatOpen = false;
 }
 
 export function selectArchiveResult(id) {
@@ -941,35 +852,43 @@ export function deleteArchiveResult(id) {
   }
 }
 
-// 아카이브에서 이어가는 대화도 챗봇과 동일하게 무상태 스트리밍 API를 세션별로 호출한다.
-export async function sendArchiveChatMessage(sessionId, text) {
+// 분석 결과 하나당 챗봇 대화가 대응되므로, 현재 선택된 결과를 대상으로 대화를 이어간다.
+// 대화별 백엔드 세션을 만들어(최초 1회) 그 session_id로 계속 보낸다 — 메인 챗 위젯의
+// workflow.sessionId(문서 파이프라인 세션)와는 별개 세션이라 서로 이력이 섞이지 않는다.
+export async function sendArchiveChatMessage(text) {
   const trimmed = text.trim();
   if (!trimmed) return;
-  const session = workflow.archiveSessions.find((s) => s.id === sessionId);
-  if (!session) return;
+  const result = workflow.archiveResults.find((r) => r.id === workflow.activeArchiveResultId);
+  if (!result) return;
 
-  session.messages.push({ role: "user", text: trimmed, time: nowTime() });
-  const assistantMessage = reactive({ role: "assistant", text: "", time: nowTime() });
-  session.messages.push(assistantMessage);
-  session.dateLabel = nowTime();
-
-  const idx = workflow.archiveSessions.findIndex((s) => s.id === sessionId);
-  if (idx > 0) {
-    const [moved] = workflow.archiveSessions.splice(idx, 1);
-    workflow.archiveSessions.unshift(moved);
+  if (!result.backendSessionId) {
+    try {
+      const { session_id } = await createSession();
+      result.backendSessionId = session_id;
+    } catch {
+      // 세션 생성 실패 시 무상태로 폴백 — session_id 없이 보내면 백엔드가 단발로 처리한다
+    }
   }
 
-  await chatStream(trimmed, {
-    onToken: (token) => {
-      assistantMessage.text += token;
+  result.messages.push({ role: "user", text: trimmed, time: nowTime() });
+  const assistantMessage = reactive({ role: "assistant", text: "", time: nowTime() });
+  result.messages.push(assistantMessage);
+
+  await chatStream(
+    trimmed,
+    {
+      onToken: (token) => {
+        assistantMessage.text += token;
+      },
+      onDone: () => {
+        if (!assistantMessage.text) assistantMessage.text = "답변을 생성하지 못했습니다.";
+      },
+      onError: (message) => {
+        assistantMessage.text = assistantMessage.text ? `${assistantMessage.text}\n\n⚠ ${message}` : message;
+      },
     },
-    onDone: () => {
-      if (!assistantMessage.text) assistantMessage.text = "답변을 생성하지 못했습니다.";
-    },
-    onError: (message) => {
-      assistantMessage.text = assistantMessage.text ? `${assistantMessage.text}\n\n⚠ ${message}` : message;
-    },
-  });
+    result.backendSessionId,
+  );
 }
 
 export function buildExportPayload() {
@@ -1021,8 +940,8 @@ export function logout() {
   workflow.userEmail = null;
   workflow.chatOpen = false;
   workflow.chatMessages = createInitialChatMessages();
-  workflow.archiveSessions = createArchiveSessions();
-  workflow.activeArchiveSessionId = workflow.archiveSessions[0]?.id ?? null;
   workflow.archiveResults = createArchiveResults();
   workflow.activeArchiveResultId = workflow.archiveResults[0]?.id ?? null;
+  workflow.archiveChatOpen = false;
+  workflow.archiveChatDocked = true;
 }
