@@ -47,8 +47,13 @@ export async function turnStream(sessionId, message, { operation = "chat", onTok
   }
 
   if (response.status === 401) {
-    notifyUnauthorized(); // 토큰 만료 — 로그인 화면으로 (apiRequest의 401 처리와 동일)
-    onError("UNAUTHORIZED", "로그인이 만료되었습니다. 다시 로그인해주세요.");
+    try {
+      onError("UNAUTHORIZED", "로그인이 만료되었습니다. 다시 로그인해주세요.");
+    } finally {
+      notifyUnauthorized(); // 토큰 만료 — 로그인 화면으로 (apiRequest의 401 처리와 동일). onError가 먼저 UI에
+      // 반영돼야 하므로 로그아웃(상태 초기화)은 마지막에 실행한다 — 순서를 바꾸면 로그아웃이
+      // chatMessages를 먼저 갈아치워 onError가 쓴 에러 메시지가 유실된다.
+    }
     return;
   }
   if (!response.ok) {

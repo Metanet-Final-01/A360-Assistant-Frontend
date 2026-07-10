@@ -1,4 +1,4 @@
-import { apiRequest, getToken, ApiError } from "./http";
+import { apiRequest, getToken, ApiError, notifyUnauthorized } from "./http";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
@@ -30,6 +30,9 @@ export async function downloadRecommendationExport(sessionId, version) {
     response = await fetch(`${BASE_URL}/api/sessions/${sessionId}/recommendations/${version}/export`, { headers });
   } catch {
     throw new ApiError("NETWORK_ERROR", "백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.", 0);
+  }
+  if (response.status === 401) {
+    notifyUnauthorized(); // 토큰 만료 — 로그인 화면으로 (apiRequest의 401 처리와 동일)
   }
   if (!response.ok) {
     throw new ApiError("EXPORT_FAILED", "내보내기에 실패했습니다. 잠시 후 다시 시도해주세요.", response.status);

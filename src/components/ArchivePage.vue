@@ -1,8 +1,9 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useArchiveStore } from "../stores/archive";
 import { downloadRecommendationExport } from "../api/recommend";
 import { evidenceLabel } from "../utils/format";
+import { buildPackageColorMap, flattenActions } from "../utils/recommendation";
 import { ARCHIVE_PANEL_ORDER_KEY, usePanelReorder } from "../composables/usePanelReorder";
 import FlowModal from "./FlowModal.vue";
 import ChatWidget from "./ChatWidget.vue";
@@ -35,6 +36,11 @@ const pagedSessions = computed(() => {
   return filteredSessions.value.slice(start, start + PAGE_SIZE);
 });
 
+// 검색어가 바뀌면 필터링된 목록 기준으로 다시 1페이지부터 보여준다
+watch(searchQuery, () => {
+  currentPage.value = 1;
+});
+
 const activeSession = computed(
   () => archive.sessions.find((session) => session.id === archive.activeSessionId) ?? null,
 );
@@ -53,6 +59,27 @@ const archivePanels = usePanelReorder({
 });
 
 const analysisSteps = computed(() => archive.detailAnalysis?.steps ?? []);
+
+// 액션/패키지는 분석 결과가 아니라 흐름도(detailRecommendation)에만 있는 정보다 — step_id로
+// 매칭해서 카드에 얹는다(AnalysisPanel.vue와 동일한 방식). 이 세션에 저장된 흐름도가 없으면
+// 자연히 빈 배열이라 아무 것도 안 뜬다.
+const packageColor = computed(() => buildPackageColorMap(archive.detailRecommendation?.recommendation?.steps));
+
+function colorFor(pkg) {
+  return packageColor.value.get(pkg || "미지정") ?? "#888888";
+}
+
+const recommendedActionsByStep = computed(() => {
+  const map = new Map();
+  (archive.detailRecommendation?.recommendation?.steps ?? []).forEach((stepRec) => {
+    map.set(stepRec.step_id, flattenActions(stepRec.actions));
+  });
+  return map;
+});
+
+function actionsForStep(stepId) {
+  return recommendedActionsByStep.value.get(stepId) ?? [];
+}
 
 function goToPage(page) {
   currentPage.value = Math.min(Math.max(1, page), pageCount.value);
@@ -122,6 +149,8 @@ async function exportRecommendationJson() {
         </svg>
         <input v-model="searchQuery" type="text" placeholder="세션 제목 검색" aria-label="세션 제목 검색" />
       </div>
+
+      <p v-if="archive.deleteError" class="upload-error">{{ archive.deleteError }}</p>
 
       <ul class="archive-chat__list">
         <li v-if="archive.listStatus === 'loading'" class="archive-chat__empty">세션 목록을 불러오는 중…</li>
@@ -265,6 +294,15 @@ async function exportRecommendationJson() {
                   <span class="rec-card__field-label">분기</span>
                   <span class="rec-card__field-value">{{ step.branching }}</span>
                 </div>
+
+                <ul v-if="actionsForStep(step.step_id).length" class="rec-card__action-list">
+                  <li v-for="(a, i) in actionsForStep(step.step_id)" :key="i" class="rec-card__action-chip">
+                    <span class="rec-card__action-chip-label">{{ a.label }}</span>
+                    <span class="rec-card__action-chip-package" :style="{ background: colorFor(a.package) }">
+                      {{ a.package }}
+                    </span>
+                  </li>
+                </ul>
               </div>
 
               <footer v-if="step.evidence" class="rec-card__footer">근거: {{ evidenceLabel(step.evidence) }}</footer>
@@ -296,12 +334,15 @@ async function exportRecommendationJson() {
       dock-zone-id="archive"
       docked-title="챗봇 대화 내역"
       floating-title="챗봇 대화 내역"
-      hint="이 세션에 대해 궁금한 점을 물어보세요."
+      show-compact
+      :compacting="archive.isCompacting"
+      :usage-gauge="archive.usageGauge"
       @toggle="archive.toggleArchiveChat"
       @close="archive.closeArchiveChat"
       @dock="archive.dockArchiveChat"
       @undock="archive.undockArchiveChat"
       @send="archive.sendArchiveChatMessage"
+      @compact="archive.compactArchiveChat"
     />
   </div>
 

@@ -30,6 +30,7 @@ export const useArchiveStore = defineStore("archive", () => {
   const sessions = ref([]); // [{ id, title, solution, created_at, updated_at, dateLabel }]
   const listStatus = ref("idle"); // idle | loading | done | error
   const listError = ref("");
+  const deleteError = ref(""); // 목록 로드와 별개 — listStatus를 바꾸면 목록 자체가 화면에서 사라진다
   const activeSessionId = ref(null);
 
   // 선택 세션 상세 (세 API 병렬 로드)
@@ -41,6 +42,11 @@ export const useArchiveStore = defineStore("archive", () => {
 
   const archiveChatOpen = ref(false);
   const archiveChatDocked = ref(true);
+
+  // 이 세션의 /turn done.data.usage_gauge — 챗 위젯 링 게이지·압축 버튼 강조용
+  // (chat.js·pipeline.js와 동일 계약, RPA-83). 세션을 바꾸면 이전 세션 값이 남지 않게 resetDetail에서 지운다.
+  const usageGauge = ref(null);
+  const isCompacting = ref(false);
 
   function toggleArchiveChat() {
     archiveChatOpen.value = !archiveChatOpen.value;
@@ -87,6 +93,8 @@ export const useArchiveStore = defineStore("archive", () => {
     detailAnalysis.value = null;
     detailRecommendation.value = null;
     detailMessages.value = [];
+    usageGauge.value = null;
+    isCompacting.value = false;
   }
 
   // 404(NO_ANALYSIS/NO_RECOMMENDATION)는 "아직 없음"이라는 정상 상태 — null로 삼킨다.
@@ -137,10 +145,11 @@ export const useArchiveStore = defineStore("archive", () => {
   }
 
   async function removeSession(id) {
+    deleteError.value = "";
     try {
       await deleteSession(id);
     } catch (err) {
-      listError.value = err instanceof ApiError ? err.message : "세션을 삭제하지 못했습니다.";
+      deleteError.value = err instanceof ApiError ? err.message : "세션을 삭제하지 못했습니다.";
       return;
     }
     sessions.value = sessions.value.filter((s) => s.id !== id);
@@ -152,23 +161,44 @@ export const useArchiveStore = defineStore("archive", () => {
   }
 
   // 선택된 세션에서 대화를 이어간다 — 세션이 이미 백엔드에 존재하므로 그 id로 바로 /turn.
+  // operation="chat"이면 일반 턴, "compact"면 결정론 신호로 압축 노드에 직행한다(chat.js와 동일 계약).
   // 이 턴이 분석/흐름도를 새로 만들면 상세 화면(detailAnalysis/detailRecommendation)에도 반영한다.
-  async function sendArchiveChatMessage(text) {
+  async function sendArchiveTurn(text, operation) {
     const trimmed = text.trim();
     const sessionId = activeSessionId.value;
     if (!trimmed || !sessionId) return;
 
     detailMessages.value.push({ role: "user", text: trimmed, time: nowTime() });
-    const assistantMessage = reactive({ role: "assistant", text: "", sources: [], sourcesOpen: false, time: nowTime() });
+
+    // stages: 이 턴 동안 받은 진행 상태 메시지를 순서대로 쌓는다 — 말풍선 위 상태 표시용(chat.js와 동일)
+    const assistantMessage = reactive({
+      role: "assistant",
+      text: "",
+      stages: [],
+      stagesOpen: false,
+      stagesDone: false,
+      sources: [],
+      sourcesOpen: false,
+      time: nowTime(),
+    });
     detailMessages.value.push(assistantMessage);
 
     await turnStream(sessionId, trimmed, {
+      operation,
+      onStage: (message) => {
+        if (message?.trim()) assistantMessage.stages.push(message.trim());
+      },
       onToken: (token) => {
         assistantMessage.text += token;
       },
       onDone: (data) => {
         if (!assistantMessage.text) assistantMessage.text = data?.answer || "답변을 생성하지 못했습니다.";
+        if (assistantMessage.stages.length) {
+          assistantMessage.stages.push("응답 생성 완료");
+          assistantMessage.stagesDone = true;
+        }
         if (Array.isArray(data?.sources) && data.sources.length) assistantMessage.sources = data.sources;
+        if (data?.usage_gauge) usageGauge.value = data.usage_gauge;
         if (activeSessionId.value === sessionId) {
           if (data?.analysis_result) detailAnalysis.value = data.analysis_result;
           if (data?.recommendation) {
@@ -178,14 +208,31 @@ export const useArchiveStore = defineStore("archive", () => {
       },
       onError: (code, message) => {
         assistantMessage.text = assistantMessage.text ? `${assistantMessage.text}\n\n⚠ ${message}` : message;
+        if (assistantMessage.stages.length) {
+          assistantMessage.stages.push("오류로 중단됨");
+          assistantMessage.stagesDone = true;
+        }
       },
     });
+  }
+
+  async function sendArchiveChatMessage(text) {
+    await sendArchiveTurn(text, "chat");
+  }
+
+  // 대화 압축 버튼 — chat.js와 동일하게 결정론 신호(operation="compact")로 압축 노드에 직행시킨다.
+  async function compactArchiveChat() {
+    if (isCompacting.value || !activeSessionId.value) return;
+    isCompacting.value = true;
+    await sendArchiveTurn("지금까지 대화 요약해줘", "compact");
+    isCompacting.value = false;
   }
 
   function resetForLogout() {
     sessions.value = [];
     listStatus.value = "idle";
     listError.value = "";
+    deleteError.value = "";
     activeSessionId.value = null;
     resetDetail();
     archiveChatOpen.value = false;
@@ -196,6 +243,7 @@ export const useArchiveStore = defineStore("archive", () => {
     sessions,
     listStatus,
     listError,
+    deleteError,
     activeSessionId,
     detailStatus,
     detailError,
@@ -204,6 +252,8 @@ export const useArchiveStore = defineStore("archive", () => {
     detailMessages,
     archiveChatOpen,
     archiveChatDocked,
+    usageGauge,
+    isCompacting,
     toggleArchiveChat,
     closeArchiveChat,
     dockArchiveChat,
@@ -212,6 +262,7 @@ export const useArchiveStore = defineStore("archive", () => {
     selectSession,
     removeSession,
     sendArchiveChatMessage,
+    compactArchiveChat,
     resetForLogout,
   };
 });

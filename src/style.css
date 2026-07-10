@@ -1802,11 +1802,6 @@ input {
   padding: 0 14px 10px;
 }
 
-.chat-popup__footer .chat-popup__hint {
-  padding: 0;
-  text-align: left;
-}
-
 .chat-popup__compact {
   flex-shrink: 0;
   border: 1px solid var(--brand-teal-dark);
@@ -1845,14 +1840,15 @@ input {
   }
 }
 
-/* ---------- 대화 누적 링 게이지 (usage_gauge, RPA-83) ---------- */
+/* ---------- 대화 누적 링 게이지 (usage_gauge, RPA-83) ----------
+   원래 헤더(어두운 그라디언트) 배경용 흰색 계열 색이었으나, 하단 푸터(밝은 흰 배경)로
+   옮기며 팔레트를 반전했다 — 상태별 강조색은 대화 압축 버튼(chat-popup__compact--recommended)과
+   동일 톤으로 맞춘다. */
 
 .chat-gauge {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  margin-left: auto;
-  margin-right: 10px;
   flex-shrink: 0;
 }
 
@@ -1869,27 +1865,35 @@ input {
 }
 
 .chat-gauge__track {
-  stroke: rgba(255, 255, 255, 0.25);
+  stroke: var(--border);
 }
 
 .chat-gauge__fill {
-  stroke: #7ee8a0;
+  stroke: #1f9d55;
   stroke-linecap: round;
   transition: stroke-dasharray 0.4s ease;
 }
 
 .chat-gauge--warn .chat-gauge__fill {
-  stroke: #ffc94d;
+  stroke: #b7791f;
 }
 
 .chat-gauge--critical .chat-gauge__fill {
-  stroke: #ff8080;
+  stroke: var(--danger);
 }
 
 .chat-gauge__label {
   font-size: 0.68rem;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-muted);
+}
+
+.chat-gauge--warn .chat-gauge__label {
+  color: #b7791f;
+}
+
+.chat-gauge--critical .chat-gauge__label {
+  color: var(--danger);
 }
 
 /* ---------- 답변 출처(sources) 접기 영역 ---------- */
@@ -2184,14 +2188,6 @@ input {
   font-weight: 800;
   font-size: 0.84rem;
   cursor: pointer;
-}
-
-.chat-popup__hint {
-  margin: 0;
-  padding: 6px 14px 12px;
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  text-align: center;
 }
 
 /* ---------- Login page ---------- */

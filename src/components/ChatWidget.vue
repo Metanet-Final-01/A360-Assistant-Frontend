@@ -9,7 +9,6 @@ const props = defineProps({
   dockZoneId: { type: String, required: true },
   dockedTitle: { type: String, default: "AI 챗봇 (대화형 수정)" },
   floatingTitle: { type: String, default: "AI 챗봇" },
-  hint: { type: String, default: "A360 액션·패키지 사용법 등을 질문하면 답변해드립니다." },
   // 대화 압축 버튼 노출 여부 — 메인 챗 위젯만 켠다 (긴 멀티턴 이력을 요약본으로 대체)
   showCompact: { type: Boolean, default: false },
   compacting: { type: Boolean, default: false },
@@ -241,26 +240,6 @@ const gaugeTitle = computed(() => {
         <span class="chat-popup__title">
           {{ docked ? dockedTitle : floatingTitle }}
         </span>
-        <span
-          v-if="usageGauge"
-          class="chat-gauge"
-          :class="`chat-gauge--${gaugeLevel}`"
-          :title="gaugeTitle"
-          role="img"
-          :aria-label="gaugeTitle"
-        >
-          <svg viewBox="0 0 20 20" aria-hidden="true">
-            <circle class="chat-gauge__track" cx="10" cy="10" r="8" />
-            <circle
-              class="chat-gauge__fill"
-              cx="10"
-              cy="10"
-              r="8"
-              :stroke-dasharray="`${gaugeDash} ${GAUGE_CIRCUMFERENCE}`"
-            />
-          </svg>
-          <span class="chat-gauge__label">{{ gaugePercent }}%</span>
-        </span>
         <button
           v-if="docked"
           type="button"
@@ -363,7 +342,6 @@ const gaugeTitle = computed(() => {
         <button type="submit">전송</button>
       </form>
       <div class="chat-popup__footer">
-        <p class="chat-popup__hint">{{ hint }}</p>
         <button
           v-if="showCompact"
           type="button"
@@ -375,6 +353,26 @@ const gaugeTitle = computed(() => {
         >
           {{ compacting ? "압축 중…" : usageGauge?.compact_recommended ? "대화 압축 권장" : "대화 압축" }}
         </button>
+        <span
+          v-if="usageGauge"
+          class="chat-gauge"
+          :class="`chat-gauge--${gaugeLevel}`"
+          :title="gaugeTitle"
+          role="img"
+          :aria-label="gaugeTitle"
+        >
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <circle class="chat-gauge__track" cx="10" cy="10" r="8" />
+            <circle
+              class="chat-gauge__fill"
+              cx="10"
+              cy="10"
+              r="8"
+              :stroke-dasharray="`${gaugeDash} ${GAUGE_CIRCUMFERENCE}`"
+            />
+          </svg>
+          <span class="chat-gauge__label">{{ gaugePercent }}%</span>
+        </span>
       </div>
     </div>
   </Teleport>
