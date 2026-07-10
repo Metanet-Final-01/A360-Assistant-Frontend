@@ -1828,6 +1828,113 @@ input {
   cursor: default;
 }
 
+/* 게이지가 압축 권장/필요 상태면 버튼을 강조해 사용자가 누르도록 유도한다 (RPA-83) */
+.chat-popup__compact--recommended {
+  border-color: #b7791f;
+  color: #b7791f;
+  animation: compact-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes compact-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(183, 121, 31, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(183, 121, 31, 0);
+  }
+}
+
+/* ---------- 대화 누적 링 게이지 (usage_gauge, RPA-83) ---------- */
+
+.chat-gauge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.chat-gauge svg {
+  width: 18px;
+  height: 18px;
+  transform: rotate(-90deg); /* 12시 방향부터 채운다 */
+}
+
+.chat-gauge__track,
+.chat-gauge__fill {
+  fill: none;
+  stroke-width: 3;
+}
+
+.chat-gauge__track {
+  stroke: rgba(255, 255, 255, 0.25);
+}
+
+.chat-gauge__fill {
+  stroke: #7ee8a0;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.4s ease;
+}
+
+.chat-gauge--warn .chat-gauge__fill {
+  stroke: #ffc94d;
+}
+
+.chat-gauge--critical .chat-gauge__fill {
+  stroke: #ff8080;
+}
+
+.chat-gauge__label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* ---------- 답변 출처(sources) 접기 영역 ---------- */
+
+.chat-message__sources {
+  margin-top: 2px;
+  max-width: 100%;
+}
+
+.chat-message__sources-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  padding: 2px 0;
+  cursor: pointer;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-align: left;
+}
+
+.chat-message__sources-list {
+  list-style: none;
+  margin: 4px 0 6px;
+  padding-left: 14px;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.chat-message__sources-list a {
+  color: var(--brand-teal-dark);
+  text-decoration: underline;
+}
+
+.chat-message__sources-score {
+  margin-left: 6px;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
 .chat-popup__minimize {
   background: transparent;
   border: 0;
@@ -2356,7 +2463,7 @@ input {
 .auth-slider {
   position: relative;
   flex: 1;
-  min-height: 260px;
+  min-height: 340px;
   margin: 20px 0;
   overflow: hidden;
 }
@@ -2376,6 +2483,19 @@ input {
   width: 100%;
   max-width: min(80%, 460px);
   height: auto;
+}
+
+.auth-slide-photo {
+  width: 100%;
+  max-width: min(100%, 750px);
+}
+
+.auth-slide-photo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  mask-image: radial-gradient(ellipse 58% 58% at center, black 45%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 58% 58% at center, black 45%, transparent 78%);
 }
 
 .auth-slide--active {
@@ -2934,6 +3054,13 @@ input {
 .archive-results__item-icon--docx {
   background: var(--mid-bg);
   color: var(--mid);
+}
+
+/* 세션 아이콘 — 파일 확장자 대신 세션의 솔루션 키(A360 등)를 표시한다 (P0-2 실연동) */
+.archive-results__item-icon--session {
+  background: var(--brand-teal-light);
+  color: var(--brand-teal-dark);
+  font-size: 0.62rem;
 }
 
 .archive-results__item-body {

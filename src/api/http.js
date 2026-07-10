@@ -60,6 +60,21 @@ async function toApiError(response) {
   );
 }
 
+// 401(토큰 만료/무효) 공통 처리 — 토큰을 지우고 등록된 핸들러(auth 스토어의 강제 로그아웃)를
+// 부른다. 핸들러 등록은 auth 스토어 생성 시점에 이뤄진다 (http.js가 스토어를 직접 import하면
+// 순환 참조가 되므로 콜백 주입 방식). SSE 경로(agent/documents)도 스트림 시작 전 401에서
+// notifyUnauthorized()를 호출해 동일하게 처리한다.
+let unauthorizedHandler = null;
+
+export function setUnauthorizedHandler(handler) {
+  unauthorizedHandler = handler;
+}
+
+export function notifyUnauthorized() {
+  clearToken();
+  unauthorizedHandler?.();
+}
+
 export async function apiRequest(path, options = {}) {
   const token = getToken();
   const headers = { ...options.headers };
@@ -70,6 +85,11 @@ export async function apiRequest(path, options = {}) {
     response = await fetch(`${BASE_URL}${path}`, { ...options, headers });
   } catch {
     throw new ApiError("NETWORK_ERROR", "백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.", 0);
+  }
+
+  // 로그인/가입의 401은 "자격 증명 오류"라 세션 만료 처리 대상이 아니다
+  if (response.status === 401 && !path.startsWith("/api/auth/")) {
+    notifyUnauthorized();
   }
 
   if (!response.ok) {

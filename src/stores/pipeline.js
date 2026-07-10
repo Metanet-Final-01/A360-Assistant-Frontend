@@ -44,6 +44,11 @@ export const usePipelineStore = defineStore("pipeline", () => {
   const recommendTreesByVersion = ref({}); // 이 세션에서 확보한 버전별 트리 캐시 — 버전 이력 "되돌리기"의 원본 (백엔드엔 개별 버전 조회 API가 없다)
   const recommendSaveError = ref(""); // 편집/실행취소 저장 실패 시 메시지 — done 화면은 유지한 채 이 메시지만 보여준다
 
+  // 매 /turn done.data.usage_gauge — 이 세션의 대화 누적 게이지 (RPA-83).
+  // { intake_tokens, limit_tokens, ratio(0~1+), compact_recommended, compact_required }
+  // 챗 위젯이 링 게이지로 표시하고, compact_recommended면 "대화 압축" 버튼을 강조한다.
+  const usageGauge = ref(null);
+
   let timers = [];
   function clearTimers() {
     timers.forEach((t) => clearTimeout(t));
@@ -148,6 +153,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
   // 분석+흐름도가 같이 온다) 프론트도 필드 존재 여부로 반영한다.
   function applyTurnArtifacts(data) {
     if (!data) return;
+    if (data.usage_gauge) usageGauge.value = data.usage_gauge;
     if (data.analysis_result) {
       analysis.value = { ...data.analysis_result, analysis_id: data.analysis_id ?? null };
       analysisStatus.value = "done";
@@ -379,16 +385,8 @@ export const usePipelineStore = defineStore("pipeline", () => {
     uploadStatus.value = "idle";
     uploadError.value = "";
     sessionId.value = null;
+    usageGauge.value = null; // 게이지는 세션 누적치라 세션이 사라질 때만 리셋한다
     resetPipelineState();
-  }
-
-  function buildExportPayload() {
-    return {
-      document: file.value?.name ?? null,
-      generatedAt: new Date().toISOString(),
-      analysis: analysis.value,
-      recommendation: recommendation.value?.recommendation ?? null,
-    };
   }
 
   return {
@@ -409,6 +407,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     recommendUndoStack,
     recommendTreesByVersion,
     recommendSaveError,
+    usageGauge,
     selectFile,
     submitTextRequest,
     applyTurnArtifacts,
@@ -419,6 +418,5 @@ export const usePipelineStore = defineStore("pipeline", () => {
     undoRecommendationEdit,
     revertToRecommendationVersion,
     resetUpload,
-    buildExportPayload,
   };
 });

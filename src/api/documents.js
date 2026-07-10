@@ -1,4 +1,4 @@
-import { apiRequest, getToken } from "./http";
+import { apiRequest, getToken, notifyUnauthorized } from "./http";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
@@ -28,6 +28,11 @@ export async function parseDocument(documentId, { onStage, onDone, onError }) {
     return;
   }
 
+  if (response.status === 401) {
+    notifyUnauthorized(); // 토큰 만료 — 로그인 화면으로 (apiRequest의 401 처리와 동일)
+    onError("로그인이 만료되었습니다. 다시 로그인해주세요.");
+    return;
+  }
   if (!response.ok || !response.body) {
     onError("문서 파싱 요청에 실패했습니다.");
     return;
