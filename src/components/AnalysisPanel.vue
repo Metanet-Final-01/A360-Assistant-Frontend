@@ -288,7 +288,7 @@ function downloadJson() {
 </script>
 
 <template>
-  <section class="panel panel--wide" aria-labelledby="analysis-panel-title">
+  <section class="panel panel--wide" aria-labelledby="analysis-panel-title" data-tour="analysis">
     <header class="panel__header">
       <h2 id="analysis-panel-title">분석 결과</h2>
     </header>

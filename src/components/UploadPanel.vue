@@ -52,7 +52,7 @@ function switchMode(mode) {
 </script>
 
 <template>
-  <section class="panel" aria-labelledby="upload-panel-title">
+  <section class="panel" aria-labelledby="upload-panel-title" data-tour="upload">
     <header class="panel__header">
       <h2 id="upload-panel-title">업무정의서 업로드</h2>
     </header>
