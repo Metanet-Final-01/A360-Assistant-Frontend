@@ -128,6 +128,8 @@ export const useChatStore = defineStore("chat", () => {
   // 히스토리에서 세션을 선택했을 때 그 세션의 대화 이력을 불러와 채운다(pipeline.loadSession에서 호출).
   async function loadHistoryMessages(sessionId) {
     const { messages } = await listChatMessages(sessionId);
+    // 응답이 오기 전에 다른 세션으로 이동했으면 버린다 (pipeline.loadSession의 세션 전환 가드와 동일)
+    if (usePipelineStore().sessionId !== sessionId) return;
     const history = (messages ?? []).map((m) => ({
       role: m.role,
       text: m.content,

@@ -418,11 +418,20 @@ export const usePipelineStore = defineStore("pipeline", () => {
     usageGauge.value = null;
     resetPipelineState();
 
-    const [analysisRes, recommendationRes] = await Promise.all([
-      swallowNotFound(getLatestAnalysis(id)),
-      swallowNotFound(getLatestRecommendation(id)),
-      useChatStore().loadHistoryMessages(id),
-    ]);
+    let analysisRes, recommendationRes;
+    try {
+      [analysisRes, recommendationRes] = await Promise.all([
+        swallowNotFound(getLatestAnalysis(id)),
+        swallowNotFound(getLatestRecommendation(id)),
+        useChatStore().loadHistoryMessages(id),
+      ]);
+    } catch (err) {
+      // 응답이 오기 전에 다른 세션으로 이동했으면 에러도 버린다
+      if (sessionId.value !== id) return;
+      uploadStatus.value = "error";
+      uploadError.value = err instanceof ApiError ? err.message : "세션을 불러오지 못했습니다.";
+      return;
+    }
     // 응답이 오기 전에 다른 세션으로 이동했으면 버린다
     if (sessionId.value !== id) return;
 

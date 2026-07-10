@@ -85,6 +85,7 @@ function handleHistoryClick(event) {
 
 async function removeSession(id, event) {
   event.stopPropagation();
+  if (!window.confirm("이 세션을 삭제하시겠습니까?")) return;
   const wasActive = id === props.activeSessionId;
   const removed = await archive.removeSession(id);
   openMenuId.value = null;
