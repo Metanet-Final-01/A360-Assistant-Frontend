@@ -1,8 +1,8 @@
 import { defineStore } from "pinia";
 import { reactive, ref } from "vue";
 import { turnStream } from "../api/agent";
-import { createSession } from "../api/sessions";
-import { createInitialChatMessages, nowTime } from "../utils/chatMessages";
+import { createSession, listChatMessages } from "../api/sessions";
+import { CHAT_GREETING, createInitialChatMessages, nowTime, timeLabel } from "../utils/chatMessages";
 import { createTypewriter } from "../utils/typewriter";
 import { usePipelineStore } from "./pipeline";
 
@@ -125,6 +125,29 @@ export const useChatStore = defineStore("chat", () => {
     await sendTurn(text, "chat");
   }
 
+  // 히스토리에서 세션을 선택했을 때 그 세션의 대화 이력을 불러와 채운다(pipeline.loadSession에서 호출).
+  async function loadHistoryMessages(sessionId) {
+    const { messages } = await listChatMessages(sessionId);
+    // 응답이 오기 전에 다른 세션으로 이동했으면 버린다 (pipeline.loadSession의 세션 전환 가드와 동일)
+    if (usePipelineStore().sessionId !== sessionId) return;
+    const history = (messages ?? []).map((m) => ({
+      role: m.role,
+      text: m.content,
+      time: timeLabel(m.created_at),
+    }));
+    chatMessages.value = history.length
+      ? history
+      : [{ role: "assistant", text: CHAT_GREETING, time: nowTime() }];
+  }
+
+  // "+ 새 채팅" — 대화창을 인사말만 남은 초기 상태로 되돌린다
+  function newChat() {
+    chatOpen.value = false;
+    chatMessages.value = createInitialChatMessages();
+    isCompacting.value = false;
+    lastCompact.value = null;
+  }
+
   // 대화 압축 버튼 — 결정론 신호(operation="compact")로 압축 노드에 직행시킨다.
   // 압축본은 백엔드 session_compacts에 저장되고 다음 턴부터 오래된 이력을 대체한다.
   async function compactConversation() {
@@ -136,10 +159,7 @@ export const useChatStore = defineStore("chat", () => {
 
   // 로그아웃 시 대화창을 접고 인사말만 남은 상태로 되돌린다
   function resetForLogout() {
-    chatOpen.value = false;
-    chatMessages.value = createInitialChatMessages();
-    isCompacting.value = false;
-    lastCompact.value = null;
+    newChat();
   }
 
   return {
@@ -154,6 +174,8 @@ export const useChatStore = defineStore("chat", () => {
     undockChat,
     sendChatMessage,
     compactConversation,
+    loadHistoryMessages,
+    newChat,
     resetForLogout,
   };
 });
