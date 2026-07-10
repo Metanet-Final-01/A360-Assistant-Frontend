@@ -8,7 +8,7 @@ const props = defineProps({
   activeMenu: { type: String, default: "analysis" },
 });
 
-const emit = defineEmits(["logout", "navigate"]);
+const emit = defineEmits(["logout", "navigate", "tutorial"]);
 
 const COLLAPSE_KEY = "a360.sidebarCollapsed";
 const saved = localStorage.getItem(COLLAPSE_KEY);
@@ -53,7 +53,7 @@ function toggleCollapsed() {
         </button>
       </div>
 
-      <nav class="app-sidebar__nav" aria-label="주요 메뉴">
+      <nav class="app-sidebar__nav" aria-label="주요 메뉴" data-tour="sidebar-nav">
         <button
           type="button"
           class="app-sidebar__nav-item"
@@ -99,6 +99,24 @@ function toggleCollapsed() {
       </nav>
 
       <div class="app-sidebar__footer">
+        <button
+          type="button"
+          class="app-sidebar__nav-item app-sidebar__help"
+          title="기능 소개"
+          @click="emit('tutorial')"
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7" />
+            <path
+              d="M9.6 9.4a2.4 2.4 0 1 1 3.4 2.8c-.7.4-1 .9-1 1.8"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+            />
+            <circle cx="12" cy="16.8" r="0.9" fill="currentColor" />
+          </svg>
+          <span class="app-sidebar__nav-label">기능 소개</span>
+        </button>
         <div class="app-sidebar__profile">
           <span class="app-sidebar__avatar" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none">
