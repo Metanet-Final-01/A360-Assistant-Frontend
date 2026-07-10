@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from "vue";
 import { useArchiveStore } from "../stores/archive";
+import { ARCHIVE_PANEL_ORDER_KEY, usePanelReorder } from "../composables/usePanelReorder";
 import FlowModal from "./FlowModal.vue";
 import ChatWidget from "./ChatWidget.vue";
 
@@ -33,6 +34,19 @@ const pagedResults = computed(() => {
 const activeResult = computed(
   () => archive.archiveResults.find((result) => result.id === archive.activeArchiveResultId) ?? null,
 );
+
+// 아카이브 화면 패널(목록/상세/도킹 챗봇) 배치 순서 — 헤더 그립 드래그로 변경
+const archivePanels = usePanelReorder({
+  storageKey: ARCHIVE_PANEL_ORDER_KEY,
+  defaultOrder: ["list", "detail", "chat"],
+  columnWidths: {
+    list: "var(--panel-col-side)",
+    detail: "minmax(0, 1fr)",
+    chat: "var(--panel-col-chat)",
+  },
+  // 챗봇은 결과가 선택돼 있고 도킹된 상태에서만 그리드 열을 차지한다
+  isVisible: (key) => key !== "chat" || (archive.archiveChatDocked && !!activeResult.value),
+});
 
 const steps = computed(() => activeResult.value?.analysis.steps ?? []);
 
@@ -100,11 +114,23 @@ function downloadResultJson() {
 <template>
   <div
     class="app-main__grid"
-    :class="{ 'app-main__grid--docked': archive.archiveChatDocked }"
+    :class="{ 'app-main__grid--docked': archive.archiveChatDocked && !!activeResult }"
+    :style="archivePanels.gridStyle"
+    v-on="archivePanels.containerHandlers"
     @click="handleDocumentClick"
   >
-    <aside class="archive-chat__sidebar">
-      <header class="archive-chat__sidebar-header">분석 결과 목록</header>
+    <aside class="archive-chat__sidebar" v-bind="archivePanels.panelProps('list')">
+      <header class="archive-chat__sidebar-header">
+        <span
+          class="panel-drag-handle"
+          draggable="true"
+          data-panel-handle
+          title="드래그하여 패널 위치 이동"
+          aria-hidden="true"
+          >⠿</span
+        >
+        분석 결과 목록
+      </header>
 
       <div class="archive-chat__search">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -199,8 +225,16 @@ function downloadResultJson() {
       </nav>
     </aside>
 
-    <section class="archive-chat__detail">
+    <section class="archive-chat__detail" v-bind="archivePanels.panelProps('detail')">
       <header class="archive-results__detail-header">
+        <span
+          class="panel-drag-handle"
+          draggable="true"
+          data-panel-handle
+          title="드래그하여 패널 위치 이동"
+          aria-hidden="true"
+          >⠿</span
+        >
         <h2>{{ activeResult ? activeResult.title : "분석 결과를 선택해주세요" }}</h2>
         <div v-if="activeResult" class="archive-results__header-actions">
           <button type="button" class="archive-results__header-btn" @click="downloadResultJson">JSON 저장</button>
@@ -251,6 +285,9 @@ function downloadResultJson() {
 
     <ChatWidget
       v-if="activeResult"
+      v-bind="archivePanels.panelProps('chat')"
+      panel-key="chat"
+      :panel-reorder="archivePanels"
       :messages="activeResult.messages"
       :open="archive.archiveChatOpen"
       :docked="archive.archiveChatDocked"

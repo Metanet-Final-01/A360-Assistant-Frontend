@@ -34,6 +34,12 @@ function onDrop(event) {
   handleFiles(event.dataTransfer?.files);
 }
 
+// 파일 드래그일 때만 드롭존을 하이라이트한다 — 패널 재배치 그립이나
+// 분석 결과 카드 드래그가 지나갈 때는 반응하지 않는다.
+function onDropzoneDragOver(event) {
+  isDragging.value = !!event.dataTransfer?.types?.includes("Files");
+}
+
 function onFileChange(event) {
   handleFiles(event.target.files);
   event.target.value = "";
@@ -54,6 +60,14 @@ function switchMode(mode) {
 <template>
   <section class="panel" aria-labelledby="upload-panel-title" data-tour="upload">
     <header class="panel__header">
+      <span
+        class="panel-drag-handle"
+        draggable="true"
+        data-panel-handle
+        title="드래그하여 패널 위치 이동"
+        aria-hidden="true"
+        >⠿</span
+      >
       <h2 id="upload-panel-title">업무정의서 업로드</h2>
     </header>
 
@@ -89,7 +103,7 @@ function switchMode(mode) {
         tabindex="0"
         @click="openFileDialog"
         @keydown.enter="openFileDialog"
-        @dragover.prevent="isDragging = true"
+        @dragover.prevent="onDropzoneDragOver"
         @dragleave.prevent="isDragging = false"
         @drop.prevent="onDrop"
       >
