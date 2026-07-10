@@ -223,9 +223,11 @@ export const useArchiveStore = defineStore("archive", () => {
   // 대화 압축 버튼 — chat.js와 동일하게 결정론 신호(operation="compact")로 압축 노드에 직행시킨다.
   async function compactArchiveChat() {
     if (isCompacting.value || !activeSessionId.value) return;
+    const sessionId = activeSessionId.value;
     isCompacting.value = true;
     await sendArchiveTurn("지금까지 대화 요약해줘", "compact");
-    isCompacting.value = false;
+    // 압축 중 다른 세션으로 이동했으면(resetDetail이 이미 그 세션의 isCompacting을 정리했다) 여기서 덮어쓰지 않는다
+    if (activeSessionId.value === sessionId) isCompacting.value = false;
   }
 
   function resetForLogout() {
