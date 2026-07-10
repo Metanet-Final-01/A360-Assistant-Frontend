@@ -5,6 +5,10 @@ import { evidenceLabel } from "../utils/format";
 import { buildPackageColorMap, flattenActions } from "../utils/recommendation";
 import RecommendationFlowModal from "./RecommendationFlowModal.vue";
 
+// 루트 노드가 여러 개(패널 + 로딩 오버레이 + 모달)라 attrs 자동 전달이 안 되므로,
+// 패널 재배치용 data-panel-key/order 스타일을 패널 섹션에 직접 물려준다.
+defineOptions({ inheritAttrs: false });
+
 const pipeline = usePipelineStore();
 
 const showFlowModal = ref(false);
@@ -288,8 +292,21 @@ function downloadJson() {
 </script>
 
 <template>
-  <section class="panel panel--wide" aria-labelledby="analysis-panel-title" data-tour="analysis">
+  <section
+    class="panel panel--wide"
+    aria-labelledby="analysis-panel-title"
+    data-tour="analysis"
+    v-bind="$attrs"
+  >
     <header class="panel__header">
+      <span
+        class="panel-drag-handle"
+        draggable="true"
+        data-panel-handle
+        title="드래그하여 패널 위치 이동"
+        aria-hidden="true"
+        >⠿</span
+      >
       <h2 id="analysis-panel-title">분석 결과</h2>
     </header>
 

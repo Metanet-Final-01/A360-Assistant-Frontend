@@ -373,10 +373,16 @@ input {
 }
 
 .app-main__grid {
+  /* 열 폭은 슬롯 위치가 아니라 패널 종류에 따라 붙는다 — 패널 재배치(usePanelReorder)가
+     인라인 --grid-cols 변수로 현재 순서에 맞춰 폭을 조합하고, 브레이크포인트에서는
+     아래 폭 변수만 바꾼다. (인라인 스타일은 변수만 세팅하므로 900px 이하의
+     grid-template-columns: 1fr 미디어 규칙이 그대로 우선한다) */
+  --panel-col-side: 340px;
+  --panel-col-chat: 456px;
   max-width: 1280px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 340px minmax(0, 1fr);
+  grid-template-columns: var(--grid-cols, var(--panel-col-side) minmax(0, 1fr));
   gap: 24px;
   align-items: start;
   border-radius: 16px;
@@ -391,28 +397,31 @@ input {
 
 .app-main__grid--docked {
   max-width: 1760px;
-  grid-template-columns: 340px minmax(0, 1fr) 456px;
+  grid-template-columns: var(--grid-cols, var(--panel-col-side) minmax(0, 1fr) var(--panel-col-chat));
 }
 
 @media (max-width: 1720px) {
   .app-main__grid--docked {
-    grid-template-columns: 320px minmax(0, 1fr) 420px;
+    --panel-col-side: 320px;
+    --panel-col-chat: 420px;
   }
 }
 
 @media (max-width: 1460px) {
   .app-main__grid--docked {
-    grid-template-columns: 300px minmax(0, 1fr) 380px;
+    --panel-col-side: 300px;
+    --panel-col-chat: 380px;
   }
 }
 
 @media (max-width: 1240px) {
   .app-main__grid {
-    grid-template-columns: 300px minmax(0, 1fr);
+    --panel-col-side: 300px;
   }
 
   .app-main__grid--docked {
-    grid-template-columns: 280px minmax(0, 1fr) 340px;
+    --panel-col-side: 280px;
+    --panel-col-chat: 340px;
   }
 }
 
@@ -443,6 +452,49 @@ input {
   background: var(--brand-teal-light);
 }
 
+/* ---------- Panel reorder (드래그앤드롭 배치 변경) ---------- */
+
+/* 순서는 DOM이 아니라 CSS order로 반영한다. .chat-widget은 display: contents라
+   order가 먹지 않으므로, 상속된 변수를 도킹된 팝업에 직접 적용한다. */
+.app-main__grid > [data-panel-key] {
+  order: var(--panel-order, 0);
+}
+
+.chat-popup--docked {
+  order: var(--panel-order, 0);
+}
+
+.panel-drag-handle {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-drag: element;
+}
+
+.panel-drag-handle:hover {
+  color: #ffffff;
+}
+
+.panel-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* 드래그 중인 패널은 흐리게, 드롭 대상 패널은 점선 테두리로 표시.
+   챗봇은 래퍼(display: contents)에 클래스가 달리므로 자식 팝업에 적용한다. */
+.panel-reorder-source,
+.panel-reorder-source > .chat-popup--docked {
+  opacity: 0.45;
+}
+
+.panel-reorder-target,
+.panel-reorder-target > .chat-popup--docked {
+  outline: 3px dashed var(--brand-teal);
+  outline-offset: 4px;
+}
+
 /* ---------- Panel ---------- */
 
 .panel {
@@ -456,6 +508,9 @@ input {
 .panel__header {
   background: linear-gradient(135deg, var(--brand-teal-dark), var(--brand-navy));
   padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .panel__header h2 {
@@ -1703,6 +1758,7 @@ input {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   padding: 14px 16px;
   background: linear-gradient(135deg, var(--brand-teal-dark), var(--brand-navy));
   cursor: grab;
@@ -1726,6 +1782,7 @@ input {
   color: #ffffff;
   font-weight: 800;
   font-size: 0.94rem;
+  flex: 1;
 }
 
 .chat-popup__close {
@@ -2590,6 +2647,9 @@ input {
   color: #ffffff;
   font-weight: 800;
   font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .archive-chat__search {
@@ -2922,6 +2982,7 @@ input {
   color: #ffffff;
   font-size: 1rem;
   font-weight: 800;
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

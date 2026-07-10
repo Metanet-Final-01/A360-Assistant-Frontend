@@ -13,6 +13,12 @@ const props = defineProps({
   // 대화 압축 버튼 노출 여부 — 메인 챗 위젯만 켠다 (긴 멀티턴 이력을 요약본으로 대체)
   showCompact: { type: Boolean, default: false },
   compacting: { type: Boolean, default: false },
+  // 부모 그리드의 패널 재배치(usePanelReorder) 참여 키. 지정하면 도킹 상태에서만
+  // 헤더에 재배치용 그립이 생긴다 — 플로팅 상태의 포인터 드래그(이동·도킹)와는 무관.
+  panelKey: { type: String, default: "" },
+  // panelKey와 함께 넘기면, 플로팅 상태에서 도킹 존 안의 패널 위로 드래그해 놓았을 때
+  // 그 패널의 원래 자리로 들어간다(usePanelReorder가 반환하는 인스턴스를 그대로 전달).
+  panelReorder: { type: Object, default: null },
 });
 const emit = defineEmits(["toggle", "close", "dock", "undock", "send", "compact"]);
 
@@ -92,6 +98,18 @@ function startDrag(event) {
   window.addEventListener("pointerup", stopDrag);
 }
 
+// 커서 아래에 있는 패널을 찾는다. elementFromPoint는 그 순간 화면에 그려진 최상단 요소를
+// 반환하는데, 드래그 중인 팝업 자신이 커서를 따라다니며 항상 커서 아래 깔려 있어 그대로 부르면
+// 팝업 자신이 잡힌다 — 그래서 호출 직전에만 팝업의 pointer-events를 꺼서 그 아래 실제 패널이
+// 잡히게 한다(동기 처리라 화면 깜빡임 없음).
+function panelUnderCursor(event) {
+  if (!popupRef.value) return null;
+  popupRef.value.style.pointerEvents = "none";
+  const key = props.panelReorder.panelKeyAtPoint(event.clientX, event.clientY);
+  popupRef.value.style.pointerEvents = "";
+  return key;
+}
+
 function onDrag(event) {
   if (!isDragging.value || !popupRef.value) return;
   const width = popupRef.value.offsetWidth;
@@ -103,6 +121,15 @@ function onDrag(event) {
 
   isOverDockZone.value = isPointInDockZone(event);
   setDockZoneHighlight(isOverDockZone.value);
+
+  if (props.panelReorder && props.panelKey) {
+    if (isOverDockZone.value) {
+      props.panelReorder.beginDrag(props.panelKey);
+      props.panelReorder.setDropTarget(panelUnderCursor(event));
+    } else {
+      props.panelReorder.cancelDrag();
+    }
+  }
 }
 
 function stopDrag() {
@@ -112,7 +139,12 @@ function stopDrag() {
   setDockZoneHighlight(false);
 
   if (isOverDockZone.value) {
+    // 마우스가 특정 패널 위에 있었으면(dropTargetKey) 그 자리로 들어가고,
+    // 빈 공간에 놓였으면 순서를 건드리지 않고 이전 자리 그대로 도킹한다.
+    props.panelReorder?.commitDrop();
     emit("dock");
+  } else {
+    props.panelReorder?.cancelDrag();
   }
   isOverDockZone.value = false;
 }
@@ -164,6 +196,15 @@ async function handleSend() {
         :class="{ 'chat-popup__header--static': docked }"
         @pointerdown="startDrag"
       >
+        <span
+          v-if="docked && panelKey"
+          class="panel-drag-handle"
+          draggable="true"
+          data-panel-handle
+          title="드래그하여 패널 위치 이동"
+          aria-hidden="true"
+          >⠿</span
+        >
         <span class="chat-popup__title">
           {{ docked ? dockedTitle : floatingTitle }}
         </span>
