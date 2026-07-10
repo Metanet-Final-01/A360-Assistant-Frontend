@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { register as apiRegister, login as apiLogin, getMe } from "../api/auth";
-import { getToken, setToken, clearToken } from "../api/http";
+import { getToken, setToken, clearToken, setUnauthorizedHandler } from "../api/http";
 import { usePipelineStore } from "./pipeline";
 import { useChatStore } from "./chat";
 import { useArchiveStore } from "./archive";
@@ -56,6 +56,12 @@ export const useAuthStore = defineStore("auth", () => {
     // 분석 화면 패널은 App.vue 루트에서 세션을 넘나들며 살아있어 handleLogout에서 별도로 초기화한다.
     localStorage.removeItem(ARCHIVE_PANEL_ORDER_KEY);
   }
+
+  // 어떤 API든 401(토큰 만료/무효)을 받으면 http.js가 이 핸들러를 부른다 — 상태를 로그아웃으로
+  // 되돌리면 App.vue가 로그인 화면을 그린다. 토큰은 notifyUnauthorized()가 이미 지웠다.
+  setUnauthorizedHandler(() => {
+    if (isLoggedIn.value) logout();
+  });
 
   return {
     isLoggedIn,

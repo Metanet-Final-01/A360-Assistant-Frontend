@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from "vue";
 import { usePipelineStore } from "../stores/pipeline";
+import { downloadRecommendationExport } from "../api/recommend";
 import { evidenceLabel } from "../utils/format";
 import { buildPackageColorMap, flattenActions } from "../utils/recommendation";
 import RecommendationFlowModal from "./RecommendationFlowModal.vue";
@@ -277,17 +278,19 @@ async function openFlowView() {
   }
 }
 
-function downloadJson() {
-  const payload = pipeline.buildExportPayload();
-  const blob = new Blob([JSON.stringify(payload, null, 2)], {
-    type: "application/json",
-  });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = "a360-analysis.json";
-  anchor.click();
-  URL.revokeObjectURL(url);
+// 내보내기는 프론트 로컬 Blob이 아니라 백엔드 표준 export API 응답을 그대로 저장한다
+// (P1-3 — schema_version 포함 봉투, 골든셋 채점 포맷과 일치). 추천안 버전이 있어야 가능.
+const exportError = ref("");
+const canExport = computed(() => !!pipeline.sessionId && pipeline.recommendation?.version != null);
+
+async function downloadJson() {
+  if (!canExport.value) return;
+  exportError.value = "";
+  try {
+    await downloadRecommendationExport(pipeline.sessionId, pipeline.recommendation.version);
+  } catch (err) {
+    exportError.value = err?.message ?? "내보내기에 실패했습니다.";
+  }
 }
 </script>
 
@@ -502,10 +505,17 @@ function downloadJson() {
       <div class="export-section">
         <h3 class="export-section__title">내보내기</h3>
         <div class="export-section__actions">
-          <button type="button" class="btn btn--outline" @click="downloadJson">
-            JSON 다운로드
+          <button
+            type="button"
+            class="btn btn--outline"
+            :disabled="!canExport"
+            :title="canExport ? '' : '흐름도(추천안)를 먼저 생성해야 내보낼 수 있습니다'"
+            @click="downloadJson"
+          >
+            JSON 내보내기
           </button>
         </div>
+        <p v-if="exportError" class="upload-error recommend-section__save-error">{{ exportError }}</p>
       </div>
     </div>
   </section>

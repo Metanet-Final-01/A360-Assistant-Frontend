@@ -13,6 +13,9 @@ const props = defineProps({
   // 대화 압축 버튼 노출 여부 — 메인 챗 위젯만 켠다 (긴 멀티턴 이력을 요약본으로 대체)
   showCompact: { type: Boolean, default: false },
   compacting: { type: Boolean, default: false },
+  // 매 턴 done.data.usage_gauge — 대화 누적 링 게이지 표시용 (RPA-83)
+  // { intake_tokens, limit_tokens, ratio(0~1+), compact_recommended, compact_required }
+  usageGauge: { type: Object, default: null },
   // 부모 그리드의 패널 재배치(usePanelReorder) 참여 키. 지정하면 도킹 상태에서만
   // 헤더에 재배치용 그립이 생긴다 — 플로팅 상태의 포인터 드래그(이동·도킹)와는 무관.
   panelKey: { type: String, default: "" },
@@ -163,6 +166,36 @@ async function handleSend() {
   draft.value = "";
   emit("send", message);
 }
+
+// ----- 대화 누적 링 게이지 (usage_gauge) -----
+const GAUGE_CIRCUMFERENCE = 2 * Math.PI * 8; // viewBox 20×20, r=8
+
+const gaugePercent = computed(() => {
+  if (!props.usageGauge) return 0;
+  return Math.min(100, Math.round((props.usageGauge.ratio ?? 0) * 100));
+});
+
+const gaugeDash = computed(() => (gaugePercent.value / 100) * GAUGE_CIRCUMFERENCE);
+
+// ok(평상시) → warn(압축 권장) → critical(압축 필요) 순으로 색이 바뀐다
+const gaugeLevel = computed(() => {
+  const gauge = props.usageGauge;
+  if (!gauge) return "ok";
+  if (gauge.compact_required) return "critical";
+  if (gauge.compact_recommended) return "warn";
+  return "ok";
+});
+
+const gaugeTitle = computed(() => {
+  const gauge = props.usageGauge;
+  if (!gauge) return "";
+  const used = gauge.intake_tokens?.toLocaleString?.() ?? gauge.intake_tokens;
+  const limit = gauge.limit_tokens?.toLocaleString?.() ?? gauge.limit_tokens;
+  const base = `대화 누적 ${gaugePercent.value}% (${used} / ${limit} 토큰)`;
+  if (gauge.compact_required) return `${base} — 대화 압축이 필요합니다`;
+  if (gauge.compact_recommended) return `${base} — 대화 압축을 권장합니다`;
+  return base;
+});
 </script>
 
 <template>
@@ -207,6 +240,26 @@ async function handleSend() {
         >
         <span class="chat-popup__title">
           {{ docked ? dockedTitle : floatingTitle }}
+        </span>
+        <span
+          v-if="usageGauge"
+          class="chat-gauge"
+          :class="`chat-gauge--${gaugeLevel}`"
+          :title="gaugeTitle"
+          role="img"
+          :aria-label="gaugeTitle"
+        >
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <circle class="chat-gauge__track" cx="10" cy="10" r="8" />
+            <circle
+              class="chat-gauge__fill"
+              cx="10"
+              cy="10"
+              r="8"
+              :stroke-dasharray="`${gaugeDash} ${GAUGE_CIRCUMFERENCE}`"
+            />
+          </svg>
+          <span class="chat-gauge__label">{{ gaugePercent }}%</span>
         </span>
         <button
           v-if="docked"
@@ -267,6 +320,35 @@ async function handleSend() {
             응답을 생성하는 중…
           </div>
           <div v-else class="chat-message__bubble" v-html="formatMessage(message.text)"></div>
+
+          <div v-if="message.role === 'assistant' && message.sources?.length" class="chat-message__sources">
+            <button
+              type="button"
+              class="chat-message__sources-toggle"
+              @click="message.sourcesOpen = !message.sourcesOpen"
+            >
+              <span
+                class="chat-message__stages-chevron"
+                :class="{ 'chat-message__stages-chevron--open': message.sourcesOpen }"
+                aria-hidden="true"
+              >
+                ▸
+              </span>
+              출처 {{ message.sources.length }}건
+            </button>
+            <ul v-if="message.sourcesOpen" class="chat-message__sources-list">
+              <li v-for="(source, sourceIdx) in message.sources" :key="sourceIdx">
+                <a v-if="source.url" :href="source.url" target="_blank" rel="noopener noreferrer">
+                  {{ source.title || source.url }}
+                </a>
+                <span v-else>{{ source.title || "제목 없는 근거" }}</span>
+                <span v-if="source.score != null" class="chat-message__sources-score">
+                  {{ Number(source.score).toFixed(2) }}
+                </span>
+              </li>
+            </ul>
+          </div>
+
           <span class="chat-message__time">{{ message.time }}</span>
         </div>
       </div>
@@ -286,11 +368,12 @@ async function handleSend() {
           v-if="showCompact"
           type="button"
           class="chat-popup__compact"
+          :class="{ 'chat-popup__compact--recommended': !compacting && usageGauge?.compact_recommended }"
           title="지금까지의 대화를 요약본으로 압축합니다"
           :disabled="compacting"
           @click="emit('compact')"
         >
-          {{ compacting ? "압축 중…" : "대화 압축" }}
+          {{ compacting ? "압축 중…" : usageGauge?.compact_recommended ? "대화 압축 권장" : "대화 압축" }}
         </button>
       </div>
     </div>

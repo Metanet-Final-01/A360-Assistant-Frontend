@@ -2,6 +2,7 @@
 import { onMounted, ref, watch } from "vue";
 import { useAuthStore } from "./stores/auth";
 import { useChatStore } from "./stores/chat";
+import { usePipelineStore } from "./stores/pipeline";
 import AppSidebar from "./components/AppSidebar.vue";
 import UploadPanel from "./components/UploadPanel.vue";
 import AnalysisPanel from "./components/AnalysisPanel.vue";
@@ -14,6 +15,7 @@ import { ANALYSIS_PANEL_ORDER_KEY, usePanelReorder } from "./composables/usePane
 
 const auth = useAuthStore();
 const chat = useChatStore();
+const pipeline = usePipelineStore();
 
 // 분석 화면 패널(업로드/분석 결과/도킹 챗봇) 배치 순서 — 헤더 그립 드래그로 변경.
 // 이 컴포저블은 App.vue 루트에서 로그인 세션을 넘나들며 살아있으므로, 로그아웃 시
@@ -113,6 +115,7 @@ function handleLogout() {
             dock-zone-id="analysis"
             show-compact
             :compacting="chat.isCompacting"
+            :usage-gauge="pipeline.usageGauge"
             @toggle="chat.toggleChat"
             @close="chat.closeChat"
             @dock="chat.dockChat"

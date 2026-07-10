@@ -58,12 +58,15 @@ export const useChatStore = defineStore("chat", () => {
     // stages는 이 턴 동안 받은 모든 진행 상태 메시지를 순서대로 쌓아 둔다 — 말풍선 위 작은
     // 텍스트(최신 상태)를 누르면 펼쳐서 전체 이력을 보여주는 용도(stagesOpen으로 펼침 여부 관리).
     // stagesDone: 턴이 끝난 뒤에도 마지막 상태가 "완료" 문구로 남도록 표시한다.
+    // sources: done.data.sources(RAG 출처) — 말풍선 하단 "출처" 접기 영역으로 표시한다.
     const assistantMessage = reactive({
       role: "assistant",
       text: "",
       stages: [],
       stagesOpen: false,
       stagesDone: false,
+      sources: [],
+      sourcesOpen: false,
       time: nowTime(),
     });
     chatMessages.value.push(assistantMessage);
@@ -85,18 +88,25 @@ export const useChatStore = defineStore("chat", () => {
         typewriter.push(token);
       },
       onDone: (data) => {
-        // 분석/추천/압축 턴은 token 스트림 없이 done에만 answer가 실린다 — 이 경우 최종
-        // 텍스트를 타자기 큐로 흘려보내 여기서도 같은 효과가 나게 한다.
+        // 분석/추천/압축 턴은 token 스트림 없이 done에만 answer가 통째로 실린다 — 뭉치
+        // 답변은 즉시 표시한다(P0-1: 타자기로 흘리면 긴 답변이 수 분씩 걸려 데모에 치명적).
+        // 타자 효과는 token 스트림일 때만 적용된다.
         if (typewriter.started) {
           typewriter.finish();
         } else {
-          typewriter.push(data?.answer || "답변을 생성하지 못했습니다.");
+          assistantMessage.text = data?.answer || "답변을 생성하지 못했습니다.";
         }
         if (assistantMessage.stages.length) {
           assistantMessage.stages.push("응답 생성 완료");
           assistantMessage.stagesDone = true;
         }
-        if (data?.compact) lastCompact.value = data.compact;
+        if (Array.isArray(data?.sources) && data.sources.length) {
+          assistantMessage.sources = data.sources;
+        }
+        // type을 명시적으로 읽어 압축 응답을 구분한다 (P2 — 산출물 반영은 필드 존재 기준 유지)
+        if (data?.type === "compact" && data.compact) {
+          lastCompact.value = data.compact;
+        }
         pipeline.applyTurnArtifacts(data);
       },
       onError: (code, message) => {
