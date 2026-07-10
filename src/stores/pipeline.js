@@ -1,9 +1,12 @@
 import { defineStore } from "pinia";
-import { ref } from "vue";
+import { reactive, ref } from "vue";
 import { uploadDocument, parseDocument, createDocumentFromText } from "../api/documents";
 import { turnStream } from "../api/agent";
 import { listRecommendations, saveRecommendation } from "../api/recommend";
 import { ApiError } from "../api/http";
+import { useChatStore } from "./chat";
+import { nowTime } from "../utils/chatMessages";
+import { createTypewriter } from "../utils/typewriter";
 
 // NOTE: 분석·추천 생성은 에이전트 단일 진입점 POST /api/sessions/{id}/turn으로 통합됐다
 // (RPA-64/67 — 레거시 /analyze·/recommend는 제거). 버튼은 합성 메시지를 보내고, done.data의
@@ -168,9 +171,28 @@ export const usePipelineStore = defineStore("pipeline", () => {
   }
 
   // 분석 시작 버튼 — intent 필드가 없으므로 합성 메시지로 에이전트의 분석 브랜치를 태운다
-  const ANALYZE_MESSAGE = "이 업무정의서를 분석해서 업무 단계를 정리해줘";
+  const ANALYZE_MESSAGE = "이 업무정의서를 분석해서 자동화 흐름도까지 만들어줘";
   // 추천안 생성 버튼 합성 메시지 (작업 명세의 문구 그대로)
   const RECOMMEND_MESSAGE = "이 업무정의서로 자동화 흐름도 만들어줘";
+
+  // 분석/추천 버튼도 결국 /turn에 합성 메시지를 보내는 것뿐이라, 챗과 똑같이 사용자 턴으로
+  // 챗봇 화면에 남긴다 — 버튼으로 시작했든 챗으로 시작했든 같은 세션 대화 흐름으로 보이게.
+  function pushChatTurn(message) {
+    const chat = useChatStore();
+    chat.chatMessages.push({ role: "user", text: message, time: nowTime() });
+    // stages: 이 턴 동안 받은 진행 상태 메시지 이력 — 말풍선 위 작은 텍스트를 누르면 펼쳐 보여준다.
+    // stagesDone: 턴이 끝난 뒤에도 마지막 상태가 "완료" 문구로 남도록 표시한다.
+    const assistantMessage = reactive({
+      role: "assistant",
+      text: "",
+      stages: [],
+      stagesOpen: false,
+      stagesDone: false,
+      time: nowTime(),
+    });
+    chat.chatMessages.push(assistantMessage);
+    return assistantMessage;
+  }
 
   async function startAnalysis() {
     if (document.value?.status !== "parsed" || !sessionId.value || analysisStatus.value === "analyzing") {
@@ -190,9 +212,16 @@ export const usePipelineStore = defineStore("pipeline", () => {
     recommendTreesByVersion.value = {};
     recommendSaveError.value = "";
 
+    const assistantMessage = pushChatTurn(ANALYZE_MESSAGE);
+    const typewriter = createTypewriter(assistantMessage);
+
     await turnStream(sessionId.value, ANALYZE_MESSAGE, {
       onStage: (message) => {
         analysisStage.value = message;
+        if (message?.trim()) assistantMessage.stages.push(message.trim());
+      },
+      onToken: (token) => {
+        typewriter.push(token);
       },
       onDone: (data) => {
         applyTurnArtifacts(data);
@@ -201,13 +230,31 @@ export const usePipelineStore = defineStore("pipeline", () => {
           analysisStatus.value = "error";
           analysisError.value = data?.answer || "분석 결과를 받지 못했습니다. 다시 시도해주세요.";
         }
+        // 분석 노드는 token 스트림 없이 done에만 answer가 실린다 — 타자기 큐로 흘려보낸다.
+        if (typewriter.started) {
+          typewriter.finish();
+        } else {
+          typewriter.push(data?.answer || (data?.analysis_result ? "분석을 완료했습니다. 왼쪽 분석 결과 패널에서 확인해 주세요." : analysisError.value));
+        }
+        if (assistantMessage.stages.length) {
+          assistantMessage.stages.push(data?.analysis_result ? "분석 완료" : "분석 실패");
+          assistantMessage.stagesDone = true;
+        }
       },
       onError: (code, message) => {
+        typewriter.finish();
         analysisStatus.value = "error";
         analysisError.value =
           code === "AGENT_UNAVAILABLE"
             ? "분석 엔진이 일시적으로 사용 불가능합니다. 잠시 후 다시 시도해주세요."
             : message || "분석 중 오류가 발생했습니다.";
+        assistantMessage.text = assistantMessage.text
+          ? `${assistantMessage.text}\n\n⚠ ${analysisError.value}`
+          : `⚠ ${analysisError.value}`;
+        if (assistantMessage.stages.length) {
+          assistantMessage.stages.push("오류로 중단됨");
+          assistantMessage.stagesDone = true;
+        }
       },
     });
   }
@@ -222,9 +269,16 @@ export const usePipelineStore = defineStore("pipeline", () => {
     recommendError.value = "";
     recommendSaveError.value = "";
 
+    const assistantMessage = pushChatTurn(RECOMMEND_MESSAGE);
+    const typewriter = createTypewriter(assistantMessage);
+
     await turnStream(sessionId.value, RECOMMEND_MESSAGE, {
       onStage: (message) => {
         recommendStage.value = message;
+        if (message?.trim()) assistantMessage.stages.push(message.trim());
+      },
+      onToken: (token) => {
+        typewriter.push(token);
       },
       onDone: (data) => {
         if (data?.recommendation) recommendUndoStack.value = []; // 새 생성 기준으로 실행취소 초기화
@@ -233,13 +287,31 @@ export const usePipelineStore = defineStore("pipeline", () => {
           recommendStatus.value = "error";
           recommendError.value = data?.answer || "추천안을 받지 못했습니다. 다시 시도해주세요.";
         }
+        // 추천 노드도 token 스트림 없이 done에만 answer가 실린다 — 타자기 큐로 흘려보낸다.
+        if (typewriter.started) {
+          typewriter.finish();
+        } else {
+          typewriter.push(data?.answer || (data?.recommendation ? "흐름도를 만들었습니다. '흐름도 보기'에서 확인해 주세요." : recommendError.value));
+        }
+        if (assistantMessage.stages.length) {
+          assistantMessage.stages.push(data?.recommendation ? "흐름도 생성 완료" : "흐름도 생성 실패");
+          assistantMessage.stagesDone = true;
+        }
       },
       onError: (code, message) => {
+        typewriter.finish();
         recommendStatus.value = "error";
         recommendError.value =
           code === "AGENT_UNAVAILABLE"
             ? "추천 엔진이 일시적으로 사용 불가능합니다. 잠시 후 다시 시도해주세요."
             : message || "추천안 생성 중 오류가 발생했습니다.";
+        assistantMessage.text = assistantMessage.text
+          ? `${assistantMessage.text}\n\n⚠ ${recommendError.value}`
+          : `⚠ ${recommendError.value}`;
+        if (assistantMessage.stages.length) {
+          assistantMessage.stages.push("오류로 중단됨");
+          assistantMessage.stagesDone = true;
+        }
       },
     });
   }

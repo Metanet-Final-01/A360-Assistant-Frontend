@@ -194,6 +194,31 @@ async function handleSend() {
           class="chat-message"
           :class="`chat-message--${message.role}`"
         >
+          <div v-if="message.role === 'assistant' && message.stages?.length" class="chat-message__stages">
+            <button
+              type="button"
+              class="chat-message__stages-toggle"
+              @click="message.stagesOpen = !message.stagesOpen"
+            >
+              <span
+                class="chat-message__stages-chevron"
+                :class="{ 'chat-message__stages-chevron--open': message.stagesOpen }"
+                aria-hidden="true"
+              >
+                ▸
+              </span>
+              <span>{{ message.stages[message.stages.length - 1] }}</span>
+            </button>
+            <ul v-if="message.stagesOpen" class="chat-message__stages-list">
+              <li v-for="(stage, stageIdx) in message.stages" :key="stageIdx">
+                <span aria-hidden="true">{{
+                  stageIdx === message.stages.length - 1 && message.stagesDone ? "✅" : "🔹"
+                }}</span>
+                {{ stage }}
+              </li>
+            </ul>
+          </div>
+
           <div
             v-if="message.role === 'assistant' && !message.text"
             class="chat-message__bubble chat-message__bubble--pending"
