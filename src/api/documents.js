@@ -29,8 +29,13 @@ export async function parseDocument(documentId, { onStage, onDone, onError }) {
   }
 
   if (response.status === 401) {
-    notifyUnauthorized(); // 토큰 만료 — 로그인 화면으로 (apiRequest의 401 처리와 동일)
-    onError("로그인이 만료되었습니다. 다시 로그인해주세요.");
+    try {
+      onError("로그인이 만료되었습니다. 다시 로그인해주세요.");
+    } finally {
+      notifyUnauthorized(); // 토큰 만료 — 로그인 화면으로 (apiRequest의 401 처리와 동일). resetUpload()가
+      // 업로드 상태의 마지막 갱신이어야 하므로 onError보다 뒤에 실행한다 — 순서를 바꾸면
+      // resetUpload()가 지운 uploadStatus/uploadError를 onError가 다시 "error"로 덮어써 버린다.
+    }
     return;
   }
   if (!response.ok || !response.body) {
