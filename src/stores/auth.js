@@ -5,7 +5,6 @@ import { getToken, setToken, clearToken, setUnauthorizedHandler } from "../api/h
 import { usePipelineStore } from "./pipeline";
 import { useChatStore } from "./chat";
 import { useArchiveStore } from "./archive";
-import { ARCHIVE_PANEL_ORDER_KEY } from "../composables/usePanelReorder";
 
 export const useAuthStore = defineStore("auth", () => {
   const isLoggedIn = ref(false);
@@ -51,10 +50,8 @@ export const useAuthStore = defineStore("auth", () => {
     userEmail.value = null;
     useChatStore().resetForLogout();
     useArchiveStore().resetForLogout();
-    // 아카이브 패널 배치는 ArchivePage가 마운트될 때만 만들어지는 컴포저블이라
-    // 여기서 직접 참조할 인스턴스가 없다 — 저장값만 지우면 다음 마운트 때 기본 순서로 읽힌다.
-    // 분석 화면 패널은 App.vue 루트에서 세션을 넘나들며 살아있어 handleLogout에서 별도로 초기화한다.
-    localStorage.removeItem(ARCHIVE_PANEL_ORDER_KEY);
+    // 분석 화면 패널(usePanelReorder)은 App.vue 루트에서 세션을 넘나들며 살아있어
+    // handleLogout에서 별도로 초기화한다(analysisPanels.resetToDefault()).
   }
 
   // 어떤 API든 401(토큰 만료/무효)을 받으면 http.js가 이 핸들러를 부른다 — 상태를 로그아웃으로

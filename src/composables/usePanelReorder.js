@@ -1,9 +1,8 @@
 import { computed, reactive, ref } from "vue";
 
-// 로그아웃 시 초기화해야 하는 저장 키 — auth 스토어(logout)와 각 화면의
+// 로그아웃 시 초기화해야 하는 저장 키 — auth 스토어(logout)와 App.vue의
 // usePanelReorder 호출부가 같은 문자열을 쓰도록 여기 한 곳에서만 정의한다.
 export const ANALYSIS_PANEL_ORDER_KEY = "a360.panelOrder.analysis";
-export const ARCHIVE_PANEL_ORDER_KEY = "a360.panelOrder.archive";
 
 // 좌표 아래 있는 패널의 키를 찾는다. 네이티브 HTML5 드래그는 고스트 이미지가 히트테스트에
 // 끼지 않아 event.target을 바로 써도 되지만, 포인터 이벤트로 움직이는 플로팅 챗봇 팝업은

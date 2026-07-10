@@ -7,7 +7,6 @@ import AppSidebar from "./components/AppSidebar.vue";
 import UploadPanel from "./components/UploadPanel.vue";
 import AnalysisPanel from "./components/AnalysisPanel.vue";
 import ChatWidget from "./components/ChatWidget.vue";
-import ArchivePage from "./components/ArchivePage.vue";
 import LoginPage from "./components/LoginPage.vue";
 import SignupPage from "./components/SignupPage.vue";
 import TutorialOverlay from "./components/TutorialOverlay.vue";
@@ -34,7 +33,6 @@ const analysisPanels = usePanelReorder({
 
 const showSignup = ref(false);
 const justRegisteredEmail = ref("");
-const activeMenu = ref("analysis");
 
 const showTutorial = ref(false);
 
@@ -53,7 +51,6 @@ watch(
 );
 
 function startTutorial() {
-  activeMenu.value = "analysis"; // 튜토리얼 대상 요소들이 분석 화면에 있다
   showTutorial.value = true;
 }
 
@@ -77,6 +74,11 @@ function handleLogout() {
   auth.logout();
   analysisPanels.resetToDefault();
 }
+
+function handleNewChat() {
+  pipeline.resetUpload();
+  chat.newChat();
+}
 </script>
 
 <template>
@@ -89,14 +91,15 @@ function handleLogout() {
 
   <div v-else class="app-shell">
     <AppSidebar
-      :active-menu="activeMenu"
-      @navigate="activeMenu = $event"
+      :active-session-id="pipeline.sessionId"
+      @select-session="pipeline.loadSession"
+      @new-chat="handleNewChat"
       @logout="handleLogout"
       @tutorial="startTutorial"
     />
 
     <div class="app-content">
-      <main v-if="activeMenu === 'analysis'" class="app-main" id="analysis">
+      <main class="app-main" id="analysis">
         <div
           class="app-main__grid"
           :class="{ 'app-main__grid--docked': chat.chatDocked }"
@@ -124,10 +127,6 @@ function handleLogout() {
             @compact="chat.compactConversation"
           />
         </div>
-      </main>
-
-      <main v-else class="app-main app-main--archive" id="archive">
-        <ArchivePage />
       </main>
     </div>
 

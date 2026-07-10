@@ -2,9 +2,11 @@ import { defineStore } from "pinia";
 import { reactive, ref } from "vue";
 import { uploadDocument, parseDocument, createDocumentFromText } from "../api/documents";
 import { turnStream } from "../api/agent";
-import { listRecommendations, saveRecommendation } from "../api/recommend";
+import { listRecommendations, saveRecommendation, getLatestRecommendation } from "../api/recommend";
+import { getLatestAnalysis } from "../api/sessions";
 import { ApiError } from "../api/http";
 import { useChatStore } from "./chat";
+import { useArchiveStore } from "./archive";
 import { nowTime } from "../utils/chatMessages";
 import { createTypewriter } from "../utils/typewriter";
 
@@ -153,6 +155,9 @@ export const usePipelineStore = defineStore("pipeline", () => {
   // 분석+흐름도가 같이 온다) 프론트도 필드 존재 여부로 반영한다.
   function applyTurnArtifacts(data) {
     if (!data) return;
+    // 모든 턴(챗/분석/추천/압축)이 이 함수를 거치므로, 새 세션이 생기거나 제목·갱신시각이
+    // 바뀔 때마다 사이드바 세션 이력도 함께 최신화한다.
+    useArchiveStore().loadSessions();
     if (data.usage_gauge) usageGauge.value = data.usage_gauge;
     if (data.analysis_result) {
       analysis.value = { ...data.analysis_result, analysis_id: data.analysis_id ?? null };
@@ -389,6 +394,52 @@ export const usePipelineStore = defineStore("pipeline", () => {
     resetPipelineState();
   }
 
+  // 404(NO_ANALYSIS/NO_RECOMMENDATION)는 "아직 없음"이라는 정상 상태 — null로 삼킨다.
+  async function swallowNotFound(promise) {
+    try {
+      return await promise;
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return null;
+      throw err;
+    }
+  }
+
+  // 사이드바 세션 이력에서 과거 세션을 선택했을 때, 그 세션을 "현재 세션"으로 하이드레이션한다.
+  // 목록 API가 원본 업로드 파일명을 돌려주지 않으므로 업로드 패널은 빈 드롭존으로 시작하되,
+  // 같은 sessionId로 새 문서를 이어 올리거나(selectFile) 채팅을 계속할 수 있다.
+  async function loadSession(id) {
+    if (!id || sessionId.value === id) return;
+    clearTimers();
+    sessionId.value = id;
+    file.value = null;
+    document.value = null;
+    uploadStatus.value = "idle";
+    uploadError.value = "";
+    usageGauge.value = null;
+    resetPipelineState();
+
+    const [analysisRes, recommendationRes] = await Promise.all([
+      swallowNotFound(getLatestAnalysis(id)),
+      swallowNotFound(getLatestRecommendation(id)),
+      useChatStore().loadHistoryMessages(id),
+    ]);
+    // 응답이 오기 전에 다른 세션으로 이동했으면 버린다
+    if (sessionId.value !== id) return;
+
+    if (analysisRes) {
+      analysis.value = { ...analysisRes.result, analysis_id: analysisRes.analysis_id ?? null };
+      analysisStatus.value = "done";
+    }
+    if (recommendationRes) {
+      recommendation.value = recommendationRes;
+      recommendStatus.value = "done";
+      recommendTreesByVersion.value[recommendationRes.version] = JSON.parse(
+        JSON.stringify(recommendationRes.recommendation),
+      );
+    }
+    loadRecommendationHistory();
+  }
+
   return {
     file,
     uploadStatus,
@@ -413,6 +464,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     applyTurnArtifacts,
     startAnalysis,
     startRecommend,
+    loadSession,
     loadRecommendationHistory,
     saveRecommendationEdit,
     undoRecommendationEdit,

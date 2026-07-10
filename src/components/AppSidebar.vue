@@ -1,22 +1,94 @@
 <script setup>
-import { ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useAuthStore } from "../stores/auth";
+import { useArchiveStore } from "../stores/archive";
 
 const auth = useAuthStore();
+const archive = useArchiveStore();
 
 const props = defineProps({
-  activeMenu: { type: String, default: "analysis" },
+  activeSessionId: { type: String, default: null },
 });
 
-const emit = defineEmits(["logout", "navigate", "tutorial"]);
+const emit = defineEmits(["logout", "tutorial", "select-session", "new-chat"]);
 
 const COLLAPSE_KEY = "a360.sidebarCollapsed";
-const saved = localStorage.getItem(COLLAPSE_KEY);
-const isCollapsed = ref(saved !== null ? saved === "1" : window.innerWidth < 1280);
+const savedCollapsed = localStorage.getItem(COLLAPSE_KEY);
+const isCollapsed = ref(savedCollapsed !== null ? savedCollapsed === "1" : window.innerWidth < 1280);
+
+const HISTORY_KEY = "a360.historyExpanded";
+const savedHistory = localStorage.getItem(HISTORY_KEY);
+const historyExpanded = ref(savedHistory !== null ? savedHistory === "1" : true);
+
+const VISIBLE_STEP = 10;
+const searchQuery = ref("");
+const visibleCount = ref(VISIBLE_STEP);
+const openMenuId = ref(null);
 
 function toggleCollapsed() {
   isCollapsed.value = !isCollapsed.value;
   localStorage.setItem(COLLAPSE_KEY, isCollapsed.value ? "1" : "0");
+}
+
+// "분석" 항목 클릭 — 사이드바가 접혀 있으면(아이콘 전용) 먼저 펼치고 이력도 함께 연다.
+// 이미 펼쳐진 상태라면 이력 서브메뉴만 접었다 편다.
+function toggleHistory() {
+  if (isCollapsed.value) {
+    isCollapsed.value = false;
+    localStorage.setItem(COLLAPSE_KEY, "0");
+    historyExpanded.value = true;
+    localStorage.setItem(HISTORY_KEY, "1");
+    return;
+  }
+  historyExpanded.value = !historyExpanded.value;
+  localStorage.setItem(HISTORY_KEY, historyExpanded.value ? "1" : "0");
+}
+
+onMounted(() => {
+  archive.loadSessions();
+});
+
+const filteredSessions = computed(() => {
+  const q = searchQuery.value.trim();
+  if (!q) return archive.sessions;
+  return archive.sessions.filter((session) => (session.title ?? "").includes(q));
+});
+
+const visibleSessions = computed(() => filteredSessions.value.slice(0, visibleCount.value));
+const hasMoreSessions = computed(() => visibleCount.value < filteredSessions.value.length);
+
+watch(searchQuery, () => {
+  visibleCount.value = VISIBLE_STEP;
+});
+
+// "더 보기" — 목록 API 자체는 페이지네이션을 지원하지 않아 이미 받아온 전체 배열에서
+// 10개 단위로 노출 개수를 늘리는 방식이다.
+function showMoreSessions() {
+  visibleCount.value += VISIBLE_STEP;
+}
+
+function selectSession(id) {
+  openMenuId.value = null;
+  emit("select-session", id);
+}
+
+function toggleMenu(id, event) {
+  event.stopPropagation();
+  openMenuId.value = openMenuId.value === id ? null : id;
+}
+
+function handleHistoryClick(event) {
+  if (openMenuId.value && !event.target.closest(".archive-chat__item-menu-wrap")) {
+    openMenuId.value = null;
+  }
+}
+
+async function removeSession(id, event) {
+  event.stopPropagation();
+  const wasActive = id === props.activeSessionId;
+  const removed = await archive.removeSession(id);
+  openMenuId.value = null;
+  if (removed && wasActive) emit("new-chat");
 }
 </script>
 
@@ -57,10 +129,9 @@ function toggleCollapsed() {
         <button
           type="button"
           class="app-sidebar__nav-item"
-          :class="{ 'app-sidebar__nav-item--active': props.activeMenu === 'analysis' }"
-          :aria-current="props.activeMenu === 'analysis' ? 'page' : undefined"
+          :aria-expanded="historyExpanded && !isCollapsed"
           title="분석"
-          @click="emit('navigate', 'analysis')"
+          @click="toggleHistory"
         >
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path
@@ -76,26 +147,94 @@ function toggleCollapsed() {
             />
           </svg>
           <span class="app-sidebar__nav-label">분석</span>
-        </button>
-        <button
-          type="button"
-          class="app-sidebar__nav-item"
-          :class="{ 'app-sidebar__nav-item--active': props.activeMenu === 'archive' }"
-          :aria-current="props.activeMenu === 'archive' ? 'page' : undefined"
-          title="아카이브"
-          @click="emit('navigate', 'archive')"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <rect x="3.5" y="4.5" width="17" height="4.5" rx="1" stroke="currentColor" stroke-width="1.7" />
-            <path
-              d="M5.5 9v9A1.5 1.5 0 0 0 7 19.5h10a1.5 1.5 0 0 0 1.5-1.5V9"
-              stroke="currentColor"
-              stroke-width="1.7"
-            />
-            <path d="M10 12.5h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+          <svg
+            class="app-sidebar__nav-chevron"
+            :class="{ 'app-sidebar__nav-chevron--open': historyExpanded }"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path d="M7 9.5 12 14l5-4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
-          <span class="app-sidebar__nav-label">아카이브</span>
         </button>
+
+        <div
+          v-if="!isCollapsed"
+          class="app-sidebar__history-wrap"
+          :class="{ 'app-sidebar__history-wrap--open': historyExpanded }"
+        >
+          <div class="app-sidebar__history" @click="handleHistoryClick">
+            <button type="button" class="app-sidebar__new-chat" @click="emit('new-chat')">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+              <span>새 채팅</span>
+            </button>
+
+            <div class="archive-chat__search">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.6" />
+                <path d="M20 20l-3.8-3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+              </svg>
+              <input v-model="searchQuery" type="text" placeholder="세션 제목 검색" aria-label="세션 제목 검색" />
+            </div>
+
+            <p v-if="archive.deleteError" class="upload-error">{{ archive.deleteError }}</p>
+
+            <ul class="archive-chat__list">
+              <li v-if="archive.listStatus === 'loading'" class="archive-chat__empty">세션 목록을 불러오는 중…</li>
+              <li v-else-if="archive.listStatus === 'error'" class="archive-chat__empty">{{ archive.listError }}</li>
+
+              <template v-else>
+                <li
+                  v-for="session in visibleSessions"
+                  :key="session.id"
+                  class="archive-chat__item"
+                  :class="{ 'archive-chat__item--active': session.id === props.activeSessionId }"
+                >
+                  <button type="button" class="archive-results__item-main" @click="selectSession(session.id)">
+                    <span class="archive-results__item-icon archive-results__item-icon--session">
+                      {{ (session.solution || "A360").toUpperCase() }}
+                    </span>
+                    <div class="archive-results__item-body">
+                      <span class="archive-results__item-title">{{ session.title || "제목 없는 세션" }}</span>
+                      <span class="archive-results__item-date">{{ session.dateLabel }}</span>
+                    </div>
+                  </button>
+
+                  <div class="archive-chat__item-menu-wrap">
+                    <button
+                      type="button"
+                      class="archive-chat__item-menu-btn"
+                      aria-label="세션 옵션"
+                      @click="toggleMenu(session.id, $event)"
+                    >
+                      &#8942;
+                    </button>
+                    <Transition name="fade-up">
+                      <div v-if="openMenuId === session.id" class="archive-chat__item-menu" role="menu">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          class="archive-chat__item-menu-danger"
+                          @click="removeSession(session.id, $event)"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    </Transition>
+                  </div>
+                </li>
+
+                <li v-if="!visibleSessions.length" class="archive-chat__empty">저장된 세션이 없습니다.</li>
+
+                <li v-if="hasMoreSessions" class="archive-chat__show-more">
+                  <button type="button" @click="showMoreSessions">더 보기</button>
+                </li>
+              </template>
+            </ul>
+          </div>
+        </div>
       </nav>
 
       <div class="app-sidebar__footer">
