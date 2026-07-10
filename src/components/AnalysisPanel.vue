@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import { usePipelineStore } from "../stores/pipeline";
 import { evidenceLabel } from "../utils/format";
+import { buildPackageColorMap, flattenActions } from "../utils/recommendation";
 import RecommendationFlowModal from "./RecommendationFlowModal.vue";
 
 const pipeline = usePipelineStore();
@@ -15,6 +16,27 @@ const emptyState = computed(() => pipeline.analysisStatus === "idle");
 const steps = computed(() => pipeline.analysis?.steps ?? []);
 const hasSteps = computed(() => steps.value.length > 0);
 const ambiguities = computed(() => pipeline.analysis?.ambiguities ?? []);
+
+// 액션/패키지는 분석 결과(WorkStep, schemas/analysis.py)가 아니라 추천 흐름도
+// (RecommendedAction, schemas/recommendation.py)에만 있는 정보다 — step_id로 매칭해서
+// 카드에 얹는다. 추천안이 아직 없으면(흐름도 보기 전) 자연히 빈 배열이라 아무 것도 안 뜬다.
+const packageColor = computed(() => buildPackageColorMap(pipeline.recommendation?.recommendation?.steps));
+
+function colorFor(pkg) {
+  return packageColor.value.get(pkg || "미지정") ?? "#888888";
+}
+
+const recommendedActionsByStep = computed(() => {
+  const map = new Map();
+  (pipeline.recommendation?.recommendation?.steps ?? []).forEach((stepRec) => {
+    map.set(stepRec.step_id, flattenActions(stepRec.actions));
+  });
+  return map;
+});
+
+function actionsForStep(stepId) {
+  return recommendedActionsByStep.value.get(stepId) ?? [];
+}
 
 const dragIndex = ref(null);
 const dragVisualHidden = ref(false);
@@ -238,6 +260,19 @@ function startAddStep() {
   startEditStep(newStep);
 }
 
+// "흐름도 보기" 버튼 하나로 생성+열람을 합친다 — 이미 만들어진 게 있으면 바로 보여주고,
+// 없거나 이전 시도가 실패했으면 먼저 생성한 뒤 성공 시에만 모달을 연다.
+async function openFlowView() {
+  if (pipeline.recommendStatus === "done") {
+    showFlowModal.value = true;
+    return;
+  }
+  await pipeline.startRecommend();
+  if (pipeline.recommendStatus === "done") {
+    showFlowModal.value = true;
+  }
+}
+
 function downloadJson() {
   const payload = pipeline.buildExportPayload();
   const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -273,7 +308,7 @@ function downloadJson() {
 
       <div v-else-if="pipeline.analysisStatus === 'analyzing'" class="analyzing-state">
         <span class="analyzing-state__spinner" aria-hidden="true"></span>
-        <p>{{ pipeline.analysisStage || "분석 중…" }}</p>
+        <p>분석 중… 진행 상태는 챗봇에서 확인할 수 있습니다.</p>
       </div>
 
       <div v-else-if="pipeline.analysisStatus === 'error'" class="analyzing-state analyzing-state--error">
@@ -395,6 +430,15 @@ function downloadJson() {
                   <span class="rec-card__field-label">분기</span>
                   <span class="rec-card__field-value">{{ step.branching }}</span>
                 </div>
+
+                <ul v-if="actionsForStep(step.step_id).length" class="rec-card__action-list">
+                  <li v-for="(a, i) in actionsForStep(step.step_id)" :key="i" class="rec-card__action-chip">
+                    <span class="rec-card__action-chip-label">{{ a.label }}</span>
+                    <span class="rec-card__action-chip-package" :style="{ background: colorFor(a.package) }">
+                      {{ a.package }}
+                    </span>
+                  </li>
+                </ul>
               </div>
 
               <footer v-if="step.evidence" class="rec-card__footer">근거: {{ evidenceLabel(step.evidence) }}</footer>
@@ -417,36 +461,25 @@ function downloadJson() {
       <div class="recommend-section">
         <h3 class="export-section__title">A360 흐름도 추천</h3>
 
-        <div v-if="pipeline.recommendStatus === 'idle'" class="recommend-section__actions">
-          <button type="button" class="btn btn--primary" @click="pipeline.startRecommend">추천안 생성</button>
+        <div class="recommend-section__actions">
+          <span v-if="pipeline.recommendation" class="recommend-section__version">
+            v{{ pipeline.recommendation.version }}
+          </span>
+          <button
+            type="button"
+            class="btn btn--primary"
+            :disabled="pipeline.recommendStatus === 'generating'"
+            @click="openFlowView"
+          >
+            {{ pipeline.recommendStatus === "generating" ? "생성 중…" : "흐름도 보기" }}
+          </button>
         </div>
-
-        <div v-else-if="pipeline.recommendStatus === 'generating'" class="recommend-section__actions">
-          <button type="button" class="btn btn--primary" disabled>생성 중…</button>
-        </div>
-
-        <div v-else-if="pipeline.recommendStatus === 'error'" class="analyzing-state analyzing-state--error">
-          <p class="upload-error">{{ pipeline.recommendError }}</p>
-          <button type="button" class="btn btn--outline" @click="pipeline.startRecommend">다시 시도</button>
-        </div>
-
-        <template v-else-if="pipeline.recommendStatus === 'done'">
-          <div class="recommend-section__actions">
-            <span class="recommend-section__version">v{{ pipeline.recommendation?.version }}</span>
-            <button type="button" class="btn btn--outline" @click="showFlowModal = true">흐름도 보기</button>
-            <button
-              type="button"
-              class="btn btn--text"
-              :disabled="pipeline.recommendUndoStack.length === 0"
-              @click="pipeline.undoRecommendationEdit"
-            >
-              실행 취소
-            </button>
-          </div>
-          <p v-if="pipeline.recommendSaveError" class="upload-error recommend-section__save-error">
-            {{ pipeline.recommendSaveError }}
-          </p>
-        </template>
+        <p v-if="pipeline.recommendStatus === 'error'" class="upload-error recommend-section__save-error">
+          {{ pipeline.recommendError }}
+        </p>
+        <p v-if="pipeline.recommendSaveError" class="upload-error recommend-section__save-error">
+          {{ pipeline.recommendSaveError }}
+        </p>
       </div>
 
       <div class="export-section">
@@ -464,7 +497,7 @@ function downloadJson() {
     <div class="modal modal--recommend-loading">
       <div class="modal__body modal__body--center">
         <span class="analyzing-state__spinner" aria-hidden="true"></span>
-        <p>{{ pipeline.recommendStage || "추천안을 생성하는 중…" }}</p>
+        <p>추천안을 생성하는 중… 진행 상태는 챗봇에서 확인할 수 있습니다.</p>
       </div>
     </div>
   </div>

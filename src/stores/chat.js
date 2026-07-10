@@ -3,6 +3,7 @@ import { reactive, ref } from "vue";
 import { turnStream } from "../api/agent";
 import { createSession } from "../api/sessions";
 import { createInitialChatMessages, nowTime } from "../utils/chatMessages";
+import { createTypewriter } from "../utils/typewriter";
 import { usePipelineStore } from "./pipeline";
 
 export const useChatStore = defineStore("chat", () => {
@@ -54,7 +55,17 @@ export const useChatStore = defineStore("chat", () => {
     if (!trimmed) return;
     chatMessages.value.push({ role: "user", text: trimmed, time: nowTime() });
 
-    const assistantMessage = reactive({ role: "assistant", text: "", time: nowTime() });
+    // stages는 이 턴 동안 받은 모든 진행 상태 메시지를 순서대로 쌓아 둔다 — 말풍선 위 작은
+    // 텍스트(최신 상태)를 누르면 펼쳐서 전체 이력을 보여주는 용도(stagesOpen으로 펼침 여부 관리).
+    // stagesDone: 턴이 끝난 뒤에도 마지막 상태가 "완료" 문구로 남도록 표시한다.
+    const assistantMessage = reactive({
+      role: "assistant",
+      text: "",
+      stages: [],
+      stagesOpen: false,
+      stagesDone: false,
+      time: nowTime(),
+    });
     chatMessages.value.push(assistantMessage);
 
     const sessionId = await ensureChatSessionId();
@@ -63,22 +74,39 @@ export const useChatStore = defineStore("chat", () => {
       return;
     }
 
+    const typewriter = createTypewriter(assistantMessage);
+
     await turnStream(sessionId, trimmed, {
       operation,
+      onStage: (message) => {
+        if (message?.trim()) assistantMessage.stages.push(message.trim());
+      },
       onToken: (token) => {
-        assistantMessage.text += token;
+        typewriter.push(token);
       },
       onDone: (data) => {
-        // 분석/추천/압축 턴은 token 스트림 없이 done에만 answer가 실릴 수 있다
-        if (!assistantMessage.text) {
-          assistantMessage.text = data?.answer || "답변을 생성하지 못했습니다.";
+        // 분석/추천/압축 턴은 token 스트림 없이 done에만 answer가 실린다 — 이 경우 최종
+        // 텍스트를 타자기 큐로 흘려보내 여기서도 같은 효과가 나게 한다.
+        if (typewriter.started) {
+          typewriter.finish();
+        } else {
+          typewriter.push(data?.answer || "답변을 생성하지 못했습니다.");
+        }
+        if (assistantMessage.stages.length) {
+          assistantMessage.stages.push("응답 생성 완료");
+          assistantMessage.stagesDone = true;
         }
         if (data?.compact) lastCompact.value = data.compact;
         pipeline.applyTurnArtifacts(data);
       },
       onError: (code, message) => {
+        typewriter.finish();
         // 이미 받은 토큰이 있으면 지우지 않고 에러 문구만 이어붙인다
         assistantMessage.text = assistantMessage.text ? `${assistantMessage.text}\n\n⚠ ${message}` : message;
+        if (assistantMessage.stages.length) {
+          assistantMessage.stages.push("오류로 중단됨");
+          assistantMessage.stagesDone = true;
+        }
       },
     });
   }
