@@ -1,10 +1,13 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, defineAsyncComponent, ref } from "vue";
 import { usePipelineStore } from "../stores/pipeline";
 import { downloadRecommendationExport } from "../api/recommend";
 import { evidenceLabel } from "../utils/format";
 import { buildPackageColorMap, flattenActions } from "../utils/recommendation";
-import RecommendationFlowModal from "./RecommendationFlowModal.vue";
+
+// "흐름도 보기" 버튼을 눌러야만 열리는 모달이라, 분석 페이지 초기 번들에서 빼서
+// 실제로 열 때만 내려받는다.
+const RecommendationFlowModal = defineAsyncComponent(() => import("./RecommendationFlowModal.vue"));
 
 // 루트 노드가 여러 개(패널 + 로딩 오버레이 + 모달)라 attrs 자동 전달이 안 되므로,
 // 패널 재배치용 data-panel-key/order 스타일을 패널 섹션에 직접 물려준다.

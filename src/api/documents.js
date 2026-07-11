@@ -4,15 +4,15 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 // POST /api/documents — 업무정의서 업로드. 검증·저장만 하고 즉시 반환한다 (status="uploaded").
 // 파싱은 분리되어 있어 이어서 parseDocument()로 진행해야 status가 "parsed"로 바뀐다.
-export function uploadDocument(file, sessionId) {
+export function uploadDocument(file, sessionId, { signal } = {}) {
   const formData = new FormData();
   formData.append("file", file);
   if (sessionId) formData.append("session_id", sessionId);
-  return apiRequest("/api/documents", { method: "POST", body: formData });
+  return apiRequest("/api/documents", { method: "POST", body: formData, signal });
 }
 
 // POST /api/documents/{id}/parse — 업로드된 문서 파싱 진행. SSE(fetch 스트리밍): stage → done/error.
-export async function parseDocument(documentId, { onStage, onDone, onError }) {
+export async function parseDocument(documentId, { onStage, onDone, onError, signal }) {
   const token = getToken();
   const headers = {};
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -22,8 +22,10 @@ export async function parseDocument(documentId, { onStage, onDone, onError }) {
     response = await fetch(`${BASE_URL}/api/documents/${documentId}/parse`, {
       method: "POST",
       headers,
+      signal,
     });
-  } catch {
+  } catch (err) {
+    if (err?.name === "AbortError") return; // 새 업로드/초기화로 의도적으로 취소됨 — 에러 아님
     onError("백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.");
     return;
   }
@@ -71,18 +73,20 @@ export async function parseDocument(documentId, { onStage, onDone, onError }) {
         else if (event.event === "error") onError(event.message ?? "문서 파싱에 실패했습니다.");
       }
     }
-  } catch {
+  } catch (err) {
+    if (err?.name === "AbortError") return; // 새 업로드/초기화로 의도적으로 취소됨 — 에러 아님
     onError("문서 파싱 중 연결이 끊어졌습니다. 다시 시도해주세요.");
   }
 }
 
 // POST /api/documents/text — 파일 없이 자연어 업무 요청으로 문서를 등록한다.
 // 파싱이 필요 없어 status="parsed"로 바로 응답 — parseDocument() 호출 없이 곧장 분석 가능.
-export function createDocumentFromText(text, sessionId) {
+export function createDocumentFromText(text, sessionId, { signal } = {}) {
   return apiRequest("/api/documents/text", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text, session_id: sessionId ?? null }),
+    signal,
   });
 }
 

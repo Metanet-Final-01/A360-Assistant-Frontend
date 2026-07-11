@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useAuthStore } from "../stores/auth";
 import { useArchiveStore } from "../stores/archive";
 
@@ -16,6 +16,22 @@ const COLLAPSE_KEY = "a360.sidebarCollapsed";
 const savedCollapsed = localStorage.getItem(COLLAPSE_KEY);
 const isCollapsed = ref(savedCollapsed !== null ? savedCollapsed === "1" : window.innerWidth < 1280);
 
+// 모바일(본문 그리드가 1열로 접히는 900px 이하)에서는 사이드바를 본문 레이아웃 폭에
+// 반영하지 않고 오버레이 드로어로만 띄운다 — isCollapsed(데스크톱 선호도)와는 별개로
+// mobileOpen이 드로어 표시 여부를 담당하며 리사이즈에 실시간으로 반응한다.
+const MOBILE_QUERY = "(max-width: 900px)";
+const mobileMql = window.matchMedia(MOBILE_QUERY);
+const isMobile = ref(mobileMql.matches);
+const mobileOpen = ref(false);
+
+function handleMobileChange(event) {
+  isMobile.value = event.matches;
+  if (event.matches) mobileOpen.value = false;
+}
+
+// 표시상 접힘 여부 — 모바일에서는 드로어 열림 상태, 데스크톱에서는 저장된 선호도를 따른다.
+const collapsedForDisplay = computed(() => (isMobile.value ? !mobileOpen.value : isCollapsed.value));
+
 const HISTORY_KEY = "a360.historyExpanded";
 const savedHistory = localStorage.getItem(HISTORY_KEY);
 const historyExpanded = ref(savedHistory !== null ? savedHistory === "1" : true);
@@ -26,16 +42,28 @@ const visibleCount = ref(VISIBLE_STEP);
 const openMenuId = ref(null);
 
 function toggleCollapsed() {
+  if (isMobile.value) {
+    mobileOpen.value = !mobileOpen.value;
+    return;
+  }
   isCollapsed.value = !isCollapsed.value;
   localStorage.setItem(COLLAPSE_KEY, isCollapsed.value ? "1" : "0");
+}
+
+function closeMobileDrawer() {
+  if (isMobile.value) mobileOpen.value = false;
 }
 
 // "분석" 항목 클릭 — 사이드바가 접혀 있으면(아이콘 전용) 먼저 펼치고 이력도 함께 연다.
 // 이미 펼쳐진 상태라면 이력 서브메뉴만 접었다 편다.
 function toggleHistory() {
-  if (isCollapsed.value) {
-    isCollapsed.value = false;
-    localStorage.setItem(COLLAPSE_KEY, "0");
+  if (collapsedForDisplay.value) {
+    if (isMobile.value) {
+      mobileOpen.value = true;
+    } else {
+      isCollapsed.value = false;
+      localStorage.setItem(COLLAPSE_KEY, "0");
+    }
     historyExpanded.value = true;
     localStorage.setItem(HISTORY_KEY, "1");
     return;
@@ -45,7 +73,12 @@ function toggleHistory() {
 }
 
 onMounted(() => {
+  mobileMql.addEventListener("change", handleMobileChange);
   archive.loadSessions();
+});
+
+onBeforeUnmount(() => {
+  mobileMql.removeEventListener("change", handleMobileChange);
 });
 
 const filteredSessions = computed(() => {
@@ -69,6 +102,7 @@ function showMoreSessions() {
 
 function selectSession(id) {
   openMenuId.value = null;
+  closeMobileDrawer();
   emit("select-session", id);
 }
 
@@ -94,7 +128,13 @@ async function removeSession(id, event) {
 </script>
 
 <template>
-  <aside class="app-sidebar" :class="{ 'app-sidebar--collapsed': isCollapsed }">
+  <div
+    v-if="isMobile && mobileOpen"
+    class="app-sidebar__backdrop"
+    aria-hidden="true"
+    @click="closeMobileDrawer"
+  ></div>
+  <aside class="app-sidebar" :class="{ 'app-sidebar--collapsed': collapsedForDisplay }">
     <div class="app-sidebar__inner">
       <div class="app-sidebar__brand">
         <img src="../assets/a360-mark.svg" alt="A360 로고" class="app-sidebar__logo" />
@@ -102,9 +142,9 @@ async function removeSession(id, event) {
         <button
           type="button"
           class="app-sidebar__toggle"
-          :title="isCollapsed ? '메뉴 펼치기' : '메뉴 접기'"
-          :aria-label="isCollapsed ? '메뉴 펼치기' : '메뉴 접기'"
-          :aria-expanded="!isCollapsed"
+          :title="collapsedForDisplay ? '메뉴 펼치기' : '메뉴 접기'"
+          :aria-label="collapsedForDisplay ? '메뉴 펼치기' : '메뉴 접기'"
+          :aria-expanded="!collapsedForDisplay"
           @click="toggleCollapsed"
         >
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -130,7 +170,7 @@ async function removeSession(id, event) {
         <button
           type="button"
           class="app-sidebar__nav-item"
-          :aria-expanded="historyExpanded && !isCollapsed"
+          :aria-expanded="historyExpanded && !collapsedForDisplay"
           title="분석"
           @click="toggleHistory"
         >
@@ -160,12 +200,19 @@ async function removeSession(id, event) {
         </button>
 
         <div
-          v-if="!isCollapsed"
+          v-if="!collapsedForDisplay"
           class="app-sidebar__history-wrap"
           :class="{ 'app-sidebar__history-wrap--open': historyExpanded }"
         >
           <div class="app-sidebar__history" @click="handleHistoryClick">
-            <button type="button" class="app-sidebar__new-chat" @click="emit('new-chat')">
+            <button
+              type="button"
+              class="app-sidebar__new-chat"
+              @click="
+                closeMobileDrawer();
+                emit('new-chat');
+              "
+            >
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
               </svg>

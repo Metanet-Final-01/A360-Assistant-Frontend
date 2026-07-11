@@ -29,7 +29,11 @@ async function readErrorDetail(response) {
 //
 // onError(code, message): HTTP 레벨 에러는 detail.code(예: AGENT_UNAVAILABLE)를 전달하고,
 // 스트림 중간의 error 이벤트는 서버가 code를 안 주므로 null로 전달한다.
-export async function turnStream(sessionId, message, { operation = "chat", onToken, onStage, onDone, onError }) {
+export async function turnStream(
+  sessionId,
+  message,
+  { operation = "chat", onToken, onStage, onDone, onError, signal },
+) {
   const token = getToken();
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -40,8 +44,10 @@ export async function turnStream(sessionId, message, { operation = "chat", onTok
       method: "POST",
       headers,
       body: JSON.stringify({ message, operation }),
+      signal,
     });
-  } catch {
+  } catch (err) {
+    if (err?.name === "AbortError") return; // 세션 전환 등으로 의도적으로 취소됨 — 에러 아님
     onError("NETWORK_ERROR", "백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.");
     return;
   }
@@ -95,7 +101,8 @@ export async function turnStream(sessionId, message, { operation = "chat", onTok
         else if (event.event === "error") onError(null, event.message ?? "알 수 없는 오류가 발생했습니다.");
       }
     }
-  } catch {
+  } catch (err) {
+    if (err?.name === "AbortError") return; // 세션 전환 등으로 의도적으로 취소됨 — 에러 아님
     // 서버가 정상 error 이벤트 없이 스트림을 중간에 끊는 경우 (예: 백엔드 미처리 예외)
     onError(null, "응답을 받는 중 연결이 끊어졌습니다. 다시 시도해주세요.");
   }
