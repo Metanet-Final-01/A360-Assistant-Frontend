@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>A360 Assistant</title>
+    <!-- 로그인 확인(/api/auth/me)·세션 목록 등 첫 화면부터 쓰는 API가 다른 오리진(백엔드)에
+         있어 커넥션 설정(DNS+TCP+TLS)이 요청 시점에야 시작된다 — 미리 연결해 그 왕복시간을
+         숨긴다. -->
+    <link rel="preconnect" href="%VITE_API_BASE_URL%" crossorigin />
+    <link rel="dns-prefetch" href="%VITE_API_BASE_URL%" />
   </head>
   <body>
     <div id="app"></div>

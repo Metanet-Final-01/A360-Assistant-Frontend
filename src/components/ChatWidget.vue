@@ -12,6 +12,10 @@ const props = defineProps({
   // 대화 압축 버튼 노출 여부 — 메인 챗 위젯만 켠다 (긴 멀티턴 이력을 요약본으로 대체)
   showCompact: { type: Boolean, default: false },
   compacting: { type: Boolean, default: false },
+  // 이전 턴의 응답을 기다리는 중이거나(챗 자체) 업로드·분석·추천 등 같은 턴 컨트롤러를 쓰는
+  // 다른 작업이 진행 중이면 입력을 막는다 — 동시에 여러 턴을 보내면 응답이 뒤섞이거나
+  // 진행 중이던 작업이 중간에 끊긴다.
+  sending: { type: Boolean, default: false },
   // 매 턴 done.data.usage_gauge — 대화 누적 링 게이지 표시용 (RPA-83)
   // { intake_tokens, limit_tokens, ratio(0~1+), compact_recommended, compact_required }
   usageGauge: { type: Object, default: null },
@@ -338,8 +342,9 @@ const gaugeTitle = computed(() => {
           type="text"
           placeholder="메시지 입력…"
           aria-label="챗봇에게 메시지 보내기"
+          :disabled="sending"
         />
-        <button type="submit">전송</button>
+        <button type="submit" :disabled="sending">전송</button>
       </form>
       <div class="chat-popup__footer">
         <button
@@ -348,7 +353,7 @@ const gaugeTitle = computed(() => {
           class="chat-popup__compact"
           :class="{ 'chat-popup__compact--recommended': !compacting && usageGauge?.compact_recommended }"
           title="지금까지의 대화를 요약본으로 압축합니다"
-          :disabled="compacting"
+          :disabled="sending || compacting"
           @click="emit('compact')"
         >
           {{ compacting ? "압축 중…" : usageGauge?.compact_recommended ? "대화 압축 권장" : "대화 압축" }}

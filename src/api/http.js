@@ -83,7 +83,10 @@ export async function apiRequest(path, options = {}) {
   let response;
   try {
     response = await fetch(`${BASE_URL}${path}`, { ...options, headers });
-  } catch {
+  } catch (err) {
+    // signal로 의도적으로 취소된 요청 — 네트워크 장애가 아니므로 그대로 던져
+    // 호출부가 AbortError로 구분해 조용히 처리하게 한다.
+    if (err?.name === "AbortError") throw err;
     throw new ApiError("NETWORK_ERROR", "백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.", 0);
   }
 
