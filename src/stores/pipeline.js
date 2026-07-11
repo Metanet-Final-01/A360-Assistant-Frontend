@@ -84,6 +84,15 @@ export const usePipelineStore = defineStore("pipeline", () => {
     return uploadGeneration;
   }
 
+  // sessionId만으로는 "다른 세션으로 갔다가 같은 세션으로 돌아온" 반복 로드를 구분할 수 없다
+  // (A→B→A처럼 재진입하면 sessionId.value가 다시 A와 같아져 오래된 응답도 최신으로 오인된다) —
+  // loadSession마다 세대를 올리고 그 세대를 loadHistoryMessages까지 넘겨 시도 단위로 구분한다.
+  const sessionGeneration = ref(0);
+  function nextSessionGeneration() {
+    sessionGeneration.value += 1;
+    return sessionGeneration.value;
+  }
+
   let activeUploadController = null;
   function startUploadController() {
     activeUploadController?.abort();
@@ -113,6 +122,10 @@ export const usePipelineStore = defineStore("pipeline", () => {
   }
 
   async function selectFile(inputFile) {
+    // 챗 턴이 진행 중이면 여기서 cancelActiveTurn()으로 그 스트림을 끊지 않는다 — 끊긴 챗
+    // 턴은 onDone/onError 없이 끝나 말풍선이 "응답 중" 상태로 영영 멈춰버린다(RPA-107).
+    // 챗이 끝난 뒤 다시 시도하게 한다 — UI도 이 조건일 때 업로드를 막아야 한다(최종 방어선).
+    if (useChatStore().isSending) return;
     const ext = inputFile.name.split(".").pop().toLowerCase();
     if (!ALLOWED_EXT.includes(ext)) {
       uploadStatus.value = "error";
@@ -175,6 +188,8 @@ export const usePipelineStore = defineStore("pipeline", () => {
   async function submitTextRequest(text) {
     const trimmed = text.trim();
     if (!trimmed) return;
+    // 챗 턴 진행 중엔 취소하지 않고 거부한다 — selectFile()과 동일한 이유(RPA-107)
+    if (useChatStore().isSending) return;
 
     clearTimers();
     uploadError.value = "";
@@ -267,6 +282,8 @@ export const usePipelineStore = defineStore("pipeline", () => {
     if (document.value?.status !== "parsed" || !sessionId.value || analysisStatus.value === "analyzing") {
       return;
     }
+    // 챗 턴 진행 중엔 취소하지 않고 거부한다 — selectFile()과 동일한 이유(RPA-107)
+    if (useChatStore().isSending) return;
     analysisStatus.value = "analyzing";
     analysisStage.value = "";
     analysisError.value = "";
@@ -283,17 +300,25 @@ export const usePipelineStore = defineStore("pipeline", () => {
 
     const assistantMessage = pushChatTurn(ANALYZE_MESSAGE);
     const typewriter = createTypewriter(assistantMessage);
+    // signal.aborted를 콜백마다 확인한다 — cancelActiveTurn()이 fetch/reader를 끊어도, 이미
+    // 버퍼에 도착해 있던 프레임(예: done)은 abort 이후에도 동기적으로 마저 처리될 수 있어
+    // (스트림 구현체 타이밍 문제) 세션이 그대로여도 취소된 턴의 결과가 새로 지운 상태를
+    // 다시 채울 수 있다 — 이 턴 소유권 검사가 최종 방어선이다.
+    const signal = startTurnController();
 
     await turnStream(sessionId.value, ANALYZE_MESSAGE, {
-      signal: startTurnController(),
+      signal,
       onStage: (message) => {
+        if (signal.aborted) return;
         analysisStage.value = message;
         if (message?.trim()) assistantMessage.stages.push(message.trim());
       },
       onToken: (token) => {
+        if (signal.aborted) return;
         typewriter.push(token);
       },
       onDone: (data) => {
+        if (signal.aborted) return;
         applyTurnArtifacts(data);
         if (!data?.analysis_result) {
           // 에이전트가 분석 대신 일반 답변으로 흐른 경우 — 성공 done이어도 분석 산출물이 없다
@@ -312,6 +337,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
         }
       },
       onError: (code, message) => {
+        if (signal.aborted) return;
         typewriter.finish();
         analysisStatus.value = "error";
         analysisError.value =
@@ -334,6 +360,8 @@ export const usePipelineStore = defineStore("pipeline", () => {
     if (analysisStatus.value !== "done" || !sessionId.value || recommendStatus.value === "generating") {
       return;
     }
+    // 챗 턴 진행 중엔 취소하지 않고 거부한다 — selectFile()과 동일한 이유(RPA-107)
+    if (useChatStore().isSending) return;
     recommendStatus.value = "generating";
     recommendStage.value = "";
     recommendError.value = "";
@@ -341,17 +369,23 @@ export const usePipelineStore = defineStore("pipeline", () => {
 
     const assistantMessage = pushChatTurn(RECOMMEND_MESSAGE);
     const typewriter = createTypewriter(assistantMessage);
+    // startAnalysis()와 동일한 이유(RPA-107) — 취소된 턴의 늦게 처리된 콜백이 방금 지운
+    // 추천 상태를 다시 채우지 않도록 콜백마다 signal.aborted를 확인한다.
+    const signal = startTurnController();
 
     await turnStream(sessionId.value, RECOMMEND_MESSAGE, {
-      signal: startTurnController(),
+      signal,
       onStage: (message) => {
+        if (signal.aborted) return;
         recommendStage.value = message;
         if (message?.trim()) assistantMessage.stages.push(message.trim());
       },
       onToken: (token) => {
+        if (signal.aborted) return;
         typewriter.push(token);
       },
       onDone: (data) => {
+        if (signal.aborted) return;
         if (data?.recommendation) recommendUndoStack.value = []; // 새 생성 기준으로 실행취소 초기화
         applyTurnArtifacts(data);
         if (!data?.recommendation) {
@@ -370,6 +404,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
         }
       },
       onError: (code, message) => {
+        if (signal.aborted) return;
         typewriter.finish();
         recommendStatus.value = "error";
         recommendError.value =
@@ -476,6 +511,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     cancelActiveTurn();
     cancelActiveUpload();
     nextUploadGeneration();
+    const myGeneration = nextSessionGeneration();
     sessionId.value = id;
     file.value = null;
     document.value = null;
@@ -489,17 +525,18 @@ export const usePipelineStore = defineStore("pipeline", () => {
       [analysisRes, recommendationRes] = await Promise.all([
         swallowNotFound(getLatestAnalysis(id)),
         swallowNotFound(getLatestRecommendation(id)),
-        useChatStore().loadHistoryMessages(id),
+        useChatStore().loadHistoryMessages(id, myGeneration),
       ]);
     } catch (err) {
-      // 응답이 오기 전에 다른 세션으로 이동했으면 에러도 버린다
-      if (sessionId.value !== id) return;
+      // 응답이 오기 전에 다른 세션으로 이동했거나(A→B) 같은 세션을 다시 불러왔으면(A→B→A)
+      // 이 시도는 낡은 것이다 — sessionId 비교만으론 후자를 구분 못 해 세대로 확인한다.
+      if (myGeneration !== sessionGeneration.value) return;
       uploadStatus.value = "error";
       uploadError.value = err instanceof ApiError ? err.message : "세션을 불러오지 못했습니다.";
       return;
     }
-    // 응답이 오기 전에 다른 세션으로 이동했으면 버린다
-    if (sessionId.value !== id) return;
+    // 응답이 오기 전에 세션이 바뀌었거나 같은 세션을 다시 불러왔으면 버린다
+    if (myGeneration !== sessionGeneration.value) return;
 
     if (analysisRes) {
       analysis.value = { ...analysisRes.result, analysis_id: analysisRes.analysis_id ?? null };
@@ -520,6 +557,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     uploadStatus,
     uploadError,
     sessionId,
+    sessionGeneration,
     document,
     analysisStatus,
     analysisStage,

@@ -54,6 +54,11 @@ function closeMobileDrawer() {
   if (isMobile.value) mobileOpen.value = false;
 }
 
+function startNewChat() {
+  closeMobileDrawer();
+  emit("new-chat");
+}
+
 // "분석" 항목 클릭 — 사이드바가 접혀 있으면(아이콘 전용) 먼저 펼치고 이력도 함께 연다.
 // 이미 펼쳐진 상태라면 이력 서브메뉴만 접었다 편다.
 function toggleHistory() {
@@ -123,7 +128,7 @@ async function removeSession(id, event) {
   const wasActive = id === props.activeSessionId;
   const removed = await archive.removeSession(id);
   openMenuId.value = null;
-  if (removed && wasActive) emit("new-chat");
+  if (removed && wasActive) startNewChat();
 }
 </script>
 
@@ -208,10 +213,7 @@ async function removeSession(id, event) {
             <button
               type="button"
               class="app-sidebar__new-chat"
-              @click="
-                closeMobileDrawer();
-                emit('new-chat');
-              "
+              @click="startNewChat"
             >
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />

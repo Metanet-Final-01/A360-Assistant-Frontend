@@ -40,7 +40,9 @@ export const useChatStore = defineStore("chat", () => {
     if (pipeline.sessionId) return pipeline.sessionId;
     try {
       const { session_id } = await createSession();
-      pipeline.sessionId = session_id;
+      // 세션 생성을 기다리는 동안 다른 경로(사이드바 세션 전환 등)가 이미 세션을 확정했으면
+      // 그걸 우선한다 — 방금 만든 세션으로 덮어쓰면 사용자가 그 사이 전환한 세션이 사라진다.
+      if (!pipeline.sessionId) pipeline.sessionId = session_id;
     } catch {
       // 세션 생성 실패 — /turn을 부를 수 없으므로 호출부에서 에러 문구를 보여준다
     }
@@ -89,26 +91,37 @@ export const useChatStore = defineStore("chat", () => {
       });
       chatMessages.value.push(assistantMessage);
 
+      const messagesAtStart = chatMessages.value;
       const sessionId = await ensureChatSessionId();
       if (!sessionId) {
         assistantMessage.text = "세션을 만들지 못해 메시지를 보낼 수 없습니다. 잠시 후 다시 시도해주세요.";
         return;
       }
+      // 세션 생성을 기다리는 동안 다른 세션으로 전환돼 대화 목록이 통째로 바뀌었으면(위 말풍선도
+      // 이미 화면에서 사라진 배열에 들어있다) 검증되지 않은 세션으로 보내지 않고 중단한다.
+      if (chatMessages.value !== messagesAtStart) return;
 
       const typewriter = createTypewriter(assistantMessage);
+      // 분석/추천 버튼 등 다른 턴이 같은 세션에서 진행 중이었다면 여기서 취소된다 — 세션당
+      // 살아있는 턴은 항상 하나만 유지한다(pipeline.js 참고). cancelActiveTurn()이 fetch/reader를
+      // 끊어도 이미 버퍼에 도착한 프레임은 abort 이후에도 동기적으로 마저 처리될 수 있어(스트림
+      // 타이밍 문제) 세션이 그대로여도 취소된 턴의 결과가 상태를 다시 채울 수 있다 — 콜백마다
+      // signal.aborted를 확인하는 게 최종 방어선이다.
+      const signal = pipeline.startTurnController();
 
       await turnStream(sessionId, trimmed, {
         operation,
-        // 분석/추천 버튼 등 다른 턴이 같은 세션에서 진행 중이었다면 여기서 취소된다 — 세션당
-        // 살아있는 턴은 항상 하나만 유지한다(pipeline.js 참고).
-        signal: pipeline.startTurnController(),
+        signal,
         onStage: (message) => {
+          if (signal.aborted) return;
           if (message?.trim()) assistantMessage.stages.push(message.trim());
         },
         onToken: (token) => {
+          if (signal.aborted) return;
           typewriter.push(token);
         },
         onDone: (data) => {
+          if (signal.aborted) return;
           // 분석/추천/압축 턴은 token 스트림 없이 done에만 answer가 통째로 실린다 — 뭉치
           // 답변은 즉시 표시한다(P0-1: 타자기로 흘리면 긴 답변이 수 분씩 걸려 데모에 치명적).
           // 타자 효과는 token 스트림일 때만 적용된다.
@@ -131,6 +144,7 @@ export const useChatStore = defineStore("chat", () => {
           pipeline.applyTurnArtifacts(data);
         },
         onError: (code, message) => {
+          if (signal.aborted) return;
           typewriter.finish();
           // 이미 받은 토큰이 있으면 지우지 않고 에러 문구만 이어붙인다
           assistantMessage.text = assistantMessage.text ? `${assistantMessage.text}\n\n⚠ ${message}` : message;
@@ -150,10 +164,14 @@ export const useChatStore = defineStore("chat", () => {
   }
 
   // 히스토리에서 세션을 선택했을 때 그 세션의 대화 이력을 불러와 채운다(pipeline.loadSession에서 호출).
-  async function loadHistoryMessages(sessionId) {
+  // generation: pipeline.loadSession이 호출마다 발급하는 세대 토큰 — sessionId만으로는 같은
+  // 세션을 다시 불러온 반복 호출(A→B→A)을 구분할 수 없어(sessionId가 다시 같아짐), 세대로
+  // "이 시도가 여전히 최신인지"를 확인한다.
+  async function loadHistoryMessages(sessionId, generation) {
     const { messages } = await listChatMessages(sessionId);
-    // 응답이 오기 전에 다른 세션으로 이동했으면 버린다 (pipeline.loadSession의 세션 전환 가드와 동일)
-    if (usePipelineStore().sessionId !== sessionId) return;
+    const pipeline = usePipelineStore();
+    // 응답이 오기 전에 다른 세션으로 이동했거나 같은 세션을 다시 불러왔으면 버린다
+    if (pipeline.sessionId !== sessionId || pipeline.sessionGeneration !== generation) return;
     const history = (messages ?? []).map((m) => ({
       role: m.role,
       text: m.content,

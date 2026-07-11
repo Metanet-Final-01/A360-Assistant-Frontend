@@ -353,7 +353,7 @@ const gaugeTitle = computed(() => {
           class="chat-popup__compact"
           :class="{ 'chat-popup__compact--recommended': !compacting && usageGauge?.compact_recommended }"
           title="지금까지의 대화를 요약본으로 압축합니다"
-          :disabled="compacting"
+          :disabled="sending || compacting"
           @click="emit('compact')"
         >
           {{ compacting ? "압축 중…" : usageGauge?.compact_recommended ? "대화 압축 권장" : "대화 압축" }}
