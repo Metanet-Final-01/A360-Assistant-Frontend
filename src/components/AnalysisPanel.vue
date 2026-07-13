@@ -460,15 +460,15 @@ async function downloadJson() {
                 <ul v-if="actionsForStep(step.step_id).length" class="rec-card__action-list">
                   <li v-for="(a, i) in actionsForStep(step.step_id)" :key="i" class="rec-card__action-chip">
                     <span class="rec-card__action-chip-label">{{ a.label }}</span>
+                    <span class="rec-card__action-chip-package" :style="{ background: colorFor(a.package) }">
+                      {{ a.package }}
+                    </span>
                     <span
                       v-if="a.badge"
                       class="confidence-badge"
                       :class="`confidence-badge--${a.badge.level}`"
                     >
                       {{ a.badge.text }}
-                    </span>
-                    <span class="rec-card__action-chip-package" :style="{ background: colorFor(a.package) }">
-                      {{ a.package }}
                     </span>
                   </li>
                 </ul>
