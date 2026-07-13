@@ -3,7 +3,7 @@ import { computed, defineAsyncComponent, ref } from "vue";
 import { usePipelineStore } from "../stores/pipeline";
 import { downloadRecommendationExport } from "../api/recommend";
 import { evidenceLabel } from "../utils/format";
-import { buildPackageColorMap, flattenActions } from "../utils/recommendation";
+import { buildPackageColorMap, confidenceBadge, flattenActions } from "../utils/recommendation";
 
 // "흐름도 보기" 버튼을 눌러야만 열리는 모달이라, 분석 페이지 초기 번들에서 빼서
 // 실제로 열 때만 내려받는다.
@@ -37,7 +37,10 @@ function colorFor(pkg) {
 const recommendedActionsByStep = computed(() => {
   const map = new Map();
   (pipeline.recommendation?.recommendation?.steps ?? []).forEach((stepRec) => {
-    map.set(stepRec.step_id, flattenActions(stepRec.actions));
+    map.set(
+      stepRec.step_id,
+      flattenActions(stepRec.actions).map((a) => ({ ...a, badge: confidenceBadge(a.confidence) })),
+    );
   });
   return map;
 });
@@ -457,6 +460,13 @@ async function downloadJson() {
                 <ul v-if="actionsForStep(step.step_id).length" class="rec-card__action-list">
                   <li v-for="(a, i) in actionsForStep(step.step_id)" :key="i" class="rec-card__action-chip">
                     <span class="rec-card__action-chip-label">{{ a.label }}</span>
+                    <span
+                      v-if="a.badge"
+                      class="confidence-badge"
+                      :class="`confidence-badge--${a.badge.level}`"
+                    >
+                      {{ a.badge.text }}
+                    </span>
                     <span class="rec-card__action-chip-package" :style="{ background: colorFor(a.package) }">
                       {{ a.package }}
                     </span>
