@@ -8,12 +8,22 @@ export function flattenActions(actions) {
   const result = [];
   function walk(list) {
     (list ?? []).forEach((a) => {
-      result.push({ label: a.label || a.action, package: a.package || "미지정" });
+      result.push({ label: a.label || a.action, package: a.package || "미지정", confidence: a.confidence });
       if (a.children?.length) walk(a.children);
     });
   }
   walk(actions);
   return result;
+}
+
+const CONFIDENCE_LABEL = { high: "높음", mid: "보통", low: "낮음" };
+
+// confidence(0~1)를 뱃지 등급+텍스트로 변환. null/undefined면 뱃지를 표시하지 않으므로 null 반환.
+// 임계값: high >= 0.7, mid >= 0.4, 그 외 low.
+export function confidenceBadge(confidence) {
+  if (confidence == null) return null;
+  const level = confidence >= 0.7 ? "high" : confidence >= 0.4 ? "mid" : "low";
+  return { level, text: `${CONFIDENCE_LABEL[level]} ${Math.round(confidence * 100)}%` };
 }
 
 // 패키지별 색상은 고정된 의미 매핑이 아니라, steps를 훑으면서 처음 등장한 순서대로 팔레트를 배정한다.

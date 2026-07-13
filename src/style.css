@@ -1628,6 +1628,13 @@ input {
   color: var(--text);
 }
 
+.flow-box__meta {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .flow-box__tag {
   flex-shrink: 0;
   padding: 3px 10px;

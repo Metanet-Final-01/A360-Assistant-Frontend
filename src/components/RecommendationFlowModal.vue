@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from "vue";
 import { usePipelineStore } from "../stores/pipeline";
-import { buildPackageColorMap, flattenActions } from "../utils/recommendation";
+import { buildPackageColorMap, confidenceBadge, flattenActions } from "../utils/recommendation";
 
 const pipeline = usePipelineStore();
 
@@ -18,7 +18,7 @@ const actionBoxes = computed(() => {
   const steps = pipeline.recommendation?.recommendation?.steps ?? [];
   let seq = 0;
   return steps.flatMap((stepRec) =>
-    flattenActions(stepRec.actions).map((a) => ({ ...a, seq: (seq += 1) })),
+    flattenActions(stepRec.actions).map((a) => ({ ...a, seq: (seq += 1), badge: confidenceBadge(a.confidence) })),
   );
 });
 
@@ -120,7 +120,16 @@ function formatDate(iso) {
             <template v-for="(box, idx) in actionBoxes" :key="box.seq">
               <div class="flow-box">
                 <span class="flow-box__label">S{{ box.seq }}. {{ box.label }}</span>
-                <span class="flow-box__tag" :style="{ background: colorFor(box.package) }">{{ box.package }}</span>
+                <span class="flow-box__meta">
+                  <span
+                    v-if="box.badge"
+                    class="confidence-badge"
+                    :class="`confidence-badge--${box.badge.level}`"
+                  >
+                    {{ box.badge.text }}
+                  </span>
+                  <span class="flow-box__tag" :style="{ background: colorFor(box.package) }">{{ box.package }}</span>
+                </span>
               </div>
               <div v-if="idx < actionBoxes.length - 1" class="flow-arrow" aria-hidden="true"></div>
             </template>
