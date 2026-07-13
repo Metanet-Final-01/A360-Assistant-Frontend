@@ -51,9 +51,46 @@ function initPosition() {
   position.y = Math.max(MARGIN, window.innerHeight - POPUP_HEIGHT - 110);
 }
 
+// 응답 스트리밍 중 새 토큰이 올 때마다 무조건 바닥으로 스크롤하면, 사용자가 위로
+// 스크롤해 이전 내용을 보려 해도 계속 아래로 끌려온다.
+//
+// scrollTop을 다시 읽어 "지금 바닥 근처인지" 매번 재판정하는 방식은 근본적으로 경합에서
+// 자유롭지 못했다 — 타자기 효과가 16ms마다 돌아가는 동안 메인 스레드가 바쁘면(마크다운
+// 파싱·v-html 재렌더 등), 휠/트랙패드 스크롤이 네이티브(컴포지터 스레드)로 이미 반영된
+// 뒤에도 JS가 읽는 scrollTop 값이 그 갱신을 아직 못 따라잡은 시점에 판정이 이뤄질 수 있다.
+// 그래서 "사용자가 위로 스크롤했다"는 판단을 scrollTop 위치 추론이 아니라 휠 이벤트 자체
+// (deltaY<0)로 즉시, 모호함 없이 내린다 — 입력 이벤트에는 지연이 없다.
+let autoScrollToBottom = true;
+// 우리가 직접 scrollTop을 바닥으로 옮기면 그 결과로도 scroll 이벤트가 발생하는데, 이걸
+// "사용자가 바닥까지 스크롤했다"로 착각해 재판정하지 않도록 다음 한 번의 scroll 이벤트는 무시한다.
+let ignoreNextScrollEvent = false;
+let previousMessageCount = props.messages.length;
+
 function scrollToBottom() {
-  if (messagesRef.value) {
-    messagesRef.value.scrollTop = messagesRef.value.scrollHeight;
+  const el = messagesRef.value;
+  if (!el) return;
+  ignoreNextScrollEvent = true;
+  el.scrollTop = el.scrollHeight;
+}
+
+function resumeAutoScroll() {
+  autoScrollToBottom = true;
+  scrollToBottom();
+}
+
+function handleMessagesWheel(event) {
+  if (event.deltaY < 0) autoScrollToBottom = false;
+}
+
+function handleMessagesScroll() {
+  if (ignoreNextScrollEvent) {
+    ignoreNextScrollEvent = false;
+    return;
+  }
+  // 휠 이외의 방법(스크롤바 드래그, 터치, 키보드)으로 직접 바닥까지 돌아왔을 때 재개한다.
+  const el = messagesRef.value;
+  if (el && el.scrollHeight - el.scrollTop - el.clientHeight <= 4) {
+    autoScrollToBottom = true;
   }
 }
 
@@ -63,7 +100,7 @@ watch(
     if (!isOpen) return;
     initPosition();
     await nextTick();
-    scrollToBottom();
+    resumeAutoScroll();
   },
 );
 
@@ -71,7 +108,7 @@ onMounted(async () => {
   if (!props.open && !props.docked) return;
   initPosition();
   await nextTick();
-  scrollToBottom();
+  resumeAutoScroll();
 });
 
 function getDockZoneEl() {
@@ -158,8 +195,17 @@ function stopDrag() {
 watch(
   () => props.messages.map((message) => message.text).join(""),
   async () => {
-    await nextTick();
-    scrollToBottom();
+    const countChanged = props.messages.length !== previousMessageCount;
+    previousMessageCount = props.messages.length;
+    if (countChanged) {
+      // 새 메시지 추가(전송, 세션 전환 등) — 사용자가 어디에 있었든 항상 바닥으로 이동한다.
+      await nextTick();
+      resumeAutoScroll();
+    } else if (autoScrollToBottom) {
+      // 같은 메시지의 스트리밍 갱신 — 사용자가 휠로 위로 올리지 않은 동안만 따라간다.
+      await nextTick();
+      scrollToBottom();
+    }
   },
 );
 
@@ -264,7 +310,12 @@ const gaugeTitle = computed(() => {
         </button>
       </header>
 
-      <div class="chat-popup__messages" ref="messagesRef">
+      <div
+        class="chat-popup__messages"
+        ref="messagesRef"
+        @wheel="handleMessagesWheel"
+        @scroll="handleMessagesScroll"
+      >
         <div
           v-for="(message, idx) in messages"
           :key="idx"

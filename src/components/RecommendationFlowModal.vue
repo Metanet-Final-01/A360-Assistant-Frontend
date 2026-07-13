@@ -121,6 +121,7 @@ function formatDate(iso) {
               <div class="flow-box">
                 <span class="flow-box__label">S{{ box.seq }}. {{ box.label }}</span>
                 <span class="flow-box__meta">
+                  <span class="flow-box__tag" :style="{ background: colorFor(box.package) }">{{ box.package }}</span>
                   <span
                     v-if="box.badge"
                     class="confidence-badge"
@@ -128,7 +129,6 @@ function formatDate(iso) {
                   >
                     {{ box.badge.text }}
                   </span>
-                  <span class="flow-box__tag" :style="{ background: colorFor(box.package) }">{{ box.package }}</span>
                 </span>
               </div>
               <div v-if="idx < actionBoxes.length - 1" class="flow-arrow" aria-hidden="true"></div>
