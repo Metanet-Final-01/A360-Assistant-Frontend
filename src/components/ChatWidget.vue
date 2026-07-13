@@ -64,11 +64,15 @@ let autoScrollToBottom = true;
 // 우리가 직접 scrollTop을 바닥으로 옮기면 그 결과로도 scroll 이벤트가 발생하는데, 이걸
 // "사용자가 바닥까지 스크롤했다"로 착각해 재판정하지 않도록 다음 한 번의 scroll 이벤트는 무시한다.
 let ignoreNextScrollEvent = false;
+let previousMessages = props.messages;
 let previousMessageCount = props.messages.length;
 
 function scrollToBottom() {
   const el = messagesRef.value;
   if (!el) return;
+  // 이미 바닥이면 scrollTop 대입이 no-op이라 scroll 이벤트가 뜨지 않는다 — 플래그를 세우면
+  // 소비될 일 없이 남아 있다가 다음번 진짜(사용자) 스크롤 이벤트를 엉뚱하게 삼켜버린다.
+  if (el.scrollTop >= el.scrollHeight - el.clientHeight) return;
   ignoreNextScrollEvent = true;
   el.scrollTop = el.scrollHeight;
 }
@@ -80,6 +84,22 @@ function resumeAutoScroll() {
 
 function handleMessagesWheel(event) {
   if (event.deltaY < 0) autoScrollToBottom = false;
+}
+
+let touchStartY = null;
+
+function handleMessagesTouchStart(event) {
+  touchStartY = event.touches[0]?.clientY ?? null;
+}
+
+// 터치는 wheel 이벤트가 안 뜬다 — 손가락을 아래로 끌어 콘텐츠 위쪽을 드러내는 동작(휠의
+// deltaY<0과 같은 방향)에서도 자동 스크롤을 꺼야 한다. wheel과 동일하게 scrollTop을 다시 읽지
+// 않고 이벤트 자체(터치 이동 방향)로 즉시 판정한다.
+function handleMessagesTouchMove(event) {
+  const currentY = event.touches[0]?.clientY;
+  if (touchStartY === null || currentY === undefined) return;
+  if (touchStartY - currentY < 0) autoScrollToBottom = false;
+  touchStartY = currentY;
 }
 
 function handleMessagesScroll() {
@@ -195,9 +215,14 @@ function stopDrag() {
 watch(
   () => props.messages.map((message) => message.text).join(""),
   async () => {
+    // 세션 전환 등으로 messages 배열 자체가 통째로 교체되면(예: 우연히 길이가 같은 다른
+    // 세션 이력으로 바뀌는 경우) length 비교만으로는 스트리밍 갱신과 구분이 안 된다 —
+    // 배열 참조 변경도 새 메시지/세션 전환과 동일하게 취급한다.
+    const arrayReplaced = props.messages !== previousMessages;
     const countChanged = props.messages.length !== previousMessageCount;
+    previousMessages = props.messages;
     previousMessageCount = props.messages.length;
-    if (countChanged) {
+    if (countChanged || arrayReplaced) {
       // 새 메시지 추가(전송, 세션 전환 등) — 사용자가 어디에 있었든 항상 바닥으로 이동한다.
       await nextTick();
       resumeAutoScroll();
@@ -313,7 +338,9 @@ const gaugeTitle = computed(() => {
       <div
         class="chat-popup__messages"
         ref="messagesRef"
-        @wheel="handleMessagesWheel"
+        @wheel.passive="handleMessagesWheel"
+        @touchstart.passive="handleMessagesTouchStart"
+        @touchmove.passive="handleMessagesTouchMove"
         @scroll="handleMessagesScroll"
       >
         <div
