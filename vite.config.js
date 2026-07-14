@@ -13,6 +13,10 @@ export default defineConfig(({ mode }) => {
     plugins: [vue()],
     define: {
       "import.meta.env.VITE_API_BASE_URL": JSON.stringify(apiBaseUrl),
+      __VUE_I18N_FULL_INSTALL__: true,
+      __VUE_I18N_LEGACY_API__: false,
+      __INTLIFY_JIT_COMPILATION__: true,
+      __INTLIFY_PROD_DEVTOOLS__: false,
     },
   };
 });

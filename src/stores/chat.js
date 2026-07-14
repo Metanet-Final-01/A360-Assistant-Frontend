@@ -2,9 +2,11 @@ import { defineStore } from "pinia";
 import { reactive, ref } from "vue";
 import { turnStream } from "../api/agent";
 import { createSession, listChatMessages } from "../api/sessions";
-import { CHAT_GREETING, createInitialChatMessages, nowTime, timeLabel } from "../utils/chatMessages";
+import { createInitialChatMessages, getChatGreeting, timeLabel } from "../utils/chatMessages";
+import { formatTime } from "../utils/dateFormat";
 import { createTypewriter } from "../utils/typewriter";
 import { usePipelineStore } from "./pipeline";
+import { t } from "../i18n";
 
 export const useChatStore = defineStore("chat", () => {
   const chatOpen = ref(false);
@@ -60,11 +62,14 @@ export const useChatStore = defineStore("chat", () => {
     // startTurnController가 이전 컨트롤러를 abort함). ChatWidget 입력창도 같은 조건으로
     // 비활성화되지만(App.vue의 chatBlocked), 이건 그 UI 가드가 우회되더라도 지켜지는
     // 최종 방어선이다.
+    // 사이드바에서 세션 이력을 불러오는 중(sessionLoadStatus)에도 막는다 — loadHistoryMessages가
+    // 응답 도착 시 chatMessages를 통째로 교체하므로, 그 사이 보낸 메시지는 화면에서 사라진다.
     if (
       isSending.value ||
       pipeline.uploadStatus === "uploading" ||
       pipeline.analysisStatus === "analyzing" ||
-      pipeline.recommendStatus === "generating"
+      pipeline.recommendStatus === "generating" ||
+      pipeline.sessionLoadStatus === "loading"
     ) {
       return;
     }
@@ -73,7 +78,7 @@ export const useChatStore = defineStore("chat", () => {
 
     isSending.value = true;
     try {
-      chatMessages.value.push({ role: "user", text: trimmed, time: nowTime() });
+      chatMessages.value.push({ role: "user", text: trimmed, time: formatTime() });
 
       // stages는 이 턴 동안 받은 모든 진행 상태 메시지를 순서대로 쌓아 둔다 — 말풍선 위 작은
       // 텍스트(최신 상태)를 누르면 펼쳐서 전체 이력을 보여주는 용도(stagesOpen으로 펼침 여부 관리).
@@ -87,14 +92,14 @@ export const useChatStore = defineStore("chat", () => {
         stagesDone: false,
         sources: [],
         sourcesOpen: false,
-        time: nowTime(),
+        time: formatTime(),
       });
       chatMessages.value.push(assistantMessage);
 
       const messagesAtStart = chatMessages.value;
       const sessionId = await ensureChatSessionId();
       if (!sessionId) {
-        assistantMessage.text = "세션을 만들지 못해 메시지를 보낼 수 없습니다. 잠시 후 다시 시도해주세요.";
+        assistantMessage.text = t("chat.errors.sessionCreateFailed");
         return;
       }
       // 세션 생성을 기다리는 동안 다른 세션으로 전환돼 대화 목록이 통째로 바뀌었으면(위 말풍선도
@@ -128,10 +133,10 @@ export const useChatStore = defineStore("chat", () => {
           if (typewriter.started) {
             typewriter.finish();
           } else {
-            assistantMessage.text = data?.answer || "답변을 생성하지 못했습니다.";
+            assistantMessage.text = data?.answer || t("chat.errors.noAnswer");
           }
           if (assistantMessage.stages.length) {
-            assistantMessage.stages.push("응답 생성 완료");
+            assistantMessage.stages.push(t("chat.stageDone"));
             assistantMessage.stagesDone = true;
           }
           if (Array.isArray(data?.sources) && data.sources.length) {
@@ -149,7 +154,7 @@ export const useChatStore = defineStore("chat", () => {
           // 이미 받은 토큰이 있으면 지우지 않고 에러 문구만 이어붙인다
           assistantMessage.text = assistantMessage.text ? `${assistantMessage.text}\n\n⚠ ${message}` : message;
           if (assistantMessage.stages.length) {
-            assistantMessage.stages.push("오류로 중단됨");
+            assistantMessage.stages.push(t("common.stageAborted"));
             assistantMessage.stagesDone = true;
           }
         },
@@ -179,7 +184,7 @@ export const useChatStore = defineStore("chat", () => {
     }));
     chatMessages.value = history.length
       ? history
-      : [{ role: "assistant", text: CHAT_GREETING, time: nowTime() }];
+      : [{ role: "assistant", text: getChatGreeting(), time: formatTime() }];
   }
 
   // "+ 새 채팅" — 대화창을 인사말만 남은 초기 상태로 되돌린다
@@ -195,7 +200,7 @@ export const useChatStore = defineStore("chat", () => {
   async function compactConversation() {
     if (isCompacting.value) return;
     isCompacting.value = true;
-    await sendTurn("지금까지 대화 요약해줘", "compact");
+    await sendTurn(t("chat.compactRequestMessage"), "compact");
     isCompacting.value = false;
   }
 

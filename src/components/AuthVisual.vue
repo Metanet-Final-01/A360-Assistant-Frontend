@@ -1,8 +1,11 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import slide1Photo from "../assets/login1.png";
 import slide2Photo from "../assets/login2.png";
 import slide3Photo from "../assets/login3.png";
+
+const { t } = useI18n();
 
 const SLIDE_COUNT = 3;
 const SLIDE_INTERVAL = 4200;
@@ -75,14 +78,11 @@ onUnmounted(() => {
     </div>
 
     <div class="auth-brand__copy">
-      <h2 class="auth-brand__title">환영합니다!</h2>
-      <p class="auth-brand__desc">
-        업무정의서를 분석하고 A360 작업을 추천하며,<br />
-        대화로 다듬어가는 자동화 도우미입니다.
-      </p>
+      <h2 class="auth-brand__title">{{ t("auth.visual.title") }}</h2>
+      <p class="auth-brand__desc">{{ t("auth.visual.desc") }}</p>
     </div>
 
-    <div class="auth-dots" role="tablist" aria-label="소개 이미지 넘기기">
+    <div class="auth-dots" role="tablist" :aria-label="t('auth.visual.dotsLabel')">
       <button
         v-for="idx in SLIDE_COUNT"
         :key="idx"
@@ -91,7 +91,7 @@ onUnmounted(() => {
         :class="{ 'auth-dot--active': idx - 1 === current }"
         role="tab"
         :aria-selected="idx - 1 === current"
-        :aria-label="`${idx}번째 이미지 보기`"
+        :aria-label="t('auth.visual.slideLabel', { n: idx })"
         @click="goTo(idx - 1)"
       ></button>
     </div>

@@ -1,4 +1,5 @@
 import { apiRequest, getToken, notifyUnauthorized } from "./http";
+import { t } from "../i18n";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
@@ -26,13 +27,13 @@ export async function parseDocument(documentId, { onStage, onDone, onError, sign
     });
   } catch (err) {
     if (err?.name === "AbortError") return; // 새 업로드/초기화로 의도적으로 취소됨 — 에러 아님
-    onError("백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.");
+    onError(t("api.errors.networkUnreachable"));
     return;
   }
 
   if (response.status === 401) {
     try {
-      onError("로그인이 만료되었습니다. 다시 로그인해주세요.");
+      onError(t("api.errors.sessionExpired"));
     } finally {
       notifyUnauthorized(); // 토큰 만료 — 로그인 화면으로 (apiRequest의 401 처리와 동일). resetUpload()가
       // 업로드 상태의 마지막 갱신이어야 하므로 onError보다 뒤에 실행한다 — 순서를 바꾸면
@@ -41,7 +42,7 @@ export async function parseDocument(documentId, { onStage, onDone, onError, sign
     return;
   }
   if (!response.ok || !response.body) {
-    onError("문서 파싱 요청에 실패했습니다.");
+    onError(t("api.errors.parseRequestFailed"));
     return;
   }
 
@@ -70,12 +71,12 @@ export async function parseDocument(documentId, { onStage, onDone, onError, sign
 
         if (event.event === "stage") onStage?.(event.message ?? "");
         else if (event.event === "done") onDone(event.data);
-        else if (event.event === "error") onError(event.message ?? "문서 파싱에 실패했습니다.");
+        else if (event.event === "error") onError(event.message ?? t("api.errors.parseFailed"));
       }
     }
   } catch (err) {
     if (err?.name === "AbortError") return; // 새 업로드/초기화로 의도적으로 취소됨 — 에러 아님
-    onError("문서 파싱 중 연결이 끊어졌습니다. 다시 시도해주세요.");
+    onError(t("api.errors.parseStreamDisconnected"));
   }
 }
 

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, defineAsyncComponent, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { usePipelineStore } from "../stores/pipeline";
 import { downloadRecommendationExport } from "../api/recommend";
 import { buildPackageColorMap, confidenceBadge, flattenDetailed, formatParamValue, stepLabel } from "../utils/recommendation";
@@ -13,6 +14,7 @@ const RecommendationFlowModal = defineAsyncComponent(() => import("./Recommendat
 defineOptions({ inheritAttrs: false });
 
 const pipeline = usePipelineStore();
+const { t } = useI18n();
 
 const showFlowModal = ref(false);
 
@@ -25,7 +27,7 @@ const hasSteps = computed(() => (pipeline.analysis?.steps ?? []).length > 0);
 const packageColor = computed(() => buildPackageColorMap(pipeline.recommendation?.recommendation?.steps));
 
 function colorFor(pkg) {
-  return packageColor.value.get(pkg || "미지정") ?? "#888888";
+  return packageColor.value.get(pkg || t("common.unspecified")) ?? "#888888";
 }
 
 const recVariables = computed(() => pipeline.recommendation?.recommendation?.variables ?? []);
@@ -66,7 +68,7 @@ async function downloadJson() {
   try {
     await downloadRecommendationExport(pipeline.sessionId, pipeline.recommendation.version);
   } catch (err) {
-    exportError.value = err?.message ?? "내보내기에 실패했습니다.";
+    exportError.value = err?.message ?? t("recommendDetail.errors.exportFailed");
   }
 }
 </script>
@@ -83,15 +85,20 @@ async function downloadJson() {
         class="panel-drag-handle"
         draggable="true"
         data-panel-handle
-        title="드래그하여 패널 위치 이동"
+        :title="t('common.dragHandle')"
         aria-hidden="true"
         >⠿</span
       >
-      <h2 id="analysis-panel-title">추천 흐름도 상세</h2>
+      <h2 id="analysis-panel-title">{{ t("recommendDetail.title") }}</h2>
     </header>
 
     <div class="panel__body">
-      <div v-if="!pipeline.recommendation" class="empty-state">
+      <div v-if="pipeline.sessionLoadStatus === 'loading'" class="analyzing-state">
+        <span class="analyzing-state__spinner" aria-hidden="true"></span>
+        <p>{{ t("recommendDetail.sessionLoadingHint") }}</p>
+      </div>
+
+      <div v-else-if="!pipeline.recommendation" class="empty-state">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path
             d="M4 6h16M4 12h10M4 18h7"
@@ -100,13 +107,13 @@ async function downloadJson() {
             stroke-linecap="round"
           />
         </svg>
-        <p>업무 단계를 분석하고 흐름도를 생성하면<br />추천 액션 상세가 여기에 표시됩니다.</p>
+        <p>{{ t("recommendDetail.emptyState") }}</p>
       </div>
 
       <div v-else class="rec-detail">
         <div v-if="inputVars.length || outputVars.length" class="rec-detail__vars">
           <div v-if="inputVars.length" class="rec-detail__var-group">
-            <h4>입력 변수</h4>
+            <h4>{{ t("recommendDetail.inputVars") }}</h4>
             <ul>
               <li v-for="v in inputVars" :key="v.name">
                 <strong>{{ v.name }}</strong>
@@ -116,7 +123,7 @@ async function downloadJson() {
             </ul>
           </div>
           <div v-if="outputVars.length" class="rec-detail__var-group">
-            <h4>출력 변수</h4>
+            <h4>{{ t("recommendDetail.outputVars") }}</h4>
             <ul>
               <li v-for="v in outputVars" :key="v.name">
                 <strong>{{ v.name }}</strong>
@@ -155,14 +162,14 @@ async function downloadJson() {
         </div>
 
         <p v-if="pipeline.recommendation.recommendation?.notes" class="flow-notes">
-          <strong>참고:</strong> {{ pipeline.recommendation.recommendation.notes }}
+          <strong>{{ t("common.notesLabel") }}</strong> {{ pipeline.recommendation.recommendation.notes }}
         </p>
       </div>
     </div>
 
     <div v-if="pipeline.analysisStatus === 'done' && hasSteps" class="panel__footer">
       <div class="recommend-section">
-        <h3 class="export-section__title">A360 흐름도 추천</h3>
+        <h3 class="export-section__title">{{ t("recommendDetail.recommendSectionTitle") }}</h3>
 
         <div class="recommend-section__actions">
           <span v-if="pipeline.recommendation" class="recommend-section__version">
@@ -174,7 +181,7 @@ async function downloadJson() {
             :disabled="pipeline.recommendStatus === 'generating'"
             @click="openFlowView"
           >
-            {{ pipeline.recommendStatus === "generating" ? "생성 중…" : "흐름도 보기" }}
+            {{ pipeline.recommendStatus === "generating" ? t("recommendDetail.generating") : t("recommendDetail.viewFlow") }}
           </button>
         </div>
         <p v-if="pipeline.recommendStatus === 'error'" class="upload-error recommend-section__save-error">
@@ -186,16 +193,16 @@ async function downloadJson() {
       </div>
 
       <div class="export-section">
-        <h3 class="export-section__title">내보내기</h3>
+        <h3 class="export-section__title">{{ t("recommendDetail.exportTitle") }}</h3>
         <div class="export-section__actions">
           <button
             type="button"
             class="btn btn--outline"
             :disabled="!canExport"
-            :title="canExport ? '' : '흐름도(추천안)를 먼저 생성해야 내보낼 수 있습니다'"
+            :title="canExport ? '' : t('recommendDetail.exportDisabledHint')"
             @click="downloadJson"
           >
-            JSON 내보내기
+            {{ t("recommendDetail.exportJson") }}
           </button>
         </div>
         <p v-if="exportError" class="upload-error recommend-section__save-error">{{ exportError }}</p>
@@ -207,7 +214,7 @@ async function downloadJson() {
     <div class="modal modal--recommend-loading">
       <div class="modal__body modal__body--center">
         <span class="analyzing-state__spinner" aria-hidden="true"></span>
-        <p>추천안을 생성하는 중… 진행 상태는 챗봇에서 확인할 수 있습니다.</p>
+        <p>{{ t("recommendDetail.generatingModal") }}</p>
       </div>
     </div>
   </div>

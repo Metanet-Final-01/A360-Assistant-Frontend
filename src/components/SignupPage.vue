@@ -1,9 +1,11 @@
 <script setup>
 import { ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
 import { ApiError } from "../api/http";
 
 const auth = useAuthStore();
+const { t } = useI18n();
 
 const emit = defineEmits(["login", "close"]);
 
@@ -24,15 +26,15 @@ function toggleShow(field) {
 
 async function handleSubmit() {
   if (!email.value.trim() || !password.value.trim() || !confirmPassword.value.trim()) {
-    signupError.value = "모든 항목을 입력해주세요.";
+    signupError.value = t("auth.signup.errors.missingFields");
     return;
   }
   if (!PASSWORD_RULE.test(password.value)) {
-    signupError.value = "영문, 숫자, 특수문자를 포함하여 8자 이상 입력해주세요.";
+    signupError.value = t("auth.signup.errors.passwordRule");
     return;
   }
   if (password.value !== confirmPassword.value) {
-    signupError.value = "비밀번호가 일치하지 않습니다.";
+    signupError.value = t("auth.signup.errors.mismatch");
     return;
   }
   signupError.value = "";
@@ -40,10 +42,10 @@ async function handleSubmit() {
   try {
     const registeredEmail = email.value.trim();
     await auth.registerWithPassword(registeredEmail, password.value);
-    window.alert("회원가입이 완료되었습니다. 로그인해주세요.");
+    window.alert(t("auth.signup.completeAlert"));
     emit("login", registeredEmail);
   } catch (err) {
-    signupError.value = err instanceof ApiError ? err.message : "회원가입 중 오류가 발생했습니다.";
+    signupError.value = err instanceof ApiError ? err.message : t("auth.signup.errors.generic");
   } finally {
     isSubmitting.value = false;
   }
@@ -54,20 +56,20 @@ async function handleSubmit() {
   <div class="modal-overlay" @click.self="$emit('close')">
     <div class="modal modal--signup" role="dialog" aria-modal="true" aria-labelledby="signup-title">
       <header class="modal__header">
-        <h2 id="signup-title">회원가입</h2>
-        <button type="button" class="modal__close" aria-label="닫기" @click="$emit('close')">✕</button>
+        <h2 id="signup-title">{{ t("auth.signup.title") }}</h2>
+        <button type="button" class="modal__close" :aria-label="t('common.close')" @click="$emit('close')">✕</button>
       </header>
 
       <div class="modal__body">
         <section class="login-card login-card--modal" aria-labelledby="signup-title">
           <p class="login-card__inline-link">
-            이미 계정이 있으신가요?
-            <button type="button" class="login-card__link-btn" @click="$emit('login')">로그인</button>
+            {{ t("auth.signup.hasAccount") }}
+            <button type="button" class="login-card__link-btn" @click="$emit('login')">{{ t("auth.signup.loginLink") }}</button>
           </p>
 
           <form class="login-form" @submit.prevent="handleSubmit">
             <div class="login-field">
-              <label class="login-field__label" for="signup-email">이메일</label>
+              <label class="login-field__label" for="signup-email">{{ t("auth.signup.emailLabel") }}</label>
               <div class="login-input">
                 <svg class="login-input__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.6" />
@@ -83,14 +85,14 @@ async function handleSubmit() {
                   id="signup-email"
                   v-model="email"
                   type="email"
-                  placeholder="이메일 주소를 입력하세요"
+                  :placeholder="t('auth.signup.emailPlaceholder')"
                   autocomplete="email"
                 />
               </div>
             </div>
 
             <div class="login-field">
-              <label class="login-field__label" for="signup-password">비밀번호</label>
+              <label class="login-field__label" for="signup-password">{{ t("auth.signup.passwordLabel") }}</label>
               <div class="login-input">
                 <svg class="login-input__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <rect x="5" y="10.5" width="14" height="9.5" rx="2" stroke="currentColor" stroke-width="1.6" />
@@ -105,13 +107,13 @@ async function handleSubmit() {
                   id="signup-password"
                   v-model="password"
                   :type="showPassword ? 'text' : 'password'"
-                  placeholder="비밀번호를 입력하세요"
+                  :placeholder="t('auth.signup.passwordPlaceholder')"
                   autocomplete="new-password"
                 />
                 <button
                   type="button"
                   class="login-input__toggle"
-                  :aria-label="showPassword ? '비밀번호 숨기기' : '비밀번호 표시'"
+                  :aria-label="showPassword ? t('auth.signup.hidePassword') : t('auth.signup.showPassword')"
                   @click="toggleShow('password')"
                 >
                   <svg v-if="showPassword" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -134,11 +136,11 @@ async function handleSubmit() {
                   </svg>
                 </button>
               </div>
-              <p class="login-field__hint">영문, 숫자, 특수문자를 포함하여 8자 이상 입력해주세요.</p>
+              <p class="login-field__hint">{{ t("auth.signup.passwordHint") }}</p>
             </div>
 
             <div class="login-field">
-              <label class="login-field__label" for="signup-password-confirm">비밀번호 확인</label>
+              <label class="login-field__label" for="signup-password-confirm">{{ t("auth.signup.confirmPasswordLabel") }}</label>
               <div class="login-input">
                 <svg class="login-input__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <rect x="5" y="10.5" width="14" height="9.5" rx="2" stroke="currentColor" stroke-width="1.6" />
@@ -153,13 +155,13 @@ async function handleSubmit() {
                   id="signup-password-confirm"
                   v-model="confirmPassword"
                   :type="showConfirmPassword ? 'text' : 'password'"
-                  placeholder="비밀번호를 다시 입력하세요"
+                  :placeholder="t('auth.signup.confirmPasswordPlaceholder')"
                   autocomplete="new-password"
                 />
                 <button
                   type="button"
                   class="login-input__toggle"
-                  :aria-label="showConfirmPassword ? '비밀번호 숨기기' : '비밀번호 표시'"
+                  :aria-label="showConfirmPassword ? t('auth.signup.hidePassword') : t('auth.signup.showPassword')"
                   @click="toggleShow('confirm')"
                 >
                   <svg v-if="showConfirmPassword" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -187,7 +189,7 @@ async function handleSubmit() {
             <p v-if="signupError" class="upload-error">{{ signupError }}</p>
 
             <button type="submit" class="btn btn--primary login-submit" :disabled="isSubmitting">
-              {{ isSubmitting ? "가입 중…" : "회원가입" }}
+              {{ isSubmitting ? t("auth.signup.submitting") : t("auth.signup.submit") }}
             </button>
           </form>
         </section>

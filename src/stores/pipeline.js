@@ -7,8 +7,9 @@ import { getLatestAnalysis } from "../api/sessions";
 import { ApiError } from "../api/http";
 import { useChatStore } from "./chat";
 import { useArchiveStore } from "./archive";
-import { nowTime } from "../utils/chatMessages";
+import { formatTime } from "../utils/dateFormat";
 import { createTypewriter } from "../utils/typewriter";
+import { t } from "../i18n";
 
 // NOTE: 분석·추천 생성은 에이전트 단일 진입점 POST /api/sessions/{id}/turn으로 통합됐다
 // (RPA-64/67 — 레거시 /analyze·/recommend는 제거). 버튼은 합성 메시지를 보내고, done.data의
@@ -50,6 +51,12 @@ export const usePipelineStore = defineStore("pipeline", () => {
   // { intake_tokens, limit_tokens, ratio(0~1+), compact_recommended, compact_required }
   // 챗 위젯이 링 게이지로 표시하고, compact_recommended면 "대화 압축" 버튼을 강조한다.
   const usageGauge = ref(null);
+
+  // 사이드바에서 과거 세션을 선택해 분석·흐름도·채팅 이력을 통째로 불러오는 동안의 상태
+  // (loadSession 전용 — analysisStatus/recommendStatus는 이 fetch 동안 idle로 리셋돼 있어
+  // 별도 플래그가 없으면 UI가 "로딩 중"과 "빈 화면"을 구분할 수 없다). 사이드바·업로드
+  // 패널·흐름도 패널·챗 위젯이 이 값을 보고 로딩 스피너를 표시한다.
+  const sessionLoadStatus = ref("idle"); // idle | loading | error
 
   let timers = [];
   function clearTimers() {
@@ -129,7 +136,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     const ext = inputFile.name.split(".").pop().toLowerCase();
     if (!ALLOWED_EXT.includes(ext)) {
       uploadStatus.value = "error";
-      uploadError.value = "PDF · PPT · PPTX · DOCX 파일만\n업로드할 수 있습니다.";
+      uploadError.value = t("pipeline.errors.invalidFileType");
       return;
     }
 
@@ -150,7 +157,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
 
       if (doc.status === "failed") {
         uploadStatus.value = "error";
-        uploadError.value = doc.error || "문서 파싱에 실패했습니다.";
+        uploadError.value = doc.error || t("api.errors.parseFailed");
         return;
       }
 
@@ -179,7 +186,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
       if (myGeneration !== uploadGeneration) return;
       uploadStatus.value = "error";
       uploadError.value =
-        err instanceof ApiError ? err.message : "업로드 중 알 수 없는 오류가 발생했습니다.";
+        err instanceof ApiError ? err.message : t("pipeline.errors.uploadUnknown");
     }
   }
 
@@ -193,7 +200,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
 
     clearTimers();
     uploadError.value = "";
-    file.value = { name: "텍스트 입력", size: trimmed.length, ext: "txt" };
+    file.value = { name: t("pipeline.textInputLabel"), size: trimmed.length, ext: "txt" };
     uploadStatus.value = "uploading";
     resetPipelineState();
     cancelActiveTurn();
@@ -207,14 +214,14 @@ export const usePipelineStore = defineStore("pipeline", () => {
       document.value = doc;
       uploadStatus.value = doc.status === "failed" ? "error" : "uploaded";
       if (doc.status === "failed") {
-        uploadError.value = doc.error || "요청을 처리하지 못했습니다.";
+        uploadError.value = doc.error || t("pipeline.errors.textRequestFailed");
       }
     } catch (err) {
       if (err?.name === "AbortError") return; // 새 업로드/초기화로 의도적으로 취소됨
       if (myGeneration !== uploadGeneration) return;
       uploadStatus.value = "error";
       uploadError.value =
-        err instanceof ApiError ? err.message : "요청 처리 중 알 수 없는 오류가 발생했습니다.";
+        err instanceof ApiError ? err.message : t("pipeline.errors.textRequestUnknown");
     }
   }
 
@@ -255,15 +262,19 @@ export const usePipelineStore = defineStore("pipeline", () => {
   }
 
   // 분석 시작 버튼 — intent 필드가 없으므로 합성 메시지로 에이전트의 분석 브랜치를 태운다
+  // ⚠️ 번역 금지: 이 문자열은 화면 표시뿐 아니라 그대로 백엔드 /turn API에 전송되어 에이전트의
+  // 분석/추천 라우팅을 태우는 트리거 문자열이다(intent 필드 없음, 리터럴 매칭 가능성). 영어 UI에서도
+  // 한국어 그대로 전송해야 하며, 다국어 트리거 지원은 백엔드 팀과 별도 협의 필요(이번 프론트 i18n
+  // 작업 범위 밖).
   const ANALYZE_MESSAGE = "이 업무정의서를 분석해서 자동화 흐름도까지 만들어줘";
-  // 추천안 생성 버튼 합성 메시지 (작업 명세의 문구 그대로)
+  // 추천안 생성 버튼 합성 메시지 (작업 명세의 문구 그대로) — 위와 동일한 이유로 번역 금지.
   const RECOMMEND_MESSAGE = "이 업무정의서로 자동화 흐름도 만들어줘";
 
   // 분석/추천 버튼도 결국 /turn에 합성 메시지를 보내는 것뿐이라, 챗과 똑같이 사용자 턴으로
   // 챗봇 화면에 남긴다 — 버튼으로 시작했든 챗으로 시작했든 같은 세션 대화 흐름으로 보이게.
   function pushChatTurn(message) {
     const chat = useChatStore();
-    chat.chatMessages.push({ role: "user", text: message, time: nowTime() });
+    chat.chatMessages.push({ role: "user", text: message, time: formatTime() });
     // stages: 이 턴 동안 받은 진행 상태 메시지 이력 — 말풍선 위 작은 텍스트를 누르면 펼쳐 보여준다.
     // stagesDone: 턴이 끝난 뒤에도 마지막 상태가 "완료" 문구로 남도록 표시한다.
     const assistantMessage = reactive({
@@ -272,7 +283,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
       stages: [],
       stagesOpen: false,
       stagesDone: false,
-      time: nowTime(),
+      time: formatTime(),
     });
     chat.chatMessages.push(assistantMessage);
     return assistantMessage;
@@ -323,16 +334,16 @@ export const usePipelineStore = defineStore("pipeline", () => {
         if (!data?.analysis_result) {
           // 에이전트가 분석 대신 일반 답변으로 흐른 경우 — 성공 done이어도 분석 산출물이 없다
           analysisStatus.value = "error";
-          analysisError.value = data?.answer || "분석 결과를 받지 못했습니다. 다시 시도해주세요.";
+          analysisError.value = data?.answer || t("pipeline.errors.analysisNoResult");
         }
         // 분석 노드는 token 스트림 없이 done에만 answer가 실린다 — 타자기 큐로 흘려보낸다.
         if (typewriter.started) {
           typewriter.finish();
         } else {
-          typewriter.push(data?.answer || (data?.analysis_result ? "분석을 완료했습니다. 왼쪽 분석 결과 패널에서 확인해 주세요." : analysisError.value));
+          typewriter.push(data?.answer || (data?.analysis_result ? t("pipeline.messages.analysisDone") : analysisError.value));
         }
         if (assistantMessage.stages.length) {
-          assistantMessage.stages.push(data?.analysis_result ? "분석 완료" : "분석 실패");
+          assistantMessage.stages.push(data?.analysis_result ? t("pipeline.stage.analysisDone") : t("pipeline.stage.analysisFailed"));
           assistantMessage.stagesDone = true;
         }
       },
@@ -342,13 +353,13 @@ export const usePipelineStore = defineStore("pipeline", () => {
         analysisStatus.value = "error";
         analysisError.value =
           code === "AGENT_UNAVAILABLE"
-            ? "분석 엔진이 일시적으로 사용 불가능합니다. 잠시 후 다시 시도해주세요."
-            : message || "분석 중 오류가 발생했습니다.";
+            ? t("pipeline.errors.analysisEngineUnavailable")
+            : message || t("pipeline.errors.analysisGeneric");
         assistantMessage.text = assistantMessage.text
           ? `${assistantMessage.text}\n\n⚠ ${analysisError.value}`
           : `⚠ ${analysisError.value}`;
         if (assistantMessage.stages.length) {
-          assistantMessage.stages.push("오류로 중단됨");
+          assistantMessage.stages.push(t("common.stageAborted"));
           assistantMessage.stagesDone = true;
         }
       },
@@ -390,16 +401,16 @@ export const usePipelineStore = defineStore("pipeline", () => {
         applyTurnArtifacts(data);
         if (!data?.recommendation) {
           recommendStatus.value = "error";
-          recommendError.value = data?.answer || "추천안을 받지 못했습니다. 다시 시도해주세요.";
+          recommendError.value = data?.answer || t("pipeline.errors.recommendNoResult");
         }
         // 추천 노드도 token 스트림 없이 done에만 answer가 실린다 — 타자기 큐로 흘려보낸다.
         if (typewriter.started) {
           typewriter.finish();
         } else {
-          typewriter.push(data?.answer || (data?.recommendation ? "흐름도를 만들었습니다. '흐름도 보기'에서 확인해 주세요." : recommendError.value));
+          typewriter.push(data?.answer || (data?.recommendation ? t("pipeline.messages.recommendDone") : recommendError.value));
         }
         if (assistantMessage.stages.length) {
-          assistantMessage.stages.push(data?.recommendation ? "흐름도 생성 완료" : "흐름도 생성 실패");
+          assistantMessage.stages.push(data?.recommendation ? t("pipeline.stage.recommendDone") : t("pipeline.stage.recommendFailed"));
           assistantMessage.stagesDone = true;
         }
       },
@@ -409,13 +420,13 @@ export const usePipelineStore = defineStore("pipeline", () => {
         recommendStatus.value = "error";
         recommendError.value =
           code === "AGENT_UNAVAILABLE"
-            ? "추천 엔진이 일시적으로 사용 불가능합니다. 잠시 후 다시 시도해주세요."
-            : message || "추천안 생성 중 오류가 발생했습니다.";
+            ? t("pipeline.errors.recommendEngineUnavailable")
+            : message || t("pipeline.errors.recommendGeneric");
         assistantMessage.text = assistantMessage.text
           ? `${assistantMessage.text}\n\n⚠ ${recommendError.value}`
           : `⚠ ${recommendError.value}`;
         if (assistantMessage.stages.length) {
-          assistantMessage.stages.push("오류로 중단됨");
+          assistantMessage.stages.push(t("common.stageAborted"));
           assistantMessage.stagesDone = true;
         }
       },
@@ -449,7 +460,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
       // 흐름도 보기/실행 취소 화면이 사라지고 "다시 시도"가 전체 재생성 버튼으로 바뀐다.
       // 대신 recommendSaveError로만 실패를 알린다(과거엔 이 필드가 없어 실패가 조용히 묻혔다).
       recommendSaveError.value =
-        err instanceof ApiError ? err.message : "추천안 저장 중 오류가 발생했습니다.";
+        err instanceof ApiError ? err.message : t("pipeline.errors.saveGeneric");
     }
   }
 
@@ -466,7 +477,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     if (!sessionId.value || recommendUndoStack.value.length === 0) return;
     // 저장이 실패할 수 있으니 성공했을 때만 pop한다 — 미리 pop하면 실패 시 스냅샷을 잃는다.
     const previous = recommendUndoStack.value[recommendUndoStack.value.length - 1];
-    await persistRecommendationTree(previous, "실행 취소", "drag");
+    await persistRecommendationTree(previous, t("pipeline.changeSummaryUndo"), "drag");
     if (!recommendSaveError.value) recommendUndoStack.value.pop();
   }
 
@@ -476,7 +487,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
   async function revertToRecommendationVersion(version) {
     const tree = recommendTreesByVersion.value[version];
     if (!tree || recommendation.value?.version === version) return;
-    await saveRecommendationEdit(JSON.parse(JSON.stringify(tree)), `v${version} 버전으로 되돌리기`);
+    await saveRecommendationEdit(JSON.parse(JSON.stringify(tree)), t("pipeline.changeSummaryRevert", { version }));
   }
 
   function resetUpload() {
@@ -484,6 +495,11 @@ export const usePipelineStore = defineStore("pipeline", () => {
     cancelActiveTurn();
     cancelActiveUpload();
     nextUploadGeneration();
+    // 세션 로딩(loadSession)이 아직 진행 중일 때 "새 채팅"을 누르는 경우도 세대를 올려야
+    // 한다 — sessionId만 null로 비우면, 이미 날아간 요청의 세대가 여전히 최신으로 보여
+    // 늦게 도착한 응답이 방금 비운 화면을 옛 세션 데이터로 다시 채워버린다.
+    nextSessionGeneration();
+    sessionLoadStatus.value = "idle";
     file.value = null;
     uploadStatus.value = "idle";
     uploadError.value = "";
@@ -519,6 +535,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     uploadError.value = "";
     usageGauge.value = null;
     resetPipelineState();
+    sessionLoadStatus.value = "loading";
 
     let analysisRes, recommendationRes;
     try {
@@ -530,9 +547,12 @@ export const usePipelineStore = defineStore("pipeline", () => {
     } catch (err) {
       // 응답이 오기 전에 다른 세션으로 이동했거나(A→B) 같은 세션을 다시 불러왔으면(A→B→A)
       // 이 시도는 낡은 것이다 — sessionId 비교만으론 후자를 구분 못 해 세대로 확인한다.
+      // 이 가드 덕분에, 로딩 중 다른 세션을 클릭해 이미 다음 시도가 시작된 경우 낡은 시도의
+      // 실패가 방금 시작된 새 로딩 상태(sessionLoadStatus="loading")를 덮어쓰지 않는다.
       if (myGeneration !== sessionGeneration.value) return;
+      sessionLoadStatus.value = "error";
       uploadStatus.value = "error";
-      uploadError.value = err instanceof ApiError ? err.message : "세션을 불러오지 못했습니다.";
+      uploadError.value = err instanceof ApiError ? err.message : t("pipeline.errors.sessionLoadFailed");
       return;
     }
     // 응답이 오기 전에 세션이 바뀌었거나 같은 세션을 다시 불러왔으면 버린다
@@ -549,6 +569,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
         JSON.stringify(recommendationRes.recommendation),
       );
     }
+    sessionLoadStatus.value = "idle";
     loadRecommendationHistory();
   }
 
@@ -572,6 +593,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     recommendTreesByVersion,
     recommendSaveError,
     usageGauge,
+    sessionLoadStatus,
     selectFile,
     submitTextRequest,
     applyTurnArtifacts,
