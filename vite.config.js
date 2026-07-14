@@ -18,5 +18,11 @@ export default defineConfig(({ mode }) => {
       __INTLIFY_JIT_COMPILATION__: true,
       __INTLIFY_PROD_DEVTOOLS__: false,
     },
+    server: {
+      // Windows 호스트 ↔ Docker 바인드 마운트는 inotify 파일 이벤트가 컨테이너로 전달되지 않아
+      // Vite가 소스 변경을 감지하지 못한다(HMR 무동작 → 저장해도 화면에 반영 안 됨). 폴링으로
+      // 주기 감시해 저장 즉시 HMR 되게 한다.
+      watch: { usePolling: true, interval: 300 },
+    },
   };
 });

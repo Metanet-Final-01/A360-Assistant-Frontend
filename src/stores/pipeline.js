@@ -58,6 +58,46 @@ export const usePipelineStore = defineStore("pipeline", () => {
   // 패널·흐름도 패널·챗 위젯이 이 값을 보고 로딩 스피너를 표시한다.
   const sessionLoadStatus = ref("idle"); // idle | loading | error
 
+  // 라이브 흐름도 스트리밍 상태 (RPA — 스트리밍 흐름도). 백엔드가 흐름도 생성/수정 도중 partial
+  // 이벤트로 흘려보내는 flow 스냅샷을 프레임 단위로 담고, "추천 흐름도 상세" 패널이 이걸
+  // 인라인으로 실시간 렌더한다(모달 팝업 아님). 버튼(startRecommend)·분석(startAnalysis)·
+  // 챗(sendTurn) 어느 경로로 흐름도를 만들든 같은 상태를 갱신한다.
+  // liveActive는 "이 턴에 흐름도 스트림이 진행 중"이라는 뜻 — 첫 프레임에서 켜지고 done/error에
+  // 리셋된다. 리셋되면 패널은 저장된 최종 추천안(pipeline.recommendation)을 보여준다(그래야
+  // 버전 되돌리기·편집도 반영된다).
+  const liveFlow = ref(null); // 최신 스냅샷 { steps, variables, notes }
+  const liveViolations = ref([]); // 스냅샷의 검수 위반 (노드 강조용)
+  const liveCaption = ref(""); // "검수 · 위반 N건" / "완료" 등 프레임 캡션
+  const liveActive = ref(false); // 스트림 진행 중 여부 (첫 프레임에서 켜짐)
+  const liveActiveStep = ref(null); // 지금 국소 수정 중인 step_id — 그 단계를 붉게 강조·스크롤
+  // 라이브 분석 스냅샷(kind:"analysis") — 흐름도와 같은 partial 채널을 쓰되 분석 결과 전용.
+  // 분석 스트리밍 중 업로드 패널이 이걸 인라인 렌더한다(요약 → 단계 하나씩 채워짐).
+  const liveAnalysis = ref(null); // { summary, document_title, steps, ambiguities }
+
+  // partial 프레임 하나를 반영한다 — kind로 흐름도/분석을 가른다. 프레임마다 패널이 다시 그린다.
+  function applyLiveFrame(data) {
+    if (!data) return;
+    if (data.kind === "analysis") {
+      liveAnalysis.value = data.analysis ?? null; // 분석 라이브 스냅샷 — 업로드 패널이 렌더
+      return;
+    }
+    if (data.kind !== "flow") return;
+    liveActive.value = true;
+    liveFlow.value = data.flow ?? { steps: [] };
+    liveViolations.value = data.violations ?? [];
+    liveCaption.value = data.caption ?? "";
+    liveActiveStep.value = data.active_step_id ?? null; // 수정 중 아니면 null → 강조 해제
+  }
+
+  function resetLiveFlow() {
+    liveActive.value = false;
+    liveFlow.value = null;
+    liveViolations.value = [];
+    liveCaption.value = "";
+    liveActiveStep.value = null;
+    liveAnalysis.value = null;
+  }
+
   let timers = [];
   function clearTimers() {
     timers.forEach((t) => clearTimeout(t));
@@ -126,6 +166,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     recommendUndoStack.value = [];
     recommendTreesByVersion.value = {};
     recommendSaveError.value = "";
+    resetLiveFlow();
   }
 
   async function selectFile(inputFile) {
@@ -308,6 +349,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     recommendUndoStack.value = [];
     recommendTreesByVersion.value = {};
     recommendSaveError.value = "";
+    resetLiveFlow(); // 이전 라이브 스냅샷 정리 — 이 턴이 흐름도까지 만들면 첫 partial에서 다시 켜진다
 
     const assistantMessage = pushChatTurn(ANALYZE_MESSAGE);
     const typewriter = createTypewriter(assistantMessage);
@@ -324,6 +366,11 @@ export const usePipelineStore = defineStore("pipeline", () => {
         analysisStage.value = message;
         if (message?.trim()) assistantMessage.stages.push(message.trim());
       },
+      onPartial: (data) => {
+        if (signal.aborted) return;
+        // 분석+흐름도까지 만드는 턴이라 생성 단계의 flow 스냅샷이 여기로 온다 — 라이브 렌더
+        applyLiveFrame(data);
+      },
       onToken: (token) => {
         if (signal.aborted) return;
         typewriter.push(token);
@@ -331,6 +378,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
       onDone: (data) => {
         if (signal.aborted) return;
         applyTurnArtifacts(data);
+        resetLiveFlow(); // 스트림 종료 → 패널이 저장된 최종본을 보여준다
         if (!data?.analysis_result) {
           // 에이전트가 분석 대신 일반 답변으로 흐른 경우 — 성공 done이어도 분석 산출물이 없다
           analysisStatus.value = "error";
@@ -350,6 +398,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
       onError: (code, message) => {
         if (signal.aborted) return;
         typewriter.finish();
+        resetLiveFlow(); // 실패 시 라이브 모달 닫기
         analysisStatus.value = "error";
         analysisError.value =
           code === "AGENT_UNAVAILABLE"
@@ -377,6 +426,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     recommendStage.value = "";
     recommendError.value = "";
     recommendSaveError.value = "";
+    resetLiveFlow(); // 이전 라이브 스냅샷 정리 — 첫 partial 프레임에서 다시 켜진다
 
     const assistantMessage = pushChatTurn(RECOMMEND_MESSAGE);
     const typewriter = createTypewriter(assistantMessage);
@@ -391,6 +441,10 @@ export const usePipelineStore = defineStore("pipeline", () => {
         recommendStage.value = message;
         if (message?.trim()) assistantMessage.stages.push(message.trim());
       },
+      onPartial: (data) => {
+        if (signal.aborted) return;
+        applyLiveFrame(data); // 흐름도 스냅샷 프레임 — 추천 흐름도 상세 패널이 실시간 렌더
+      },
       onToken: (token) => {
         if (signal.aborted) return;
         typewriter.push(token);
@@ -399,6 +453,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
         if (signal.aborted) return;
         if (data?.recommendation) recommendUndoStack.value = []; // 새 생성 기준으로 실행취소 초기화
         applyTurnArtifacts(data);
+        resetLiveFlow(); // 스트림 종료 → 패널이 저장된 최종본을 보여준다(버전 되돌리기·편집 반영)
         if (!data?.recommendation) {
           recommendStatus.value = "error";
           recommendError.value = data?.answer || t("pipeline.errors.recommendNoResult");
@@ -417,6 +472,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
       onError: (code, message) => {
         if (signal.aborted) return;
         typewriter.finish();
+        resetLiveFlow(); // 실패 시 라이브 모달 닫기
         recommendStatus.value = "error";
         recommendError.value =
           code === "AGENT_UNAVAILABLE"
@@ -594,6 +650,14 @@ export const usePipelineStore = defineStore("pipeline", () => {
     recommendSaveError,
     usageGauge,
     sessionLoadStatus,
+    liveFlow,
+    liveViolations,
+    liveCaption,
+    liveActive,
+    liveActiveStep,
+    liveAnalysis,
+    applyLiveFrame,
+    resetLiveFlow,
     selectFile,
     submitTextRequest,
     applyTurnArtifacts,
