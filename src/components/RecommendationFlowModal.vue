@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from "vue";
 import { usePipelineStore } from "../stores/pipeline";
-import { buildPackageColorMap, confidenceBadge, flattenActions } from "../utils/recommendation";
+import { buildPackageColorMap, confidenceBadge, flattenDetailed, stepLabel } from "../utils/recommendation";
 
 const pipeline = usePipelineStore();
 
@@ -13,14 +13,19 @@ function colorFor(pkg) {
   return packageColor.value.get(pkg || "미지정") ?? "#888888";
 }
 
-// 업무 단계 구분 없이 모든 액션(중첩 포함)을 순서대로 박스 하나씩으로 펼친 단일 시퀀스.
-const actionBoxes = computed(() => {
+// 흐름도 자체의 step 구획별로 묶은 요약 시퀀스 — 분석(WorkStep) 단계와는 무관하다.
+// 모달은 요약 보기라 파라미터·변수·설명 없이 단계 제목 + 액션(패키지·라벨)만 보여준다.
+const stepGroups = computed(() => {
   const steps = pipeline.recommendation?.recommendation?.steps ?? [];
   let seq = 0;
-  return steps.flatMap((stepRec) =>
-    flattenActions(stepRec.actions).map((a) => ({ ...a, seq: (seq += 1), badge: confidenceBadge(a.confidence) })),
-  );
+  return steps.map((stepRec, idx) => ({
+    key: stepRec.step_id ?? idx,
+    title: stepLabel(stepRec, idx),
+    boxes: flattenDetailed(stepRec.actions).map((a) => ({ ...a, seq: (seq += 1), badge: confidenceBadge(a.confidence) })),
+  }));
 });
+
+const hasBoxes = computed(() => stepGroups.value.some((g) => g.boxes.length));
 
 // ----- 버전 이력 -----
 // 순서변경·수정·삭제·추가는 분석 결과 패널의 업무 단계 카드에서 하므로, 여기는 읽기 전용 보기다.
@@ -71,7 +76,7 @@ function formatDate(iso) {
 
       <div class="modal__body modal__body--flow">
         <div class="flow-toolbar">
-          <p class="flow-hint">전체 액션 시퀀스입니다. 패키지별 색상으로 구분됩니다.</p>
+          <p class="flow-hint">단계별 액션 시퀀스입니다. 패키지별 색상으로 구분됩니다.</p>
           <div class="flow-toolbar__actions">
             <button type="button" class="btn btn--outline" @click="showHistory = !showHistory">
               버전 이력
@@ -112,29 +117,31 @@ function formatDate(iso) {
           </p>
         </div>
 
-        <template v-if="actionBoxes.length">
+        <template v-if="hasBoxes">
           <div class="flow-diagram">
             <div class="flow-pill">시작</div>
             <div class="flow-arrow" aria-hidden="true"></div>
 
-            <template v-for="(box, idx) in actionBoxes" :key="box.seq">
-              <div class="flow-box">
-                <span class="flow-box__label">S{{ box.seq }}. {{ box.label }}</span>
-                <span class="flow-box__meta">
-                  <span class="flow-box__tag" :style="{ background: colorFor(box.package) }">{{ box.package }}</span>
-                  <span
-                    v-if="box.badge"
-                    class="confidence-badge"
-                    :class="`confidence-badge--${box.badge.level}`"
-                  >
-                    {{ box.badge.text }}
+            <template v-for="group in stepGroups" :key="group.key">
+              <div class="flow-step-divider">{{ group.title }}</div>
+              <template v-for="box in group.boxes" :key="box.seq">
+                <div class="flow-box">
+                  <span class="flow-box__label">S{{ box.seq }}. {{ box.label }}</span>
+                  <span class="flow-box__meta">
+                    <span class="flow-box__tag" :style="{ background: colorFor(box.package) }">{{ box.package }}</span>
+                    <span
+                      v-if="box.badge"
+                      class="confidence-badge"
+                      :class="`confidence-badge--${box.badge.level}`"
+                    >
+                      {{ box.badge.text }}
+                    </span>
                   </span>
-                </span>
-              </div>
-              <div v-if="idx < actionBoxes.length - 1" class="flow-arrow" aria-hidden="true"></div>
+                </div>
+                <div class="flow-arrow" aria-hidden="true"></div>
+              </template>
             </template>
 
-            <div class="flow-arrow" aria-hidden="true"></div>
             <div class="flow-pill">완료</div>
           </div>
 

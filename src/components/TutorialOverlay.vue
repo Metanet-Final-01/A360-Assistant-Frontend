@@ -17,7 +17,12 @@ const steps = [
   {
     selectors: ['[data-tour="analysis"]'],
     title: "분석 결과 확인 · 편집",
-    body: "AI가 업무를 단계별로 정리해 보여줍니다. 단계를 드래그로 재정렬하거나 수정·삭제할 수 있고, '흐름도 보기'로 A360 액션 추천 흐름도를 확인할 수 있습니다.",
+    body: "AI가 업무를 단계별로 정리해 보여줍니다. 단계를 드래그로 재정렬하거나 수정·삭제할 수 있습니다.",
+  },
+  {
+    selectors: ['[data-tour="recommend"]'],
+    title: "추천 흐름도 상세",
+    body: "'흐름도 보기'로 A360 액션 추천 흐름도를 생성·확인할 수 있고, 이 패널에서 단계별 액션과 파라미터 상세를 바로 볼 수 있습니다.",
   },
   {
     selectors: [".chat-popup--docked", ".chat-fab"],
