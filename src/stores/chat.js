@@ -121,6 +121,11 @@ export const useChatStore = defineStore("chat", () => {
           if (signal.aborted) return;
           if (message?.trim()) assistantMessage.stages.push(message.trim());
         },
+        onPartial: (data) => {
+          if (signal.aborted) return;
+          // 챗으로 흐름도를 만들거나 고칠 때도 flow 스냅샷을 "추천 흐름도 상세" 패널에 라이브로 그린다.
+          pipeline.applyLiveFrame(data);
+        },
         onToken: (token) => {
           if (signal.aborted) return;
           typewriter.push(token);
@@ -147,10 +152,12 @@ export const useChatStore = defineStore("chat", () => {
             lastCompact.value = data.compact;
           }
           pipeline.applyTurnArtifacts(data);
+          pipeline.resetLiveFlow(); // 스트림 종료 → 패널이 저장된 최종본을 보여준다
         },
         onError: (code, message) => {
           if (signal.aborted) return;
           typewriter.finish();
+          pipeline.resetLiveFlow(); // 실패 시 라이브 스트림 종료
           // 이미 받은 토큰이 있으면 지우지 않고 에러 문구만 이어붙인다
           assistantMessage.text = assistantMessage.text ? `${assistantMessage.text}\n\n⚠ ${message}` : message;
           if (assistantMessage.stages.length) {

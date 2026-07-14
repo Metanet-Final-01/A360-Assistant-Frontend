@@ -66,6 +66,12 @@ const steps = computed(() => pipeline.analysis?.steps ?? []);
 const hasSteps = computed(() => steps.value.length > 0);
 const ambiguities = computed(() => pipeline.analysis?.ambiguities ?? []);
 
+// 분석 스트리밍(RPA — 분석도 실시간) — 백엔드가 분석을 요약→단계 순으로 흘려보내는 라이브
+// 스냅샷. 분석이 끝나기 전(analyzing)에 이걸 읽기 전용으로 렌더해 결과가 채워지는 걸 보여준다.
+// 완료(done) 시엔 pipeline.analysis(편집 가능본)로 교체된다.
+const liveAnalysis = computed(() => pipeline.liveAnalysis);
+const liveAnalysisSteps = computed(() => pipeline.liveAnalysis?.steps ?? []);
+
 const analysisBodyRef = ref(null);
 const dragIndex = ref(null);
 const dragVisualHidden = ref(false);
@@ -483,10 +489,37 @@ function startAddStep() {
           <p>{{ t("upload.sessionLoadingHint") }}</p>
         </div>
 
-        <div v-else-if="pipeline.analysisStatus === 'analyzing'" class="analyzing-state">
-          <span class="analyzing-state__spinner" aria-hidden="true"></span>
-          <p>{{ t("upload.analyzingHint") }}</p>
-        </div>
+        <!-- 분석 중: 스트리밍 렌더(요약 → 단계 하나씩). 첫 프레임 전엔 스피너 -->
+        <template v-else-if="pipeline.analysisStatus === 'analyzing'">
+          <div v-if="liveAnalysis" class="analysis-live">
+            <div class="flow-live-status">
+              <span class="analyzing-state__spinner" aria-hidden="true"></span>
+              <span class="flow-live-status__caption">{{ pipeline.liveCaption || t("upload.analyzingHint") }}</span>
+            </div>
+            <div class="analysis-summary" v-if="liveAnalysis.summary">
+              <h3 v-if="liveAnalysis.document_title">{{ liveAnalysis.document_title }}</h3>
+              <p>{{ liveAnalysis.summary }}</p>
+            </div>
+            <TransitionGroup name="rec-list" tag="div" class="rec-list">
+              <article
+                v-for="(step, idx) in liveAnalysisSteps"
+                :key="step.step_id ?? idx"
+                class="rec-card rec-card--live"
+              >
+                <header class="rec-card__header">
+                  <div class="rec-card__header-left">
+                    <h3>{{ step.order ?? idx + 1 }}. {{ step.name }}</h3>
+                  </div>
+                </header>
+                <p v-if="step.description" class="rec-card__description">{{ step.description }}</p>
+              </article>
+            </TransitionGroup>
+          </div>
+          <div v-else class="analyzing-state">
+            <span class="analyzing-state__spinner" aria-hidden="true"></span>
+            <p>{{ t("upload.analyzingHint") }}</p>
+          </div>
+        </template>
 
         <div v-else-if="pipeline.analysisStatus === 'error'" class="analyzing-state analyzing-state--error">
           <p class="upload-error">{{ pipeline.analysisError }}</p>
