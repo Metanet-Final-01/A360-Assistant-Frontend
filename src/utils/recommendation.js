@@ -1,14 +1,23 @@
-// RecommendedAction 트리(schemas/recommendation.py) 공용 헬퍼 — 액션+패키지만 필요한
-// 화면(분석 결과 카드, 흐름도 보기 모달)에서 같은 방식으로 펼치고 같은 색을 쓰도록 공유한다.
+// RecommendedAction 트리(schemas/recommendation.py) 공용 헬퍼 — 분석 결과 패널(상세 보기)과
+// 흐름도 모달(요약 보기)이 같은 방식으로 펼치고 같은 패키지 색을 쓰도록 공유한다.
+// 흐름도 step은 분석(WorkStep) 단계와 1:1이 아니다(에이전트가 자유롭게 합치고 쪼갠다) —
+// step_id로 분석 결과와 매칭하지 않고, 흐름도 데이터(steps[].label/description/actions)만으로
+// 독립적으로 렌더한다.
 
 const PALETTE = ["#1f6f8b", "#7c5cbf", "#b7791f", "#1f9d55", "#d84a3a", "#2f6fa8", "#a8447a", "#55607a"];
 
-// Loop/If 같은 컨테이너 액션의 children까지 재귀적으로 펼쳐 순서대로 나열한다.
-export function flattenActions(actions) {
+// Loop/If 같은 컨테이너 액션의 children까지 재귀적으로 펼쳐, 상세/요약 보기 모두에 필요한 필드를 담는다.
+export function flattenDetailed(actions) {
   const result = [];
   function walk(list) {
     (list ?? []).forEach((a) => {
-      result.push({ label: a.label || a.action, package: a.package || "미지정", confidence: a.confidence });
+      result.push({
+        package: a.package || "미지정",
+        action: a.action,
+        label: a.label || a.action,
+        parameters: a.parameters ?? [],
+        confidence: a.confidence,
+      });
       if (a.children?.length) walk(a.children);
     });
   }
@@ -39,4 +48,15 @@ export function buildPackageColorMap(steps) {
   }
   (steps ?? []).forEach((stepRec) => walk(stepRec.actions));
   return map;
+}
+
+// 흐름도 step 제목 폴백: label → step_id → "단계 N".
+export function stepLabel(step, idx) {
+  return step.label || step.step_id || `단계 ${idx + 1}`;
+}
+
+// 파라미터 값 표시 폴백: null/undefined/빈 문자열이면 "(미지정)".
+export function formatParamValue(value) {
+  if (value === null || value === undefined || value === "") return "(미지정)";
+  return value;
 }

@@ -592,6 +592,18 @@ input {
   gap: 18px;
 }
 
+/* 업무 단계 카드 목록은 문서/요청에 따라 개수가 늘어날 수 있어, 업로드 패널 전체가
+   함께 늘어나지 않도록 이 영역만 독립적으로 스크롤한다. */
+.analysis-results {
+  max-height: 60vh;
+  overflow-y: auto;
+  overflow-anchor: none;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-right: 4px;
+}
+
 /* ---------- Upload mode toggle ---------- */
 
 .upload-mode-toggle {
@@ -1121,6 +1133,102 @@ input {
   white-space: nowrap;
 }
 
+/* ---------- 추천 흐름도 상세 (분석 결과 패널) ---------- */
+
+.rec-detail__vars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+
+.rec-detail__var-group {
+  flex: 1;
+  min-width: 200px;
+}
+
+.rec-detail__var-group h4 {
+  margin: 0 0 6px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+
+.rec-detail__var-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.84rem;
+  color: var(--text);
+}
+
+.rec-detail__var-type {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+}
+
+.rec-detail__step {
+  margin-bottom: 18px;
+}
+
+.rec-detail__step-title {
+  margin: 0 0 4px;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: var(--brand-teal-dark);
+}
+
+.rec-detail__step-desc {
+  margin: 0 0 10px;
+  font-size: 0.84rem;
+  color: var(--text-muted);
+}
+
+.rec-detail__action {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  background: #fbfcfd;
+}
+
+.rec-detail__action-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rec-detail__action-label {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
+.rec-detail__params {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+}
+
+.rec-detail__param-name {
+  color: var(--text-muted);
+  font-weight: 700;
+  margin-right: 6px;
+}
+
+.rec-detail__param-value {
+  color: var(--text);
+}
+
 .rec-card--skeleton {
   display: flex;
   flex-direction: column;
@@ -1620,6 +1728,17 @@ input {
   border-radius: 10px;
   padding: 10px 14px;
   background: #fbfcfd;
+}
+
+.flow-step-divider {
+  width: 100%;
+  max-width: 560px;
+  margin: 4px 0;
+  padding-bottom: 4px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--brand-teal-dark);
+  border-bottom: 1px dashed var(--border);
 }
 
 .flow-box__label {
