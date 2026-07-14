@@ -18,6 +18,7 @@
   --warning-bg: #fdf3e2;
   --danger: #d84a3a;
   --danger-bg: #fbeceb;
+  --danger-rgb: 216, 74, 58; /* --danger의 RGB — 반투명(rgba) 강조에 rgba(var(--danger-rgb), α)로 쓴다 */
 
   --surface-sunken: #fbfcfd;
   --surface-sunken-hover: #e7edf1;
@@ -1947,38 +1948,38 @@ input {
 }
 
 .flow-box--violation {
-  border-color: #d84a3a;
+  border-color: var(--danger);
   background: #fff6f5;
-  box-shadow: inset 0 0 0 1px #d84a3a;
+  box-shadow: inset 0 0 0 1px var(--danger);
 }
 
 /* 국소 수정 중인 단계의 액션 박스 — 붉은 테두리로 강조하고 깜빡여 "지금 여기를 고치는 중"을 알린다 */
 .flow-box--editing {
-  border-color: #d84a3a;
+  border-color: var(--danger);
   animation: flow-edit-blink 1s ease-in-out infinite;
 }
 
 @keyframes flow-edit-blink {
   0%,
   100% {
-    box-shadow: 0 0 0 1px #d84a3a, 0 0 0 0 rgba(216, 74, 58, 0.4);
+    box-shadow: 0 0 0 1px var(--danger), 0 0 0 0 rgba(var(--danger-rgb), 0.4);
   }
   50% {
-    box-shadow: 0 0 0 1px #d84a3a, 0 0 9px 3px rgba(216, 74, 58, 0.55);
+    box-shadow: 0 0 0 1px var(--danger), 0 0 9px 3px rgba(var(--danger-rgb), 0.55);
   }
 }
 
 /* 수정 중인 단계 컨테이너에도 옅은 붉은 배경 — 스크롤로 이동했을 때 어느 단계인지 한눈에 */
 .rec-detail__step--editing {
   border-radius: 10px;
-  background: rgba(216, 74, 58, 0.05);
-  box-shadow: inset 0 0 0 1px rgba(216, 74, 58, 0.25);
+  background: rgba(var(--danger-rgb), 0.05);
+  box-shadow: inset 0 0 0 1px rgba(var(--danger-rgb), 0.25);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .flow-box--editing {
     animation: none;
-    box-shadow: 0 0 0 2px #d84a3a;
+    box-shadow: 0 0 0 2px var(--danger);
   }
 }
 
@@ -2014,7 +2015,7 @@ input {
 
 .flow-box__violation-mark {
   flex-shrink: 0;
-  color: #d84a3a;
+  color: var(--danger);
   font-weight: 800;
 }
 
@@ -2109,7 +2110,7 @@ input {
 .flow-branch__role--try { background: #1f6f8b; }
 .flow-branch__role--catch { background: #b7791f; }
 .flow-branch__role--finally { background: #1f9d55; }
-.flow-branch__role--throw { background: #d84a3a; }
+.flow-branch__role--throw { background: var(--danger); }
 .flow-branch__role--cond { background: #7c5cbf; }
 
 .flow-branch__body {
@@ -2251,7 +2252,7 @@ input {
 
 .flow-live-status__violations {
   flex-shrink: 0;
-  color: #d84a3a;
+  color: var(--danger);
   font-weight: 700;
 }
 

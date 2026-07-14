@@ -83,10 +83,16 @@ export function isBranchNode(node) {
   return !!node && BRANCH_PACKAGES.has(node.package) && node.action !== "errorHandlerThrow";
 }
 
-// 새 분기 그룹을 시작하는 노드(Try) — 연속한 오류 처리기 사이에서 별개 try 블록을 가른다.
-// (Catch/Finally/Else 등은 앞 분기의 '다른 열'로 이어진다.)
+// 새 분기 그룹을 시작하는 노드(Try·원초 If) — 연속한 분기 사이에서 별개 블록을 가른다.
+// (Catch/Finally·Else If/Else 등은 앞 분기의 '다른 열'로 이어진다.) 원초 If를 스타터로
+// 넣지 않으면 나란한 독립 If 블록 두 개가 한 그룹으로 병합돼 컬럼으로 잘못 렌더된다.
 export function isBranchStarter(node) {
-  return node?.action === "errorHandlerTry";
+  if (node?.action === "errorHandlerTry") return true;
+  if (node?.package === "If") {
+    const a = (node.action || "").toLowerCase();
+    return a.includes("if") && !a.includes("else"); // 원초 If만 — Else If/Else는 앞 If에 이어붙는다
+  }
+  return false;
 }
 
 // 분기 컬럼의 역할 라벨 — Error handler는 Try/Catch/Finally/Throw, If 패키지는 If/Else If/Else.
