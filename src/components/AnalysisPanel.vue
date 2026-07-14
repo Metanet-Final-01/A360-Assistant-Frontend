@@ -20,8 +20,18 @@ const showFlowModal = ref(false);
 // 패널 루트 — 국소 수정 중인 단계로 스크롤할 때 그 단계 요소를 여기서 찾는다.
 const rootRef = ref(null);
 
-// "흐름도 추천" 버튼 노출 여부만 분석 완료 여부를 본다.
+// 업무 단계(WorkStep, schemas/analysis.py) 확인·편집은 업로드 패널로 옮겨졌다 — 여기는
+// 흐름도(RecommendedAction, schemas/recommendation.py)만 다룬다. 흐름도 step은 분석 단계와
+// 1:1이 아니므로(에이전트가 자유롭게 합치고 쪼갠다), step_id로 분석 결과와 매칭하지 않고
+// 흐름도 데이터만으로 독립적으로 렌더한다.
 const hasSteps = computed(() => (pipeline.analysis?.steps ?? []).length > 0);
+// "흐름도 보기"/"JSON 다운로드" 버튼을 보여줄지: 분석이 단계를 찾아 새로 생성할 수 있거나(hasSteps),
+// 텍스트 업로드처럼 분석이 단계를 못 찾았어도 챗봇 대화(예: "분석해서 흐름도까지 만들어줘")로 이미
+// 흐름도가 만들어져 있으면(pipeline.recommendation) 보여준다 — 이 경우 analysisStatus/hasSteps만으로는
+// 판단할 수 없다.
+const canShowRecommendFooter = computed(
+  () => (pipeline.analysisStatus === "done" && hasSteps.value) || !!pipeline.recommendation,
+);
 
 // 스트리밍 중이면 라이브 스냅샷(liveFlow)을, 아니면 저장된 최종 추천안을 소스로 삼는다 —
 // 이 패널이 흐름도 생성/수정 과정을 실시간으로, 완료 후 최종본을 "같은 자리"에서 보여준다.
@@ -208,7 +218,7 @@ async function downloadJson() {
       </div>
     </div>
 
-    <div v-if="pipeline.analysisStatus === 'done' && hasSteps" class="panel__footer">
+    <div v-if="canShowRecommendFooter" class="panel__footer">
       <div class="recommend-section">
         <h3 class="export-section__title">{{ t("recommendDetail.recommendSectionTitle") }}</h3>
 
