@@ -1,15 +1,15 @@
 <script setup>
-import { computed, defineAsyncComponent, ref } from "vue";
+import { computed, defineAsyncComponent, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { usePipelineStore } from "../stores/pipeline";
 import { downloadRecommendationExport } from "../api/recommend";
-import { buildPackageColorMap, confidenceBadge, flattenDetailed, formatParamValue, stepLabel } from "../utils/recommendation";
+import { buildPackageColorMap, numberFlowSteps, violationSetByStep } from "../utils/recommendation";
+import FlowSequence from "./FlowSequence.vue";
 
-// "흐름도 보기" 버튼을 눌러야만 열리는 모달이라, 분석 페이지 초기 번들에서 빼서
-// 실제로 열 때만 내려받는다.
+// "흐름도 보기" 버튼을 눌러야만 열리는 요약 다이어그램 모달 — 실제로 열 때만 내려받는다.
 const RecommendationFlowModal = defineAsyncComponent(() => import("./RecommendationFlowModal.vue"));
 
-// 루트 노드가 여러 개(패널 + 로딩 오버레이 + 모달)라 attrs 자동 전달이 안 되므로,
+// 루트 노드가 여러 개(패널 + 모달)라 attrs 자동 전달이 안 되므로,
 // 패널 재배치용 data-panel-key/order 스타일을 패널 섹션에 직접 물려준다.
 defineOptions({ inheritAttrs: false });
 
@@ -17,44 +17,73 @@ const pipeline = usePipelineStore();
 const { t } = useI18n();
 
 const showFlowModal = ref(false);
+// 패널 루트 — 국소 수정 중인 단계로 스크롤할 때 그 단계 요소를 여기서 찾는다.
+const rootRef = ref(null);
 
-// 업무 단계(WorkStep, schemas/analysis.py) 확인·편집은 업로드 패널로 옮겨졌다 — 여기는
-// 흐름도(RecommendedAction, schemas/recommendation.py)만 다룬다. 흐름도 step은 분석 단계와
-// 1:1이 아니므로(에이전트가 자유롭게 합치고 쪼갠다), step_id로 분석 결과와 매칭하지 않고
-// 흐름도 데이터만으로 독립적으로 렌더한다. "흐름도 추천" 버튼 노출 여부만 분석 완료 여부를 본다.
+// "흐름도 추천" 버튼 노출 여부만 분석 완료 여부를 본다.
 const hasSteps = computed(() => (pipeline.analysis?.steps ?? []).length > 0);
 
-const packageColor = computed(() => buildPackageColorMap(pipeline.recommendation?.recommendation?.steps));
+// 스트리밍 중이면 라이브 스냅샷(liveFlow)을, 아니면 저장된 최종 추천안을 소스로 삼는다 —
+// 이 패널이 흐름도 생성/수정 과정을 실시간으로, 완료 후 최종본을 "같은 자리"에서 보여준다.
+// (모달 팝업 대신 인라인 스트리밍) 흐름도 step은 분석(WorkStep)과 1:1이 아니라 흐름도
+// 데이터(steps→actions→children)만으로 독립 렌더한다.
+const liveMode = computed(() => pipeline.liveActive);
+const activeRec = computed(() =>
+  liveMode.value ? pipeline.liveFlow : pipeline.recommendation?.recommendation,
+);
+const activeSteps = computed(() => activeRec.value?.steps ?? []);
+const hasActions = computed(() => activeSteps.value.some((s) => (s.actions?.length ?? 0) > 0));
 
+// 분석/생성/스트리밍 중이면 "작업 중" — 아직 그릴 액션이 없어도 빈 화면 대신 스피너를 보여준다.
+const working = computed(
+  () => liveMode.value || pipeline.analysisStatus === "analyzing" || pipeline.recommendStatus === "generating",
+);
+const workingText = computed(() =>
+  pipeline.analysisStatus === "analyzing" ? "업무를 분석하는 중…" : "흐름도를 구성하는 중… 에이전트가 액션을 탐색하고 있습니다.",
+);
+
+const packageColor = computed(() => buildPackageColorMap(activeSteps.value));
 function colorFor(pkg) {
   return packageColor.value.get(pkg || t("common.unspecified")) ?? "#888888";
 }
 
-const recVariables = computed(() => pipeline.recommendation?.recommendation?.variables ?? []);
+const recVariables = computed(() => activeRec.value?.variables ?? []);
 const inputVars = computed(() => recVariables.value.filter((v) => v.direction === "input"));
 const outputVars = computed(() => recVariables.value.filter((v) => v.direction === "output"));
+const notes = computed(() => activeRec.value?.notes);
 
-const flowSteps = computed(() => {
-  const steps = pipeline.recommendation?.recommendation?.steps ?? [];
-  return steps.map((stepRec, idx) => ({
-    key: stepRec.step_id ?? idx,
-    title: stepLabel(stepRec, idx),
-    description: stepRec.description,
-    actions: flattenDetailed(stepRec.actions).map((a) => ({ ...a, badge: confidenceBadge(a.confidence) })),
-  }));
+// 트리 렌더용 정규화(모달과 동일한 번호·경로 헬퍼) + 스트리밍 중 검수 위반 노드 강조.
+const numberedSteps = computed(() => numberFlowSteps(activeSteps.value));
+const violationsByStep = computed(() =>
+  liveMode.value ? violationSetByStep(pipeline.liveViolations) : new Map(),
+);
+function stepViolations(stepId) {
+  return violationsByStep.value.get(stepId) ?? null;
+}
+const liveViolationCount = computed(() => pipeline.liveViolations?.length ?? 0);
+
+// 지금 국소 수정 중인 단계(step_id) — 그 단계의 액션 박스를 붉게 강조·깜빡이고 그 위치로
+// 스크롤한다. 라이브 스트림 중에만 의미가 있다(최종본에선 null).
+const activeStep = computed(() => (liveMode.value ? pipeline.liveActiveStep : null));
+
+// 수정 중인 단계가 바뀌면 그 단계로 부드럽게 스크롤한다 — 사용자가 "지금 어디를 고치는지"
+// 눈으로 따라가게. 프레임 반영(트리 재렌더) 후 DOM이 갱신되도록 nextTick을 기다린다.
+watch(activeStep, async (stepId) => {
+  if (!stepId) return;
+  await nextTick();
+  rootRef.value
+    ?.querySelector(`[data-step-id="${stepId}"]`)
+    ?.scrollIntoView({ behavior: "smooth", block: "center" });
 });
 
-// "흐름도 보기" 버튼 하나로 생성+열람을 합친다 — 이미 만들어진 게 있으면 바로 보여주고,
-// 없거나 이전 시도가 실패했으면 먼저 생성한 뒤 성공 시에만 모달을 연다.
+// "흐름도 보기" 버튼: 이미 있으면 요약 다이어그램 모달을 열고, 없으면 생성한다 —
+// 생성 과정은 이 패널이 인라인으로 실시간 렌더하므로 별도 로딩 모달을 띄우지 않는다.
 async function openFlowView() {
   if (pipeline.recommendStatus === "done") {
     showFlowModal.value = true;
     return;
   }
   await pipeline.startRecommend();
-  if (pipeline.recommendStatus === "done") {
-    showFlowModal.value = true;
-  }
 }
 
 // 내보내기는 프론트 로컬 Blob이 아니라 백엔드 표준 export API 응답을 그대로 저장한다
@@ -75,6 +104,7 @@ async function downloadJson() {
 
 <template>
   <section
+    ref="rootRef"
     class="panel panel--wide"
     aria-labelledby="analysis-panel-title"
     data-tour="recommend"
@@ -93,12 +123,24 @@ async function downloadJson() {
     </header>
 
     <div class="panel__body">
+      <!-- 실시간 생성/수정 상태 배너 — 스트림 프레임마다 캡션·위반 수가 갱신된다 -->
+      <div v-if="liveMode" class="flow-live-status">
+        <span class="analyzing-state__spinner" aria-hidden="true"></span>
+        <span class="flow-live-status__caption">{{ pipeline.liveCaption || "흐름도 구성 중…" }}</span>
+        <span v-if="liveViolationCount" class="flow-live-status__violations">
+          검수 위반 {{ liveViolationCount }}건
+        </span>
+      </div>
+
+      <!-- 과거 세션 로딩 중 -->
       <div v-if="pipeline.sessionLoadStatus === 'loading'" class="analyzing-state">
         <span class="analyzing-state__spinner" aria-hidden="true"></span>
         <p>{{ t("recommendDetail.sessionLoadingHint") }}</p>
       </div>
 
-      <div v-else-if="!pipeline.recommendation" class="empty-state">
+      <!-- 아직 아무 것도 없고 작업도 안 함 -->
+      <div v-else-if="!hasActions && !working" class="empty-state">
+
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path
             d="M4 6h16M4 12h10M4 18h7"
@@ -110,6 +152,13 @@ async function downloadJson() {
         <p>{{ t("recommendDetail.emptyState") }}</p>
       </div>
 
+      <!-- 작업 중인데 아직 그릴 액션 프레임 전 (분석 중 / 생성 준비 중) -->
+      <div v-else-if="!hasActions && working" class="analyzing-state">
+        <span class="analyzing-state__spinner" aria-hidden="true"></span>
+        <p>{{ workingText }}</p>
+      </div>
+
+      <!-- 흐름도 상세: 라이브/최종 공통. 중첩(컨테이너=분기) 트리 + 파라미터를 인라인 렌더 -->
       <div v-else class="rec-detail">
         <div v-if="inputVars.length || outputVars.length" class="rec-detail__vars">
           <div v-if="inputVars.length" class="rec-detail__var-group">
@@ -134,36 +183,28 @@ async function downloadJson() {
           </div>
         </div>
 
-        <div v-for="group in flowSteps" :key="group.key" class="rec-detail__step">
-          <h4 class="rec-detail__step-title">{{ group.title }}</h4>
-          <p v-if="group.description" class="rec-detail__step-desc">{{ group.description }}</p>
+        <div
+          v-for="step in numberedSteps"
+          :key="step.key"
+          class="rec-detail__step"
+          :class="{ 'rec-detail__step--editing': step.step_id === activeStep }"
+          :data-step-id="step.step_id"
+        >
+          <h4 class="rec-detail__step-title">{{ step.title }}</h4>
+          <p v-if="step.description" class="rec-detail__step-desc">{{ step.description }}</p>
 
-          <div v-for="(a, i) in group.actions" :key="i" class="rec-detail__action">
-            <div class="rec-detail__action-header">
-              <span class="rec-detail__action-label">{{ a.label }}</span>
-              <span class="rec-card__action-chip-package" :style="{ background: colorFor(a.package) }">
-                {{ a.package }}
-              </span>
-              <span
-                v-if="a.badge"
-                class="confidence-badge"
-                :class="`confidence-badge--${a.badge.level}`"
-              >
-                {{ a.badge.text }}
-              </span>
-            </div>
-            <ul v-if="a.parameters.length" class="rec-detail__params">
-              <li v-for="p in a.parameters" :key="p.name">
-                <span class="rec-detail__param-name">{{ p.name }}</span>
-                <span class="rec-detail__param-value">{{ formatParamValue(p.value) }}</span>
-              </li>
-            </ul>
-          </div>
+          <FlowSequence
+            v-if="step.items.length"
+            :items="step.items"
+            :color-for="colorFor"
+            :violation-paths="stepViolations(step.step_id)"
+            :editing="step.step_id === activeStep"
+            detailed
+          />
+          <p v-else class="flow-step-empty">이 단계는 확정된 액션이 없습니다</p>
         </div>
 
-        <p v-if="pipeline.recommendation.recommendation?.notes" class="flow-notes">
-          <strong>{{ t("common.notesLabel") }}</strong> {{ pipeline.recommendation.recommendation.notes }}
-        </p>
+        <p v-if="notes" class="flow-notes"><strong>{{ t("common.notesLabel") }}</strong> {{ notes }}</p>
       </div>
     </div>
 
@@ -178,10 +219,10 @@ async function downloadJson() {
           <button
             type="button"
             class="btn btn--primary"
-            :disabled="pipeline.recommendStatus === 'generating'"
+            :disabled="pipeline.recommendStatus === 'generating' || liveMode"
             @click="openFlowView"
           >
-            {{ pipeline.recommendStatus === "generating" ? t("recommendDetail.generating") : t("recommendDetail.viewFlow") }}
+            {{ pipeline.recommendStatus === "generating" || liveMode ? t("recommendDetail.generating") : t("recommendDetail.viewFlow") }}
           </button>
         </div>
         <p v-if="pipeline.recommendStatus === 'error'" class="upload-error recommend-section__save-error">
@@ -209,15 +250,6 @@ async function downloadJson() {
       </div>
     </div>
   </section>
-
-  <div v-if="pipeline.recommendStatus === 'generating'" class="modal-overlay" role="alertdialog" aria-live="polite" aria-busy="true">
-    <div class="modal modal--recommend-loading">
-      <div class="modal__body modal__body--center">
-        <span class="analyzing-state__spinner" aria-hidden="true"></span>
-        <p>{{ t("recommendDetail.generatingModal") }}</p>
-      </div>
-    </div>
-  </div>
 
   <RecommendationFlowModal v-if="showFlowModal" @close="showFlowModal = false" />
 </template>

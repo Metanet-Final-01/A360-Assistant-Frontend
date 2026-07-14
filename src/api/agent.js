@@ -33,7 +33,7 @@ async function readErrorDetail(response) {
 export async function turnStream(
   sessionId,
   message,
-  { operation = "chat", onToken, onStage, onDone, onError, signal },
+  { operation = "chat", onToken, onStage, onPartial, onDone, onError, signal },
 ) {
   const token = getToken();
   const headers = { "Content-Type": "application/json" };
@@ -97,7 +97,10 @@ export async function turnStream(
         }
 
         if (event.event === "token") onToken?.(event.message ?? "");
-        else if (event.event === "stage" || event.event === "partial") onStage?.(event.message ?? "");
+        else if (event.event === "stage") onStage?.(event.message ?? "");
+        // partial = 중간 산출물(data). 흐름도 라이브 렌더용 flow 스냅샷이 여기로 온다.
+        // (기존 분석 partial은 message가 없어 stage 라인에 안 뜨던 것 — 하위호환 유지)
+        else if (event.event === "partial") onPartial?.(event.data ?? null);
         else if (event.event === "done") onDone(event.data);
         else if (event.event === "error") onError(null, event.message ?? t("api.errors.unknown"));
       }
