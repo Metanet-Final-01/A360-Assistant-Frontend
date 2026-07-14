@@ -1,14 +1,17 @@
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { formatMessage } from "../utils/chatFormat";
+
+const { t } = useI18n();
 
 const props = defineProps({
   messages: { type: Array, required: true },
   open: { type: Boolean, default: false },
   docked: { type: Boolean, default: true },
   dockZoneId: { type: String, required: true },
-  dockedTitle: { type: String, default: "AI 챗봇 (대화형 수정)" },
-  floatingTitle: { type: String, default: "AI 챗봇" },
+  dockedTitle: { type: String, default: "" },
+  floatingTitle: { type: String, default: "" },
   // 대화 압축 버튼 노출 여부 — 메인 챗 위젯만 켠다 (긴 멀티턴 이력을 요약본으로 대체)
   showCompact: { type: Boolean, default: false },
   compacting: { type: Boolean, default: false },
@@ -44,6 +47,9 @@ const popupStyle = computed(() => {
   if (props.docked || position.x === null) return {};
   return { left: `${position.x}px`, top: `${position.y}px` };
 });
+
+const dockedTitleDisplay = computed(() => props.dockedTitle || t("chat.dockedTitleDefault"));
+const floatingTitleDisplay = computed(() => props.floatingTitle || t("chat.floatingTitleDefault"));
 
 function initPosition() {
   if (position.x !== null) return;
@@ -265,9 +271,9 @@ const gaugeTitle = computed(() => {
   if (!gauge) return "";
   const used = gauge.intake_tokens?.toLocaleString?.() ?? gauge.intake_tokens;
   const limit = gauge.limit_tokens?.toLocaleString?.() ?? gauge.limit_tokens;
-  const base = `대화 누적 ${gaugePercent.value}% (${used} / ${limit} 토큰)`;
-  if (gauge.compact_required) return `${base} — 대화 압축이 필요합니다`;
-  if (gauge.compact_recommended) return `${base} — 대화 압축을 권장합니다`;
+  const base = t("chat.gauge.base", { percent: gaugePercent.value, used, limit });
+  if (gauge.compact_required) return t("chat.gauge.compactRequiredSuffix", { base });
+  if (gauge.compact_recommended) return t("chat.gauge.compactRecommendedSuffix", { base });
   return base;
 });
 </script>
@@ -278,7 +284,7 @@ const gaugeTitle = computed(() => {
     v-if="!docked"
     type="button"
     class="chat-fab"
-    aria-label="AI 챗봇 열기"
+    :aria-label="t('chat.openAria')"
     @click="emit('toggle')"
   >
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -308,18 +314,18 @@ const gaugeTitle = computed(() => {
           class="panel-drag-handle"
           draggable="true"
           data-panel-handle
-          title="드래그하여 패널 위치 이동"
+          :title="t('common.dragHandle')"
           aria-hidden="true"
           >⠿</span
         >
         <span class="chat-popup__title">
-          {{ docked ? dockedTitle : floatingTitle }}
+          {{ docked ? dockedTitleDisplay : floatingTitleDisplay }}
         </span>
         <button
           v-if="docked"
           type="button"
           class="chat-popup__minimize"
-          aria-label="챗봇 최소화"
+          :aria-label="t('chat.minimize')"
           @click="emit('undock')"
         >
           &minus;
@@ -328,7 +334,7 @@ const gaugeTitle = computed(() => {
           v-else
           type="button"
           class="chat-popup__close"
-          aria-label="챗봇 닫기"
+          :aria-label="t('chat.close')"
           @click="emit('close')"
         >
           ✕
@@ -378,7 +384,7 @@ const gaugeTitle = computed(() => {
             v-if="message.role === 'assistant' && !message.text"
             class="chat-message__bubble chat-message__bubble--pending"
           >
-            응답을 생성하는 중…
+            {{ t("chat.pending") }}
           </div>
           <div v-else class="chat-message__bubble" v-html="formatMessage(message.text)"></div>
 
@@ -395,14 +401,14 @@ const gaugeTitle = computed(() => {
               >
                 ▸
               </span>
-              출처 {{ message.sources.length }}건
+              {{ t("chat.sourcesCount", { count: message.sources.length }, message.sources.length) }}
             </button>
             <ul v-if="message.sourcesOpen" class="chat-message__sources-list">
               <li v-for="(source, sourceIdx) in message.sources" :key="sourceIdx">
                 <a v-if="source.url" :href="source.url" target="_blank" rel="noopener noreferrer">
                   {{ source.title || source.url }}
                 </a>
-                <span v-else>{{ source.title || "제목 없는 근거" }}</span>
+                <span v-else>{{ source.title || t("chat.untitledSource") }}</span>
                 <span v-if="source.score != null" class="chat-message__sources-score">
                   {{ Number(source.score).toFixed(2) }}
                 </span>
@@ -418,11 +424,11 @@ const gaugeTitle = computed(() => {
         <input
           v-model="draft"
           type="text"
-          placeholder="메시지 입력…"
-          aria-label="챗봇에게 메시지 보내기"
+          :placeholder="t('chat.inputPlaceholder')"
+          :aria-label="t('chat.sendAria')"
           :disabled="sending"
         />
-        <button type="submit" :disabled="sending">전송</button>
+        <button type="submit" :disabled="sending">{{ t("chat.send") }}</button>
       </form>
       <div class="chat-popup__footer">
         <button
@@ -430,11 +436,11 @@ const gaugeTitle = computed(() => {
           type="button"
           class="chat-popup__compact"
           :class="{ 'chat-popup__compact--recommended': !compacting && usageGauge?.compact_recommended }"
-          title="지금까지의 대화를 요약본으로 압축합니다"
+          :title="t('chat.compactTitle')"
           :disabled="sending || compacting"
           @click="emit('compact')"
         >
-          {{ compacting ? "압축 중…" : usageGauge?.compact_recommended ? "대화 압축 권장" : "대화 압축" }}
+          {{ compacting ? t("chat.compacting") : usageGauge?.compact_recommended ? t("chat.compactRecommended") : t("chat.compact") }}
         </button>
         <span
           v-if="usageGauge"

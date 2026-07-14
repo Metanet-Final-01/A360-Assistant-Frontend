@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 const TOKEN_KEY = "a360_access_token";
 
@@ -29,11 +31,11 @@ export class ApiError extends Error {
 // [{loc: ["body","email"], msg: "...", type: "..."}]. 필드별로 사람이 읽을 메시지로 바꾼다.
 function describeValidationError(first) {
   const field = first?.loc?.at(-1);
-  if (field === "email") return "올바른 이메일 형식이 아닙니다.";
+  if (field === "email") return t("api.errors.invalidEmail");
   if (field === "password" && first?.type === "string_too_short") {
-    return `비밀번호는 최소 ${first?.ctx?.min_length ?? 8}자 이상이어야 합니다.`;
+    return t("api.errors.passwordTooShort", { min: first?.ctx?.min_length ?? 8 });
   }
-  return first?.msg ?? "입력값을 확인해주세요.";
+  return first?.msg ?? t("api.errors.checkInput");
 }
 
 async function toApiError(response) {
@@ -87,7 +89,7 @@ export async function apiRequest(path, options = {}) {
     // signal로 의도적으로 취소된 요청 — 네트워크 장애가 아니므로 그대로 던져
     // 호출부가 AbortError로 구분해 조용히 처리하게 한다.
     if (err?.name === "AbortError") throw err;
-    throw new ApiError("NETWORK_ERROR", "백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.", 0);
+    throw new ApiError("NETWORK_ERROR", t("api.errors.networkUnreachable"), 0);
   }
 
   // 로그인/가입의 401은 "자격 증명 오류"라 세션 만료 처리 대상이 아니다

@@ -1,9 +1,11 @@
 <script setup>
 import { computed, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { usePipelineStore } from "../stores/pipeline";
 import { evidenceLabel, formatBytes } from "../utils/format";
 
 const pipeline = usePipelineStore();
+const { t } = useI18n();
 
 const isDragging = ref(false);
 const fileInputRef = ref(null);
@@ -256,7 +258,7 @@ function cancelEditStep() {
 function saveEditStep() {
   const step = steps.value.find((s) => s.step_id === editingStepId.value);
   if (!step) return;
-  step.name = stepForm.value.name.trim() || "이름 없음";
+  step.name = stepForm.value.name.trim() || t("upload.unnamedStep");
   step.description = stepForm.value.description.trim();
   step.inputs = fromCsv(stepForm.value.inputs);
   step.outputs = fromCsv(stepForm.value.outputs);
@@ -286,7 +288,7 @@ function startAddStep() {
   const newStep = {
     step_id: crypto.randomUUID(),
     order: list.length + 1,
-    name: "새 업무 단계",
+    name: t("upload.newStepDefaultName"),
     description: "",
     inputs: [],
     outputs: [],
@@ -301,17 +303,17 @@ function startAddStep() {
 </script>
 
 <template>
-  <section class="panel" aria-labelledby="upload-panel-title" data-tour="upload">
+  <section class="panel panel--wide" aria-labelledby="upload-panel-title" data-tour="upload">
     <header class="panel__header">
       <span
         class="panel-drag-handle"
         draggable="true"
         data-panel-handle
-        title="드래그하여 패널 위치 이동"
+        :title="t('common.dragHandle')"
         aria-hidden="true"
         >⠿</span
       >
-      <h2 id="upload-panel-title">업무정의서 업로드</h2>
+      <h2 id="upload-panel-title">{{ t("upload.title") }}</h2>
     </header>
 
     <div class="panel__body">
@@ -324,7 +326,7 @@ function startAddStep() {
           :class="{ 'upload-mode-toggle__btn--active': inputMode === 'file' }"
           @click="switchMode('file')"
         >
-          파일 업로드
+          {{ t("upload.fileTab") }}
         </button>
         <button
           type="button"
@@ -334,7 +336,7 @@ function startAddStep() {
           :class="{ 'upload-mode-toggle__btn--active': inputMode === 'text' }"
           @click="switchMode('text')"
         >
-          텍스트로 입력
+          {{ t("upload.textTab") }}
         </button>
       </div>
 
@@ -360,10 +362,9 @@ function startAddStep() {
           />
         </svg>
         <p class="dropzone__text">
-          <strong>PDF · PPT · PPTX · DOCX</strong> 파일을 여기에 드래그하거나<br />
-          클릭하여 선택하세요
+          <strong>{{ t("upload.dropzone.fileTypes") }}</strong> {{ t("upload.dropzone.hint") }}
         </p>
-        <span class="dropzone__button">파일 선택</span>
+        <span class="dropzone__button">{{ t("upload.dropzone.selectButton") }}</span>
         <input
           ref="fileInputRef"
           type="file"
@@ -378,7 +379,7 @@ function startAddStep() {
           v-model="textDraft"
           class="text-input-area__field"
           rows="6"
-          placeholder="처리하고 싶은 업무 내용을 자연어로 설명해주세요. 예: 매일 아침 네이버 금융에서 국내 금 시세를 조회해 엑셀로 정리하고 담당자에게 메일로 보낸다."
+          :placeholder="t('upload.textPlaceholder')"
         ></textarea>
         <button
           type="button"
@@ -386,7 +387,7 @@ function startAddStep() {
           :disabled="!textDraft.trim()"
           @click="handleTextSubmit"
         >
-          분석 시작하기
+          {{ t("upload.startFromText") }}
         </button>
       </div>
 
@@ -395,7 +396,7 @@ function startAddStep() {
       </p>
 
       <div class="uploaded-doc" v-if="pipeline.file">
-        <h3 class="uploaded-doc__label">{{ inputMode === "text" ? "입력된 요청" : "업로드된 문서" }}</h3>
+        <h3 class="uploaded-doc__label">{{ inputMode === "text" ? t("upload.inputRequestLabel") : t("upload.uploadedDocLabel") }}</h3>
 
         <div class="doc-card">
           <span class="doc-card__icon">{{ pipeline.file.ext.toUpperCase() }}</span>
@@ -406,14 +407,14 @@ function startAddStep() {
           <span
             v-if="pipeline.uploadStatus === 'uploading'"
             class="doc-card__status doc-card__status--loading"
-            aria-label="업로드 중"
+            :aria-label="t('upload.status.uploading')"
           ></span>
           <svg
             v-else-if="pipeline.uploadStatus === 'error'"
             class="doc-card__status doc-card__status--done"
             viewBox="0 0 24 24"
             fill="none"
-            aria-label="업로드 실패"
+            :aria-label="t('upload.status.failed')"
           >
             <circle cx="12" cy="12" r="10" fill="var(--danger-bg)" />
             <path
@@ -429,7 +430,7 @@ function startAddStep() {
             class="doc-card__status doc-card__status--done"
             viewBox="0 0 24 24"
             fill="none"
-            aria-label="업로드 완료"
+            :aria-label="t('upload.status.done')"
           >
             <circle cx="12" cy="12" r="10" fill="#e8f8ee" />
             <path
@@ -445,9 +446,9 @@ function startAddStep() {
         <Transition name="fade-up">
           <ul class="extraction-meta" v-if="pipeline.document?.status === 'parsed'">
             <li v-if="pipeline.document.page_count != null">
-              · 파싱 완료 · 페이지 {{ pipeline.document.page_count }}
+              {{ t("upload.status.parsedWithPage", { page: pipeline.document.page_count }) }}
             </li>
-            <li v-else>· 처리 완료</li>
+            <li v-else>{{ t("upload.status.processedDone") }}</li>
             <li v-for="(warning, idx) in pipeline.document.warnings" :key="idx" class="extraction-meta__warning">
               ⚠ {{ warning }}
             </li>
@@ -461,12 +462,12 @@ function startAddStep() {
             :disabled="!canStartAnalysis"
             @click="pipeline.startAnalysis"
           >
-            <span v-if="pipeline.analysisStatus === 'analyzing'">분석 진행 중…</span>
-            <span v-else-if="pipeline.analysisStatus === 'done'">분석 완료</span>
-            <span v-else>분석 시작</span>
+            <span v-if="pipeline.analysisStatus === 'analyzing'">{{ t("upload.analysis.progress") }}</span>
+            <span v-else-if="pipeline.analysisStatus === 'done'">{{ t("upload.analysis.done") }}</span>
+            <span v-else>{{ t("upload.analysis.start") }}</span>
           </button>
           <button type="button" class="btn btn--text" @click="pipeline.resetUpload">
-            {{ inputMode === "text" ? "새 요청 입력" : "새 문서 업로드" }}
+            {{ inputMode === "text" ? t("upload.newTextRequest") : t("upload.newDocumentUpload") }}
           </button>
         </div>
       </div>
@@ -474,12 +475,12 @@ function startAddStep() {
       <div v-if="pipeline.analysisStatus !== 'idle'" class="analysis-results" data-tour="analysis" ref="analysisBodyRef">
         <div v-if="pipeline.analysisStatus === 'analyzing'" class="analyzing-state">
           <span class="analyzing-state__spinner" aria-hidden="true"></span>
-          <p>분석 중… 진행 상태는 챗봇에서 확인할 수 있습니다.</p>
+          <p>{{ t("upload.analyzingHint") }}</p>
         </div>
 
         <div v-else-if="pipeline.analysisStatus === 'error'" class="analyzing-state analyzing-state--error">
           <p class="upload-error">{{ pipeline.analysisError }}</p>
-          <button type="button" class="btn btn--outline" @click="pipeline.startAnalysis">다시 시도</button>
+          <button type="button" class="btn btn--outline" @click="pipeline.startAnalysis">{{ t("upload.retry") }}</button>
         </div>
 
         <template v-else-if="pipeline.analysisStatus === 'done'">
@@ -489,7 +490,7 @@ function startAddStep() {
           </div>
 
           <div v-if="!hasSteps" class="empty-state">
-            <p>문서에서 분석 가능한 업무 단계를 찾지 못했습니다. 아래 버튼으로 직접 추가할 수 있습니다.</p>
+            <p>{{ t("upload.noStepsFound") }}</p>
           </div>
 
           <TransitionGroup
@@ -512,51 +513,51 @@ function startAddStep() {
               <template v-if="editingStepId === step.step_id">
                 <div class="flow-card__edit-grid">
                   <label class="flow-card__edit-wide">
-                    <span>제목</span>
+                    <span>{{ t("upload.form.title") }}</span>
                     <input v-model="stepForm.name" type="text" />
                   </label>
                   <label class="flow-card__edit-wide">
-                    <span>설명</span>
+                    <span>{{ t("upload.form.description") }}</span>
                     <input v-model="stepForm.description" type="text" />
                   </label>
                   <label>
-                    <span>입력 (쉼표로 구분)</span>
+                    <span>{{ t("upload.form.inputsCsv") }}</span>
                     <input v-model="stepForm.inputs" type="text" />
                   </label>
                   <label>
-                    <span>출력 (쉼표로 구분)</span>
+                    <span>{{ t("upload.form.outputsCsv") }}</span>
                     <input v-model="stepForm.outputs" type="text" />
                   </label>
                   <label>
-                    <span>연계 시스템 (쉼표로 구분)</span>
+                    <span>{{ t("upload.form.systemsCsv") }}</span>
                     <input v-model="stepForm.systems" type="text" />
                   </label>
                   <label>
-                    <span>분기</span>
+                    <span>{{ t("upload.form.branching") }}</span>
                     <input v-model="stepForm.branching" type="text" />
                   </label>
                   <label class="flow-card__edit-wide">
-                    <span>근거</span>
+                    <span>{{ t("upload.form.evidence") }}</span>
                     <input v-model="stepForm.evidenceSnippet" type="text" />
                   </label>
                 </div>
                 <div class="flow-card__actions">
-                  <button type="button" class="btn btn--outline" @click="cancelEditStep">취소</button>
-                  <button type="button" class="btn btn--primary" @click="saveEditStep">저장</button>
+                  <button type="button" class="btn btn--outline" @click="cancelEditStep">{{ t("common.cancel") }}</button>
+                  <button type="button" class="btn btn--primary" @click="saveEditStep">{{ t("common.save") }}</button>
                 </div>
               </template>
 
               <template v-else>
                 <header class="rec-card__header">
                   <div class="rec-card__header-left">
-                    <span class="flow-card__handle" aria-hidden="true" title="드래그해서 순서 변경">⠿</span>
+                    <span class="flow-card__handle" aria-hidden="true" :title="t('upload.reorderTitle')">⠿</span>
                     <h3>{{ step.order }}. {{ step.name }}</h3>
                   </div>
                   <div class="flow-card__menu-wrap">
                     <button
                       type="button"
                       class="flow-card__menu-btn"
-                      aria-label="업무 단계 옵션"
+                      :aria-label="t('upload.stepOptionsAria')"
                       @click="toggleMenu(step.step_id, $event)"
                     >
                       &#8942;
@@ -569,7 +570,7 @@ function startAddStep() {
                           :disabled="editingStepId !== null"
                           @click="startEditStep(step)"
                         >
-                          수정
+                          {{ t("common.edit") }}
                         </button>
                         <button
                           type="button"
@@ -577,7 +578,7 @@ function startAddStep() {
                           class="flow-card__menu-danger"
                           @click="removeStep(step.step_id)"
                         >
-                          삭제
+                          {{ t("common.delete") }}
                         </button>
                       </div>
                     </Transition>
@@ -588,24 +589,24 @@ function startAddStep() {
 
                 <div class="rec-card__grid">
                   <div class="rec-card__field">
-                    <span class="rec-card__field-label">입력</span>
-                    <span class="rec-card__field-value">{{ step.inputs?.join(", ") || "없음" }}</span>
+                    <span class="rec-card__field-label">{{ t("upload.field.inputs") }}</span>
+                    <span class="rec-card__field-value">{{ step.inputs?.join(", ") || t("common.none") }}</span>
                   </div>
                   <div class="rec-card__field">
-                    <span class="rec-card__field-label">출력</span>
-                    <span class="rec-card__field-value">{{ step.outputs?.join(", ") || "없음" }}</span>
+                    <span class="rec-card__field-label">{{ t("upload.field.outputs") }}</span>
+                    <span class="rec-card__field-value">{{ step.outputs?.join(", ") || t("common.none") }}</span>
                   </div>
                   <div class="rec-card__field">
-                    <span class="rec-card__field-label">연계 시스템</span>
-                    <span class="rec-card__field-value">{{ step.systems?.join(", ") || "없음" }}</span>
+                    <span class="rec-card__field-label">{{ t("upload.field.systems") }}</span>
+                    <span class="rec-card__field-value">{{ step.systems?.join(", ") || t("common.none") }}</span>
                   </div>
                   <div class="rec-card__field" v-if="step.branching">
-                    <span class="rec-card__field-label">분기</span>
+                    <span class="rec-card__field-label">{{ t("upload.field.branching") }}</span>
                     <span class="rec-card__field-value">{{ step.branching }}</span>
                   </div>
                 </div>
 
-                <footer v-if="step.evidence" class="rec-card__footer">근거: {{ evidenceLabel(step.evidence) }}</footer>
+                <footer v-if="step.evidence" class="rec-card__footer">{{ t("upload.evidencePrefix", { evidence: evidenceLabel(step.evidence) }) }}</footer>
               </template>
             </article>
           </TransitionGroup>
@@ -616,11 +617,11 @@ function startAddStep() {
             :disabled="editingStepId !== null"
             @click="startAddStep"
           >
-            + 업무 단계 추가
+            {{ t("upload.addStep") }}
           </button>
 
           <div v-if="ambiguities.length" class="ambiguities-section">
-            <h3 class="ambiguities-section__title">확인 필요</h3>
+            <h3 class="ambiguities-section__title">{{ t("upload.ambiguitiesTitle") }}</h3>
             <ul>
               <li v-for="(item, idx) in ambiguities" :key="idx">{{ item }}</li>
             </ul>

@@ -1,8 +1,10 @@
 <script setup>
 import { computed, defineAsyncComponent, onMounted, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { useAuthStore } from "./stores/auth";
 import { useChatStore } from "./stores/chat";
 import { usePipelineStore } from "./stores/pipeline";
+import { useSettingsStore } from "./stores/settings";
 import AppSidebar from "./components/AppSidebar.vue";
 import UploadPanel from "./components/UploadPanel.vue";
 import AnalysisPanel from "./components/AnalysisPanel.vue";
@@ -14,10 +16,13 @@ import { ANALYSIS_PANEL_ORDER_KEY, usePanelReorder } from "./composables/usePane
 const LoginPage = defineAsyncComponent(() => import("./components/LoginPage.vue"));
 const SignupPage = defineAsyncComponent(() => import("./components/SignupPage.vue"));
 const TutorialOverlay = defineAsyncComponent(() => import("./components/TutorialOverlay.vue"));
+const SettingsOverlay = defineAsyncComponent(() => import("./components/SettingsOverlay.vue"));
 
 const auth = useAuthStore();
 const chat = useChatStore();
 const pipeline = usePipelineStore();
+useSettingsStore(); // 앱 부팅 시 locale/theme(다크모드) 초기화 보장 — App.vue가 가장 이른 진입점
+const { t } = useI18n();
 
 // 분석 화면 패널(업로드/분석 결과/도킹 챗봇) 배치 순서 — 헤더 그립 드래그로 변경.
 // 이 컴포저블은 App.vue 루트에서 로그인 세션을 넘나들며 살아있으므로, 로그아웃 시
@@ -50,6 +55,7 @@ const showSignup = ref(false);
 const justRegisteredEmail = ref("");
 
 const showTutorial = ref(false);
+const showSettings = ref(false);
 
 // 계정별로 최초 1회만 자동 표시 — 같은 브라우저에서 다른 계정으로 로그인하면 다시 뜬다.
 // (userEmail은 두 로그인 경로 모두 isLoggedIn보다 먼저 세팅된다)
@@ -97,7 +103,7 @@ function handleNewChat() {
 </script>
 
 <template>
-  <div v-if="auth.authChecking" class="app-loading">로그인 확인 중…</div>
+  <div v-if="auth.authChecking" class="app-loading">{{ t("app.authChecking") }}</div>
 
   <template v-else-if="!auth.isLoggedIn">
     <LoginPage :prefill-email="justRegisteredEmail" @signup="showSignup = true" />
@@ -111,6 +117,7 @@ function handleNewChat() {
       @new-chat="handleNewChat"
       @logout="handleLogout"
       @tutorial="startTutorial"
+      @open-settings="showSettings = true"
     />
 
     <div class="app-content">
@@ -147,5 +154,6 @@ function handleNewChat() {
     </div>
 
     <TutorialOverlay v-if="showTutorial" @close="closeTutorial" />
+    <SettingsOverlay v-if="showSettings" @close="showSettings = false" />
   </div>
 </template>

@@ -1,4 +1,5 @@
 import { getToken, notifyUnauthorized } from "./http";
+import { t } from "../i18n";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
@@ -48,13 +49,13 @@ export async function turnStream(
     });
   } catch (err) {
     if (err?.name === "AbortError") return; // 세션 전환 등으로 의도적으로 취소됨 — 에러 아님
-    onError("NETWORK_ERROR", "백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.");
+    onError("NETWORK_ERROR", t("api.errors.networkUnreachable"));
     return;
   }
 
   if (response.status === 401) {
     try {
-      onError("UNAUTHORIZED", "로그인이 만료되었습니다. 다시 로그인해주세요.");
+      onError("UNAUTHORIZED", t("api.errors.sessionExpired"));
     } finally {
       notifyUnauthorized(); // 토큰 만료 — 로그인 화면으로 (apiRequest의 401 처리와 동일). onError가 먼저 UI에
       // 반영돼야 하므로 로그아웃(상태 초기화)은 마지막에 실행한다 — 순서를 바꾸면 로그아웃이
@@ -68,7 +69,7 @@ export async function turnStream(
     return;
   }
   if (!response.body) {
-    onError("UNKNOWN", "응답을 받아오지 못했습니다.");
+    onError("UNKNOWN", t("api.errors.noResponse"));
     return;
   }
 
@@ -98,12 +99,12 @@ export async function turnStream(
         if (event.event === "token") onToken?.(event.message ?? "");
         else if (event.event === "stage" || event.event === "partial") onStage?.(event.message ?? "");
         else if (event.event === "done") onDone(event.data);
-        else if (event.event === "error") onError(null, event.message ?? "알 수 없는 오류가 발생했습니다.");
+        else if (event.event === "error") onError(null, event.message ?? t("api.errors.unknown"));
       }
     }
   } catch (err) {
     if (err?.name === "AbortError") return; // 세션 전환 등으로 의도적으로 취소됨 — 에러 아님
     // 서버가 정상 error 이벤트 없이 스트림을 중간에 끊는 경우 (예: 백엔드 미처리 예외)
-    onError(null, "응답을 받는 중 연결이 끊어졌습니다. 다시 시도해주세요.");
+    onError(null, t("api.errors.streamDisconnected"));
   }
 }

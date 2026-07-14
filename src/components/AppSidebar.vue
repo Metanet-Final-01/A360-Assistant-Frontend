@@ -1,16 +1,18 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
 import { useArchiveStore } from "../stores/archive";
 
 const auth = useAuthStore();
 const archive = useArchiveStore();
+const { t } = useI18n();
 
 const props = defineProps({
   activeSessionId: { type: String, default: null },
 });
 
-const emit = defineEmits(["logout", "tutorial", "select-session", "new-chat"]);
+const emit = defineEmits(["logout", "tutorial", "open-settings", "select-session", "new-chat"]);
 
 const COLLAPSE_KEY = "a360.sidebarCollapsed";
 const savedCollapsed = localStorage.getItem(COLLAPSE_KEY);
@@ -124,7 +126,7 @@ function handleHistoryClick(event) {
 
 async function removeSession(id, event) {
   event.stopPropagation();
-  if (!window.confirm("이 세션을 삭제하시겠습니까?")) return;
+  if (!window.confirm(t("sidebar.deleteConfirm"))) return;
   const wasActive = id === props.activeSessionId;
   const removed = await archive.removeSession(id);
   openMenuId.value = null;
@@ -142,13 +144,13 @@ async function removeSession(id, event) {
   <aside class="app-sidebar" :class="{ 'app-sidebar--collapsed': collapsedForDisplay }">
     <div class="app-sidebar__inner">
       <div class="app-sidebar__brand">
-        <img src="../assets/a360-mark.svg" alt="A360 로고" class="app-sidebar__logo" />
+        <img src="../assets/a360-mark.svg" :alt="t('sidebar.logoAlt')" class="app-sidebar__logo" />
         <span class="app-sidebar__brand-title">A360 ASSISTANT</span>
         <button
           type="button"
           class="app-sidebar__toggle"
-          :title="collapsedForDisplay ? '메뉴 펼치기' : '메뉴 접기'"
-          :aria-label="collapsedForDisplay ? '메뉴 펼치기' : '메뉴 접기'"
+          :title="collapsedForDisplay ? t('sidebar.expandMenu') : t('sidebar.collapseMenu')"
+          :aria-label="collapsedForDisplay ? t('sidebar.expandMenu') : t('sidebar.collapseMenu')"
           :aria-expanded="!collapsedForDisplay"
           @click="toggleCollapsed"
         >
@@ -171,12 +173,12 @@ async function removeSession(id, event) {
         </button>
       </div>
 
-      <nav class="app-sidebar__nav" aria-label="주요 메뉴" data-tour="sidebar-nav">
+      <nav class="app-sidebar__nav" :aria-label="t('sidebar.mainNavLabel')" data-tour="sidebar-nav">
         <button
           type="button"
           class="app-sidebar__nav-item"
           :aria-expanded="historyExpanded && !collapsedForDisplay"
-          title="분석"
+          :title="t('sidebar.analysis')"
           @click="toggleHistory"
         >
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -192,7 +194,7 @@ async function removeSession(id, event) {
               stroke-linecap="round"
             />
           </svg>
-          <span class="app-sidebar__nav-label">분석</span>
+          <span class="app-sidebar__nav-label">{{ t("sidebar.analysis") }}</span>
           <svg
             class="app-sidebar__nav-chevron"
             :class="{ 'app-sidebar__nav-chevron--open': historyExpanded }"
@@ -218,7 +220,7 @@ async function removeSession(id, event) {
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
               </svg>
-              <span>새 채팅</span>
+              <span>{{ t("sidebar.newChat") }}</span>
             </button>
 
             <div class="archive-chat__search">
@@ -226,13 +228,13 @@ async function removeSession(id, event) {
                 <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.6" />
                 <path d="M20 20l-3.8-3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
               </svg>
-              <input v-model="searchQuery" type="text" placeholder="세션 제목 검색" aria-label="세션 제목 검색" />
+              <input v-model="searchQuery" type="text" :placeholder="t('sidebar.searchPlaceholder')" :aria-label="t('sidebar.searchPlaceholder')" />
             </div>
 
             <p v-if="archive.deleteError" class="upload-error">{{ archive.deleteError }}</p>
 
             <ul class="archive-chat__list">
-              <li v-if="archive.listStatus === 'loading'" class="archive-chat__empty">세션 목록을 불러오는 중…</li>
+              <li v-if="archive.listStatus === 'loading'" class="archive-chat__empty">{{ t("sidebar.loadingSessions") }}</li>
               <li v-else-if="archive.listStatus === 'error'" class="archive-chat__empty">{{ archive.listError }}</li>
 
               <template v-else>
@@ -247,7 +249,7 @@ async function removeSession(id, event) {
                       {{ (session.solution || "A360").toUpperCase() }}
                     </span>
                     <div class="archive-results__item-body">
-                      <span class="archive-results__item-title">{{ session.title || "제목 없는 세션" }}</span>
+                      <span class="archive-results__item-title">{{ session.title || t("sidebar.untitledSession") }}</span>
                       <span class="archive-results__item-date">{{ session.dateLabel }}</span>
                     </div>
                   </button>
@@ -256,7 +258,7 @@ async function removeSession(id, event) {
                     <button
                       type="button"
                       class="archive-chat__item-menu-btn"
-                      aria-label="세션 옵션"
+                      :aria-label="t('sidebar.sessionOptions')"
                       @click="toggleMenu(session.id, $event)"
                     >
                       &#8942;
@@ -269,17 +271,17 @@ async function removeSession(id, event) {
                           class="archive-chat__item-menu-danger"
                           @click="removeSession(session.id, $event)"
                         >
-                          삭제
+                          {{ t("common.delete") }}
                         </button>
                       </div>
                     </Transition>
                   </div>
                 </li>
 
-                <li v-if="!visibleSessions.length" class="archive-chat__empty">저장된 세션이 없습니다.</li>
+                <li v-if="!visibleSessions.length" class="archive-chat__empty">{{ t("sidebar.noSessions") }}</li>
 
                 <li v-if="hasMoreSessions" class="archive-chat__show-more">
-                  <button type="button" @click="showMoreSessions">더 보기</button>
+                  <button type="button" @click="showMoreSessions">{{ t("sidebar.showMore") }}</button>
                 </li>
               </template>
             </ul>
@@ -291,7 +293,7 @@ async function removeSession(id, event) {
         <button
           type="button"
           class="app-sidebar__nav-item app-sidebar__help"
-          title="기능 소개"
+          :title="t('sidebar.tutorial')"
           @click="emit('tutorial')"
         >
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -304,7 +306,28 @@ async function removeSession(id, event) {
             />
             <circle cx="12" cy="16.8" r="0.9" fill="currentColor" />
           </svg>
-          <span class="app-sidebar__nav-label">기능 소개</span>
+          <span class="app-sidebar__nav-label">{{ t("sidebar.tutorial") }}</span>
+        </button>
+        <button
+          type="button"
+          class="app-sidebar__nav-item app-sidebar__help"
+          :title="t('sidebar.settings')"
+          @click="emit('open-settings')"
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"
+              stroke="currentColor"
+              stroke-width="1.7"
+            />
+            <path
+              d="M19.4 13.5c.05-.33.08-.66.08-1s-.03-.67-.08-1l1.6-1.25a.7.7 0 0 0 .17-.9l-1.5-2.6a.7.7 0 0 0-.85-.3l-1.9.76a7.4 7.4 0 0 0-1.73-1l-.29-2.02a.7.7 0 0 0-.7-.6h-3a.7.7 0 0 0-.7.6l-.29 2.02c-.63.24-1.21.58-1.73 1l-1.9-.76a.7.7 0 0 0-.85.3l-1.5 2.6a.7.7 0 0 0 .17.9l1.6 1.25c-.05.33-.08.66-.08 1s.03.67.08 1l-1.6 1.25a.7.7 0 0 0-.17.9l1.5 2.6c.18.3.54.42.85.3l1.9-.76c.52.42 1.1.76 1.73 1l.29 2.02c.05.34.35.6.7.6h3c.35 0 .65-.26.7-.6l.29-2.02c.63-.24 1.21-.58 1.73-1l1.9.76c.31.12.67 0 .85-.3l1.5-2.6a.7.7 0 0 0-.17-.9l-1.6-1.25Z"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <span class="app-sidebar__nav-label">{{ t("sidebar.settings") }}</span>
         </button>
         <div class="app-sidebar__profile">
           <span class="app-sidebar__avatar" aria-hidden="true">
@@ -319,7 +342,7 @@ async function removeSession(id, event) {
             </svg>
           </span>
           <div class="app-sidebar__profile-info">
-            <span class="app-sidebar__profile-name">로그인 계정</span>
+            <span class="app-sidebar__profile-name">{{ t("sidebar.loginAccount") }}</span>
             <span class="app-sidebar__profile-email" :title="auth.userEmail || ''">
               {{ auth.userEmail || "-" }}
             </span>
@@ -327,8 +350,8 @@ async function removeSession(id, event) {
           <button
             type="button"
             class="app-sidebar__logout"
-            title="로그아웃"
-            aria-label="로그아웃"
+            :title="t('sidebar.logout')"
+            :aria-label="t('sidebar.logout')"
             @click="emit('logout')"
           >
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">

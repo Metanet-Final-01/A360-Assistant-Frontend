@@ -1,16 +1,19 @@
 <script setup>
 import { computed, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { usePipelineStore } from "../stores/pipeline";
 import { buildPackageColorMap, confidenceBadge, flattenDetailed, stepLabel } from "../utils/recommendation";
+import { formatDateShort } from "../utils/dateFormat";
 
 const pipeline = usePipelineStore();
+const { t } = useI18n();
 
 defineEmits(["close"]);
 
 const packageColor = computed(() => buildPackageColorMap(pipeline.recommendation?.recommendation?.steps));
 
 function colorFor(pkg) {
-  return packageColor.value.get(pkg || "미지정") ?? "#888888";
+  return packageColor.value.get(pkg || t("common.unspecified")) ?? "#888888";
 }
 
 // 흐름도 자체의 step 구획별로 묶은 요약 시퀀스 — 분석(WorkStep) 단계와는 무관하다.
@@ -34,10 +37,12 @@ const revertingVersion = ref(null);
 
 pipeline.loadRecommendationHistory();
 
-const SOURCE_LABEL = { llm: "자동 생성", drag: "직접 편집", chat: "챗 수정", feedback: "피드백" };
+const KNOWN_SOURCES = ["llm", "drag", "chat", "feedback"];
 
 function versionDescription(v) {
-  return v.change_summary || SOURCE_LABEL[v.source] || v.source || "";
+  if (v.change_summary) return v.change_summary;
+  if (v.source && KNOWN_SOURCES.includes(v.source)) return t(`recommendFlow.source.${v.source}`);
+  return v.source || "";
 }
 
 // 백엔드에 개별 버전 조회 API가 없어, 이 브라우저 세션에서 트리를 캐시해 둔 버전만 되돌릴 수 있다.
@@ -52,13 +57,7 @@ async function revertTo(version) {
   revertingVersion.value = null;
 }
 
-function formatDate(iso) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? ""
-    : d.toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" });
-}
+const formatDate = formatDateShort;
 </script>
 
 <template>
@@ -66,20 +65,20 @@ function formatDate(iso) {
     <div class="modal modal--flow" role="dialog" aria-modal="true" aria-labelledby="rec-flow-modal-title">
       <header class="modal__header">
         <h2 id="rec-flow-modal-title">
-          추천 작업 흐름도
+          {{ t("recommendFlow.title") }}
           <span v-if="pipeline.recommendation?.version" class="flow-version-badge">
             v{{ pipeline.recommendation.version }}
           </span>
         </h2>
-        <button type="button" class="modal__close" aria-label="닫기" @click="$emit('close')">✕</button>
+        <button type="button" class="modal__close" :aria-label="t('common.close')" @click="$emit('close')">✕</button>
       </header>
 
       <div class="modal__body modal__body--flow">
         <div class="flow-toolbar">
-          <p class="flow-hint">단계별 액션 시퀀스입니다. 패키지별 색상으로 구분됩니다.</p>
+          <p class="flow-hint">{{ t("recommendFlow.hint") }}</p>
           <div class="flow-toolbar__actions">
             <button type="button" class="btn btn--outline" @click="showHistory = !showHistory">
-              버전 이력
+              {{ t("recommendFlow.versionHistory") }}
             </button>
           </div>
         </div>
@@ -87,16 +86,16 @@ function formatDate(iso) {
         <p v-if="pipeline.recommendSaveError" class="upload-error">{{ pipeline.recommendSaveError }}</p>
 
         <div v-if="showHistory" class="flow-history">
-          <h3 class="flow-history__title">버전 이력</h3>
+          <h3 class="flow-history__title">{{ t("recommendFlow.versionHistory") }}</h3>
           <p v-if="!pipeline.recommendVersions.length" class="flow-history__empty">
-            저장된 버전이 없습니다.
+            {{ t("recommendFlow.noVersions") }}
           </p>
           <ol v-else class="flow-history__list">
             <li v-for="v in pipeline.recommendVersions" :key="v.id" class="flow-history__item">
               <div class="flow-history__meta">
                 <strong>v{{ v.version }}</strong>
                 <span v-if="v.version === pipeline.recommendation?.version" class="flow-history__current">
-                  현재
+                  {{ t("recommendFlow.current") }}
                 </span>
                 <span class="flow-history__desc">{{ versionDescription(v) }}</span>
                 <time class="flow-history__date">{{ formatDate(v.created_at) }}</time>
@@ -108,18 +107,18 @@ function formatDate(iso) {
                 :disabled="revertingVersion !== null"
                 @click="revertTo(v.version)"
               >
-                {{ revertingVersion === v.version ? "되돌리는 중…" : "이 버전으로 되돌리기" }}
+                {{ revertingVersion === v.version ? t("recommendFlow.reverting") : t("recommendFlow.revert") }}
               </button>
             </li>
           </ol>
           <p class="flow-history__hint">
-            되돌리기는 삭제가 아니라 해당 버전 내용을 새 버전으로 다시 저장하는 방식입니다.
+            {{ t("recommendFlow.revertHint") }}
           </p>
         </div>
 
         <template v-if="hasBoxes">
           <div class="flow-diagram">
-            <div class="flow-pill">시작</div>
+            <div class="flow-pill">{{ t("recommendFlow.start") }}</div>
             <div class="flow-arrow" aria-hidden="true"></div>
 
             <template v-for="group in stepGroups" :key="group.key">
@@ -142,7 +141,7 @@ function formatDate(iso) {
               </template>
             </template>
 
-            <div class="flow-pill">완료</div>
+            <div class="flow-pill">{{ t("recommendFlow.done") }}</div>
           </div>
 
           <div class="flow-legend">
@@ -151,10 +150,10 @@ function formatDate(iso) {
             </span>
           </div>
         </template>
-        <p v-else class="modal__empty">표시할 추천 결과가 없습니다.</p>
+        <p v-else class="modal__empty">{{ t("recommendFlow.noResults") }}</p>
 
         <p v-if="pipeline.recommendation?.recommendation?.notes" class="flow-notes">
-          <strong>참고:</strong> {{ pipeline.recommendation.recommendation.notes }}
+          <strong>{{ t("common.notesLabel") }}</strong> {{ pipeline.recommendation.recommendation.notes }}
         </p>
       </div>
     </div>
