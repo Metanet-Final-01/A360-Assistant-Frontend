@@ -35,6 +35,7 @@ export default {
     collapseMenu: "메뉴 접기",
     sessionOptions: "세션 옵션",
     deleteConfirm: "이 세션을 삭제하시겠습니까?",
+    sessionLoading: "세션을 불러오는 중…",
   },
 
   settings: {
@@ -143,6 +144,7 @@ export default {
     inputVars: "입력 변수",
     outputVars: "출력 변수",
     recommendSectionTitle: "A360 흐름도 추천",
+    sessionLoadingHint: "흐름도를 불러오는 중…",
     generating: "생성 중…",
     viewFlow: "흐름도 보기",
     exportTitle: "내보내기",
@@ -162,6 +164,7 @@ export default {
     minimize: "챗봇 최소화",
     close: "챗봇 닫기",
     pending: "응답을 생성하는 중…",
+    historyLoading: "대화 내용을 불러오는 중…",
     untitledSource: "제목 없는 근거",
     inputPlaceholder: "메시지 입력…",
     sendAria: "챗봇에게 메시지 보내기",
@@ -233,6 +236,7 @@ export default {
     newTextRequest: "새 요청 입력",
     newDocumentUpload: "새 문서 업로드",
     analyzingHint: "분석 중… 진행 상태는 챗봇에서 확인할 수 있습니다.",
+    sessionLoadingHint: "분석 결과를 불러오는 중…",
     retry: "다시 시도",
     noStepsFound: "문서에서 분석 가능한 업무 단계를 찾지 못했습니다. 아래 버튼으로 직접 추가할 수 있습니다.",
     form: {

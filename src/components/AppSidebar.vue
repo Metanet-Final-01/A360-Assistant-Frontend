@@ -10,6 +10,11 @@ const { t } = useI18n();
 
 const props = defineProps({
   activeSessionId: { type: String, default: null },
+  // activeSessionId의 분석·흐름도·채팅 이력을 불러오는 중인지 — 참이면 해당 항목에
+  // 로딩 스피너를 보여준다. 로딩 도중 다른 항목을 클릭하면 activeSessionId 자체가
+  // 바로 그 항목으로 옮겨가므로(pipeline.loadSession이 동기적으로 먼저 반영) 스피너도
+  // 자연히 새로 클릭한 항목으로 따라 움직인다 — 별도의 취소 처리가 필요 없다.
+  activeSessionLoading: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(["logout", "tutorial", "open-settings", "select-session", "new-chat"]);
@@ -245,7 +250,13 @@ async function removeSession(id, event) {
                   :class="{ 'archive-chat__item--active': session.id === props.activeSessionId }"
                 >
                   <button type="button" class="archive-results__item-main" @click="selectSession(session.id)">
-                    <span class="archive-results__item-icon archive-results__item-icon--session">
+                    <span
+                      v-if="session.id === props.activeSessionId && props.activeSessionLoading"
+                      class="archive-chat__item-spinner"
+                      role="status"
+                      :aria-label="t('sidebar.sessionLoading')"
+                    ></span>
+                    <span v-else class="archive-results__item-icon archive-results__item-icon--session">
                       {{ (session.solution || "A360").toUpperCase() }}
                     </span>
                     <div class="archive-results__item-body">

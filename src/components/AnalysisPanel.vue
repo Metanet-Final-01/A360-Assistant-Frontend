@@ -93,7 +93,12 @@ async function downloadJson() {
     </header>
 
     <div class="panel__body">
-      <div v-if="!pipeline.recommendation" class="empty-state">
+      <div v-if="pipeline.sessionLoadStatus === 'loading'" class="analyzing-state">
+        <span class="analyzing-state__spinner" aria-hidden="true"></span>
+        <p>{{ t("recommendDetail.sessionLoadingHint") }}</p>
+      </div>
+
+      <div v-else-if="!pipeline.recommendation" class="empty-state">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path
             d="M4 6h16M4 12h10M4 18h7"

@@ -472,8 +472,18 @@ function startAddStep() {
         </div>
       </div>
 
-      <div v-if="pipeline.analysisStatus !== 'idle'" class="analysis-results" data-tour="analysis" ref="analysisBodyRef">
-        <div v-if="pipeline.analysisStatus === 'analyzing'" class="analyzing-state">
+      <div
+        v-if="pipeline.sessionLoadStatus === 'loading' || pipeline.analysisStatus !== 'idle'"
+        class="analysis-results"
+        data-tour="analysis"
+        ref="analysisBodyRef"
+      >
+        <div v-if="pipeline.sessionLoadStatus === 'loading'" class="analyzing-state">
+          <span class="analyzing-state__spinner" aria-hidden="true"></span>
+          <p>{{ t("upload.sessionLoadingHint") }}</p>
+        </div>
+
+        <div v-else-if="pipeline.analysisStatus === 'analyzing'" class="analyzing-state">
           <span class="analyzing-state__spinner" aria-hidden="true"></span>
           <p>{{ t("upload.analyzingHint") }}</p>
         </div>

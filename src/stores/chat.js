@@ -62,11 +62,14 @@ export const useChatStore = defineStore("chat", () => {
     // startTurnController가 이전 컨트롤러를 abort함). ChatWidget 입력창도 같은 조건으로
     // 비활성화되지만(App.vue의 chatBlocked), 이건 그 UI 가드가 우회되더라도 지켜지는
     // 최종 방어선이다.
+    // 사이드바에서 세션 이력을 불러오는 중(sessionLoadStatus)에도 막는다 — loadHistoryMessages가
+    // 응답 도착 시 chatMessages를 통째로 교체하므로, 그 사이 보낸 메시지는 화면에서 사라진다.
     if (
       isSending.value ||
       pipeline.uploadStatus === "uploading" ||
       pipeline.analysisStatus === "analyzing" ||
-      pipeline.recommendStatus === "generating"
+      pipeline.recommendStatus === "generating" ||
+      pipeline.sessionLoadStatus === "loading"
     ) {
       return;
     }

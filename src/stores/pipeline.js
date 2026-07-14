@@ -52,6 +52,12 @@ export const usePipelineStore = defineStore("pipeline", () => {
   // 챗 위젯이 링 게이지로 표시하고, compact_recommended면 "대화 압축" 버튼을 강조한다.
   const usageGauge = ref(null);
 
+  // 사이드바에서 과거 세션을 선택해 분석·흐름도·채팅 이력을 통째로 불러오는 동안의 상태
+  // (loadSession 전용 — analysisStatus/recommendStatus는 이 fetch 동안 idle로 리셋돼 있어
+  // 별도 플래그가 없으면 UI가 "로딩 중"과 "빈 화면"을 구분할 수 없다). 사이드바·업로드
+  // 패널·흐름도 패널·챗 위젯이 이 값을 보고 로딩 스피너를 표시한다.
+  const sessionLoadStatus = ref("idle"); // idle | loading | error
+
   let timers = [];
   function clearTimers() {
     timers.forEach((t) => clearTimeout(t));
@@ -489,6 +495,11 @@ export const usePipelineStore = defineStore("pipeline", () => {
     cancelActiveTurn();
     cancelActiveUpload();
     nextUploadGeneration();
+    // 세션 로딩(loadSession)이 아직 진행 중일 때 "새 채팅"을 누르는 경우도 세대를 올려야
+    // 한다 — sessionId만 null로 비우면, 이미 날아간 요청의 세대가 여전히 최신으로 보여
+    // 늦게 도착한 응답이 방금 비운 화면을 옛 세션 데이터로 다시 채워버린다.
+    nextSessionGeneration();
+    sessionLoadStatus.value = "idle";
     file.value = null;
     uploadStatus.value = "idle";
     uploadError.value = "";
@@ -524,6 +535,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     uploadError.value = "";
     usageGauge.value = null;
     resetPipelineState();
+    sessionLoadStatus.value = "loading";
 
     let analysisRes, recommendationRes;
     try {
@@ -535,7 +547,10 @@ export const usePipelineStore = defineStore("pipeline", () => {
     } catch (err) {
       // 응답이 오기 전에 다른 세션으로 이동했거나(A→B) 같은 세션을 다시 불러왔으면(A→B→A)
       // 이 시도는 낡은 것이다 — sessionId 비교만으론 후자를 구분 못 해 세대로 확인한다.
+      // 이 가드 덕분에, 로딩 중 다른 세션을 클릭해 이미 다음 시도가 시작된 경우 낡은 시도의
+      // 실패가 방금 시작된 새 로딩 상태(sessionLoadStatus="loading")를 덮어쓰지 않는다.
       if (myGeneration !== sessionGeneration.value) return;
+      sessionLoadStatus.value = "error";
       uploadStatus.value = "error";
       uploadError.value = err instanceof ApiError ? err.message : t("pipeline.errors.sessionLoadFailed");
       return;
@@ -554,6 +569,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
         JSON.stringify(recommendationRes.recommendation),
       );
     }
+    sessionLoadStatus.value = "idle";
     loadRecommendationHistory();
   }
 
@@ -577,6 +593,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     recommendTreesByVersion,
     recommendSaveError,
     usageGauge,
+    sessionLoadStatus,
     selectFile,
     submitTextRequest,
     applyTurnArtifacts,

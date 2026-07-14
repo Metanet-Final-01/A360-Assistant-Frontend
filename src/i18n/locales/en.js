@@ -35,6 +35,7 @@ export default {
     collapseMenu: "Collapse menu",
     sessionOptions: "Session options",
     deleteConfirm: "Delete this session?",
+    sessionLoading: "Loading session…",
   },
 
   settings: {
@@ -143,6 +144,7 @@ export default {
     inputVars: "Input variables",
     outputVars: "Output variables",
     recommendSectionTitle: "A360 flow recommendation",
+    sessionLoadingHint: "Loading the flow…",
     generating: "Generating…",
     viewFlow: "View flow",
     exportTitle: "Export",
@@ -162,6 +164,7 @@ export default {
     minimize: "Minimize chatbot",
     close: "Close chatbot",
     pending: "Generating a response…",
+    historyLoading: "Loading the conversation…",
     untitledSource: "Untitled source",
     inputPlaceholder: "Type a message…",
     sendAria: "Send message to chatbot",
@@ -233,6 +236,7 @@ export default {
     newTextRequest: "Enter a new request",
     newDocumentUpload: "Upload a new document",
     analyzingHint: "Analyzing… you can check progress in the chatbot.",
+    sessionLoadingHint: "Loading the analysis results…",
     retry: "Retry",
     noStepsFound: "Couldn't find any work steps to analyze in the document. You can add one manually below.",
     form: {

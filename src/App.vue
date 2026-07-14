@@ -48,7 +48,8 @@ const chatBlocked = computed(
     chat.isSending ||
     pipeline.uploadStatus === "uploading" ||
     pipeline.analysisStatus === "analyzing" ||
-    pipeline.recommendStatus === "generating",
+    pipeline.recommendStatus === "generating" ||
+    pipeline.sessionLoadStatus === "loading",
 );
 
 const showSignup = ref(false);
@@ -113,6 +114,7 @@ function handleNewChat() {
   <div v-else class="app-shell">
     <AppSidebar
       :active-session-id="pipeline.sessionId"
+      :active-session-loading="pipeline.sessionLoadStatus === 'loading'"
       @select-session="pipeline.loadSession"
       @new-chat="handleNewChat"
       @logout="handleLogout"
@@ -135,6 +137,7 @@ function handleNewChat() {
             panel-key="chat"
             :panel-reorder="analysisPanels"
             :messages="chat.chatMessages"
+            :history-loading="pipeline.sessionLoadStatus === 'loading'"
             :open="chat.chatOpen"
             :docked="chat.chatDocked"
             dock-zone-id="analysis"

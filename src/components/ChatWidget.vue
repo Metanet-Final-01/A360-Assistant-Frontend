@@ -7,6 +7,9 @@ const { t } = useI18n();
 
 const props = defineProps({
   messages: { type: Array, required: true },
+  // 사이드바에서 세션 이력을 불러오는 중이면 참 — 도착할 때 messages가 통째로 교체되므로
+  // 그 사이엔 이전 세션의 대화가 잠깐 보였다 바뀌는 대신 로딩 상태를 보여준다.
+  historyLoading: { type: Boolean, default: false },
   open: { type: Boolean, default: false },
   docked: { type: Boolean, default: true },
   dockZoneId: { type: String, required: true },
@@ -349,6 +352,12 @@ const gaugeTitle = computed(() => {
         @touchmove.passive="handleMessagesTouchMove"
         @scroll="handleMessagesScroll"
       >
+        <div v-if="historyLoading" class="chat-history-loading">
+          <span class="analyzing-state__spinner" aria-hidden="true"></span>
+          <p>{{ t("chat.historyLoading") }}</p>
+        </div>
+
+        <template v-else>
         <div
           v-for="(message, idx) in messages"
           :key="idx"
@@ -418,6 +427,7 @@ const gaugeTitle = computed(() => {
 
           <span class="chat-message__time">{{ message.time }}</span>
         </div>
+        </template>
       </div>
 
       <form class="chat-popup__composer" @submit.prevent="handleSend">
