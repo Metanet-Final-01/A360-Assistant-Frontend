@@ -69,6 +69,10 @@ const dragIndex = ref(null);
 const dragVisualHidden = ref(false);
 const openMenuId = ref(null);
 const editingStepId = ref(null);
+// "+ 업무 단계 추가"로 막 만든, 아직 한 번도 저장되지 않은 단계의 id — 취소 시 이 id와
+// 일치할 때만 지운다(필드 값으로 "빈 초안"을 추측하면, 이름을 안 바꾼 실제 저장된 단계를
+// 취소만 눌러도 지워버릴 수 있다).
+const draftStepId = ref(null);
 const stepForm = ref({
   name: "",
   description: "",
@@ -77,6 +81,7 @@ const stepForm = ref({
   systems: "",
   branching: "",
   evidenceSnippet: "",
+  evidencePage: null,
 });
 
 function toCsv(arr) {
@@ -119,11 +124,16 @@ function captureDragStartSlots() {
   }
   const containerRect = container.getBoundingClientRect();
   const cards = container.querySelectorAll(".rec-card");
-  dragStartSlots = Array.from(cards).map((el) => {
+  const slots = Array.from(cards).map((el) => {
     const r = el.getBoundingClientRect();
     const top = r.top - containerRect.top + container.scrollTop;
     return { mid: top + r.height / 2 };
   });
+  // 드래그 중인 카드 자신의 원래 슬롯은 목표 인덱스 계산에서 제외한다 — 포함된 채로 두면
+  // splice로 카드를 뺀 뒤의 배열 인덱스와 어긋나, 아래로 옮길 때 의도한 자리보다 한 칸
+  // 더 내려가 버린다.
+  if (dragIndex.value !== null) slots.splice(dragIndex.value, 1);
+  dragStartSlots = slots;
 }
 
 function trackPointer(event) {
@@ -214,6 +224,9 @@ function closeMenuOnOutsideClick(event) {
 }
 
 function startEditStep(step) {
+  // 다른 단계를 편집하는 중이면 무시한다 — 그대로 두면 stepForm이 통째로 교체돼
+  // 저장하지 않은 입력이 조용히 사라진다.
+  if (editingStepId.value !== null) return;
   openMenuId.value = null;
   editingStepId.value = step.step_id;
   stepForm.value = {
@@ -224,22 +237,15 @@ function startEditStep(step) {
     systems: toCsv(step.systems),
     branching: step.branching ?? "",
     evidenceSnippet: step.evidence?.snippet ?? "",
+    evidencePage: step.evidence?.page ?? null,
   };
 }
 
 function cancelEditStep() {
-  // 방금 "+ 업무 단계 추가"로 만든, 아직 아무것도 채우지 않은 카드면 취소 시 함께 지운다.
-  if (editingStepId.value !== null) {
+  // 방금 "+ 업무 단계 추가"로 만든, 아직 한 번도 저장되지 않은 카드일 때만 취소 시 지운다.
+  if (editingStepId.value !== null && editingStepId.value === draftStepId.value) {
     const idx = steps.value.findIndex((s) => s.step_id === editingStepId.value);
-    const draft = idx !== -1 ? steps.value[idx] : null;
-    const isUnfilledDraft =
-      draft &&
-      draft.name === "새 업무 단계" &&
-      !draft.description &&
-      !draft.inputs?.length &&
-      !draft.outputs?.length &&
-      !draft.systems?.length;
-    if (isUnfilledDraft) {
+    if (idx !== -1) {
       steps.value.splice(idx, 1);
       renumber();
     }
@@ -257,7 +263,11 @@ function saveEditStep() {
   step.systems = fromCsv(stepForm.value.systems);
   step.branching = stepForm.value.branching.trim() || null;
   const snippet = stepForm.value.evidenceSnippet.trim();
-  step.evidence = snippet ? { page: step.evidence?.page ?? null, snippet } : null;
+  const page = stepForm.value.evidencePage;
+  // 근거 텍스트를 지워도 페이지 번호(편집 UI에 없는 필드)는 남겨 둔다 — 스니펫만 비우려고
+  // 저장했는데 페이지 참조까지 통째로 날아가면 안 된다.
+  step.evidence = snippet || page != null ? { page, snippet: snippet || null } : null;
+  if (draftStepId.value === editingStepId.value) draftStepId.value = null;
   editingStepId.value = null;
 }
 
@@ -270,6 +280,8 @@ function removeStep(stepId) {
 }
 
 function startAddStep() {
+  // 다른 단계를 편집하는 중이면 무시한다 — startEditStep과 동일한 이유.
+  if (editingStepId.value !== null) return;
   const list = steps.value;
   const newStep = {
     step_id: crypto.randomUUID(),
@@ -283,6 +295,7 @@ function startAddStep() {
     evidence: null,
   };
   list.push(newStep);
+  draftStepId.value = newStep.step_id;
   startEditStep(newStep);
 }
 </script>
@@ -550,7 +563,14 @@ function startAddStep() {
                     </button>
                     <Transition name="fade-up">
                       <div v-if="openMenuId === step.step_id" class="flow-card__menu" role="menu">
-                        <button type="button" role="menuitem" @click="startEditStep(step)">수정</button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          :disabled="editingStepId !== null"
+                          @click="startEditStep(step)"
+                        >
+                          수정
+                        </button>
                         <button
                           type="button"
                           role="menuitem"
@@ -590,7 +610,14 @@ function startAddStep() {
             </article>
           </TransitionGroup>
 
-          <button type="button" class="flow-add-btn" @click="startAddStep">+ 업무 단계 추가</button>
+          <button
+            type="button"
+            class="flow-add-btn"
+            :disabled="editingStepId !== null"
+            @click="startAddStep"
+          >
+            + 업무 단계 추가
+          </button>
 
           <div v-if="ambiguities.length" class="ambiguities-section">
             <h3 class="ambiguities-section__title">확인 필요</h3>
