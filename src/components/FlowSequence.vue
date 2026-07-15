@@ -5,7 +5,7 @@
 //  · 그 외 일반 액션 → 세로 박스.
 // 자식 본문은 자기 자신(FlowSequence)을 재귀 호출해 그린다 — 컬럼 안에 또 분기가 있으면
 // 그 안에서 다시 컬럼이 된다.
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import FlowNode from "./FlowNode.vue";
 import { isBranchNode, isBranchStarter, childItems, branchColumnExits, branchRole } from "../utils/recommendation";
 
@@ -46,17 +46,24 @@ function colsElOf(branchEl) {
   return branchEl?.querySelector(".flow-branch__cols") ?? null;
 }
 
+// 마운트 시점에 있던 분기 컬럼만 이 초기화를 거치면, 이후 데이터 변경(라이브 스트리밍·편집)으로
+// 새로 나타난 분기 컬럼은 초기 페이드 상태도 못 잡고 ResizeObserver에도 안 걸린다 — segments가
+// 바뀔 때마다 다시 불러야 한다.
+function setupBranchFades() {
+  branchRefs.value.forEach((branchEl) => {
+    const colsEl = colsElOf(branchEl);
+    if (!colsEl) return;
+    updateColsFade(colsEl);
+    resizeObserver?.observe(colsEl);
+  });
+}
+
 onMounted(async () => {
   await nextTick();
   resizeObserver = new ResizeObserver(() => {
     branchRefs.value.forEach((branchEl) => updateColsFade(colsElOf(branchEl)));
   });
-  branchRefs.value.forEach((branchEl) => {
-    const colsEl = colsElOf(branchEl);
-    if (!colsEl) return;
-    updateColsFade(colsEl);
-    resizeObserver.observe(colsEl);
-  });
+  setupBranchFades();
 });
 
 onBeforeUnmount(() => {
@@ -87,6 +94,12 @@ const segments = computed(() => {
   // 분기(Error handler·If)는 항상 '감싸는 블록(컬럼)'으로 렌더한다 — 단독 Try/If여도 들여쓰기가 아니라
   // 블록 안에 본문을 넣는다. (Loop/Step 같은 단일 컨테이너는 애초에 분기 그룹이 아니라 node로 중첩됨)
   return raw.map((s) => ({ ...s, key: s.type === "branch" ? s.items[0].path : s.item.path }));
+});
+
+// segments가 바뀌면(props.items 변경) 새로 렌더된 분기 컬럼에 대해 페이드 초기화를 다시 돈다.
+watch(segments, async () => {
+  await nextTick();
+  setupBranchFades();
 });
 
 function kids(item) {

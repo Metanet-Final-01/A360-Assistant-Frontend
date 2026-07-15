@@ -10,6 +10,7 @@ export default {
     unspecifiedParen: "(Unspecified)",
     dragHandle: "Drag to move panel",
     resizeHandle: "Drag or use arrow keys to resize panels",
+    resizeHandleBetween: "Resize between {left} and {right}",
     notesLabel: "Note:",
     stageAborted: "Stopped due to an error",
   },

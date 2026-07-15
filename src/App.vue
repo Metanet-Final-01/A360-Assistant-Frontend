@@ -69,6 +69,29 @@ const chatBlocked = computed(
     pipeline.sessionLoadStatus === "loading",
 );
 
+// 리사이즈 핸들 접근성 — 현재 좌우 폭 비율을 aria-valuenow로 노출하고(weights가 리액티브라
+// 포인터 드래그·키보드 넛지 어느 쪽으로 바뀌어도 그대로 반영된다), 어느 패널 사이 핸들인지
+// aria-label에서 구분되게 한다(전부 같은 라벨이면 스크린 리더로는 핸들끼리 구별이 안 된다).
+const PANEL_TITLE_KEYS = {
+  upload: "upload.title",
+  analysis: "recommendDetail.title",
+  chat: "chat.dockedTitleDefault",
+};
+
+function boundarySplitPercent(boundary) {
+  const left = analysisPanels.weights[boundary.leftKey] ?? 0;
+  const right = analysisPanels.weights[boundary.rightKey] ?? 0;
+  const total = left + right;
+  return total > 0 ? Math.round((left / total) * 100) : 50;
+}
+
+function boundaryLabel(boundary) {
+  return t("common.resizeHandleBetween", {
+    left: t(PANEL_TITLE_KEYS[boundary.leftKey] ?? boundary.leftKey),
+    right: t(PANEL_TITLE_KEYS[boundary.rightKey] ?? boundary.rightKey),
+  });
+}
+
 const showSignup = ref(false);
 const justRegisteredEmail = ref("");
 
@@ -184,7 +207,10 @@ function handleNewChat() {
             :style="{ order: boundary.order }"
             role="separator"
             aria-orientation="vertical"
-            :aria-label="t('common.resizeHandle')"
+            :aria-label="boundaryLabel(boundary)"
+            :aria-valuenow="boundarySplitPercent(boundary)"
+            aria-valuemin="0"
+            aria-valuemax="100"
             :tabindex="boundary.interactive ? 0 : -1"
             @pointerdown="analysisPanels.beginResize(boundary.leftKey, boundary.rightKey, $event)"
             @keydown.left="analysisPanels.nudgeResize(boundary.leftKey, boundary.rightKey, -24)"
