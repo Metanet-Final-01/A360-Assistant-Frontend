@@ -1048,6 +1048,7 @@ input {
 }
 
 .analyzing-state__spinner {
+  flex: none; /* flex 행(.flow-live-status) 안에서 가로 수축돼 타원이 되는 것 방지 */
   width: 28px;
   height: 28px;
   border: 3px solid var(--border);
