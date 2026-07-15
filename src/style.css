@@ -526,17 +526,29 @@ input {
 
 .app-main__grid {
   /* 열 폭은 슬롯 위치가 아니라 패널 종류에 따라 붙는다 — 패널 재배치(usePanelReorder)가
-     인라인 --grid-cols 변수로 현재 순서에 맞춰 폭을 조합한다. 세 패널 모두 fr 비율(사이드 3 :
-     분석 8 : 챗봇 4)로 잡아서, 사이드바 접힘/펼침이나 창 크기 변경으로 그리드 가용 폭이 바뀔
-     때 분석 패널만 늘어나는 게 아니라 세 패널이 같은 비율로 함께 줄고 늘어난다. minmax의
-     하한은 각 패널이 실사용 가능한 최소 폭 아래로는 줄어들지 않게 하는 바닥값이다. */
-  --panel-col-side: minmax(220px, 3fr);
-  --panel-col-chat: minmax(260px, 4fr);
-  max-width: 1280px;
+     인라인 --grid-cols 변수로 현재 순서·너비 비율에 맞춰 조합한다(패널-핸들-패널-핸들-패널
+     순으로, 핸들 트랙이 기존 gap 자리(24px)를 대신한다 — 그래서 컨테이너 자체의 gap은 0).
+     챗봇이 도킹 해제돼도 트랙 자체는 사라지지 않고 0으로 접힐 뿐이라(usePanelReorder의
+     layout 참고) 항상 "패널-핸들-패널-핸들-패널" 5트랙 모양 그대로다. max-width도 고정해
+     챗봇을 접어도 화면 폭을 그대로 쓴다. 각 패널은 fr 비율로 잡혀서, 사이드바 접힘/펼침이나
+     창 크기 변경으로 그리드 가용 폭이 바뀔 때 패널들이 지금 조정된 비율 그대로 함께 줄고
+     늘어난다. minmax의 하한은 각 패널이 실사용 가능한 최소 폭 아래로는 줄어들지 않게 하는
+     바닥값이다.
+     grid-template-columns 자체는 기본적으로 transition을 걸지 않는다 — 손으로 경계를
+     드래그/키보드 조정할 때마다(매 프레임 새 값) 애니메이션이 겹쳐 커서를 따라가지 못하고
+     늘어지는 느낌이 나기 때문. 챗봇 도킹/해제처럼 "한 번에 훅 바뀌는" 경우에만
+     .app-main__grid--dock-transition을 잠깐 붙여 그때만 부드럽게 보간되게 한다. */
+  --panel-col-side: minmax(240px, 3fr);
+  --panel-col-chat: minmax(300px, 4fr);
+  --panel-gap: 24px;
+  max-width: 1760px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: var(--grid-cols, var(--panel-col-side) minmax(0, 8fr));
-  gap: 24px;
+  grid-template-columns: var(
+    --grid-cols,
+    var(--panel-col-side) var(--panel-gap) minmax(380px, 8fr) var(--panel-gap) var(--panel-col-chat)
+  );
+  gap: 0;
   align-items: start;
   border-radius: 16px;
   transition: outline-color 0.15s ease, background 0.15s ease;
@@ -544,19 +556,25 @@ input {
   outline-offset: 6px;
 }
 
+/* 챗봇 도킹/해제 순간에만 붙는 일시적 클래스(App.vue) — 이때만 남은 패널들이 그 자리를
+   부드럽게 채워 들어가도록 grid-template-columns를 보간한다. */
+.app-main__grid--dock-transition {
+  transition: outline-color 0.15s ease, background 0.15s ease, grid-template-columns 0.32s ease;
+}
+
 .app-main__grid > * {
   min-width: 0;
 }
 
-.app-main__grid--docked {
-  max-width: 1760px;
-  grid-template-columns: var(--grid-cols, var(--panel-col-side) minmax(0, 8fr) var(--panel-col-chat));
-}
-
 @media (max-width: 900px) {
   .app-main__grid,
-  .app-main__grid--docked {
+  .app-main__grid--dock-transition {
     grid-template-columns: 1fr;
+    transition: outline-color 0.15s ease, background 0.15s ease;
+  }
+
+  .panel-resize-handle {
+    display: none;
   }
 
   .panel__footer {
@@ -590,6 +608,57 @@ input {
 
 .chat-popup--docked {
   order: var(--panel-order, 0);
+}
+
+/* 챗봇 도킹 해제 시 그리드 트랙 모양을 유지시켜 주는 자리표시자 — 폭 0인 트랙을 차지할
+   뿐 아무것도 그리지 않는다. */
+.chat-widget__ghost-slot {
+  order: var(--panel-order, 0);
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ---------- Panel resize (좌우 경계 드래그로 너비 조정) ---------- */
+
+/* 패널 사이 24px 트랙 전체가 그랩 영역이고, 가운데 얇은 선만 시각적으로 보여준다.
+   align-self:stretch로 그리드의 align-items:start를 덮어써 행 높이 전체를 채운다 —
+   패널 높이가 서로 달라도 손잡이를 놓치지 않게. */
+.panel-resize-handle {
+  align-self: stretch;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.panel-resize-handle::before {
+  content: "";
+  width: 2px;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--border);
+  transition: background 0.15s ease, width 0.15s ease;
+}
+
+.panel-resize-handle:hover::before,
+.panel-resize-handle:focus-visible::before,
+.panel-resize-handle--active::before {
+  width: 4px;
+  background: var(--brand-teal-dark);
+}
+
+.panel-resize-handle:focus-visible {
+  outline: none;
+}
+
+/* 챗봇 도킹 해제 등으로 한쪽 패널이 숨겨져 트랙이 0으로 접히는 중인 핸들 — 전환 애니메이션
+   도중 잠깐 폭이 남아 있어도 잡히지 않게 한다. */
+.panel-resize-handle--collapsed {
+  pointer-events: none;
+  cursor: default;
 }
 
 .panel-drag-handle {
@@ -986,6 +1055,7 @@ input {
 /* ---------- Analysis panel ---------- */
 
 .panel--wide {
+  position: relative; /* .panel__bottom-fade가 이 박스 바닥에 고정되는 기준 */
   display: flex;
   flex-direction: column;
   height: calc(100vh - 150px);
@@ -998,6 +1068,20 @@ input {
   overflow-anchor: none;
   flex: 1;
   min-height: 0;
+}
+
+/* 스크롤 위치와 무관하게 패널 하단(둥근 모서리)에 콘텐츠가 여백 없이 바로 잘려 보이는 문제
+   보정 — 스크롤되는 콘텐츠 바깥(패널__body의 형제)에 절대 위치로 얹어, 스크롤 위치와 무관하게
+   항상 패널 바닥에서 배경색으로 옅게 페이드시킨다. (스크롤 콘텐츠 안쪽에 넣으면 position:sticky여도
+   맨 끝에 다다랐을 때만 붙고 중간 스크롤 중엔 안 보인다 — 그래서 스크롤 밖의 오버레이로 둔다.) */
+.panel--wide .panel__bottom-fade {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 24px;
+  background: linear-gradient(to bottom, transparent, var(--surface));
+  pointer-events: none;
 }
 
 .empty-state {
@@ -1048,6 +1132,7 @@ input {
 }
 
 .analyzing-state__spinner {
+  flex-shrink: 0; /* .flow-live-status처럼 좁은 가로 배치 안에서도 찌그러지지 않게 */
   width: 28px;
   height: 28px;
   border: 3px solid var(--border);
@@ -1300,10 +1385,25 @@ input {
   color: var(--text-muted);
   font-weight: 700;
   margin-right: 6px;
+  overflow-wrap: break-word;
 }
 
 .rec-detail__param-value {
   color: var(--text);
+  overflow-wrap: break-word;
+}
+
+/* 상세 패널: 다이어그램 모달(중앙정렬·고정폭)과 달리 패널 전체 폭을 그대로 채운다 */
+.rec-detail .flow-node,
+.rec-detail .flow-box,
+.rec-detail .flow-node__params,
+.rec-detail .flow-branch {
+  max-width: none;
+}
+
+/* 상세 패널: 박스(+파라미터) 바로 아래에 다음 박스가 붙어 보이던 간격 보정 */
+.rec-detail .flow-node {
+  margin-bottom: 10px;
 }
 
 .rec-card--skeleton {
@@ -1973,13 +2073,13 @@ input {
 }
 
 .flow-box--container {
-  background: #f2f7fb;
+  background: var(--brand-teal-light);
   border-color: var(--brand-teal-dark);
 }
 
 .flow-box--violation {
   border-color: var(--danger);
-  background: #fff6f5;
+  background: var(--danger-bg);
   box-shadow: inset 0 0 0 1px var(--danger);
 }
 
@@ -2085,18 +2185,59 @@ input {
   border-radius: 999px;
   font-size: 0.7rem;
   font-weight: 800;
-  color: var(--brand-navy);
+  color: var(--text);
   background: rgba(31, 47, 90, 0.08);
 }
 
-/* 컬럼들이 나란히 — 좁으면 가로 스크롤. 분기 개수만큼 열이 생긴다(최대 N, 항상 N 아님) */
+/* 컬럼들이 나란히 — 좁으면 가로 스크롤. 분기 개수만큼 열이 생긴다(최대 N, 항상 N 아님).
+   패널이 아주 좁아지면 컬럼들이 최소 폭(180px) 아래로는 안 줄고 대신 가로로 넘친다 — 스크롤
+   가능하다는 건 아래 flow-branch__cols-fade(좌우 페이드 힌트)로 알리고, 스크롤바 자체는
+   세로 스크롤바와 같은 전역 스타일(색·두께)을 그대로 쓴다(별도로 진하게 칠하지 않는다).
+   justify-content는 반드시 flex-start여야 한다 — center(또는 flex-end)를 쓰면 콘텐츠가
+   넘칠 때 그 초과분을 좌우로 "가운데 정렬"해서 절반이 스크롤 시작 위치(scrollLeft=0)보다도
+   왼쪽에 놓여버린다. scrollLeft는 음수로 갈 수 없어 그 부분은 왼쪽 끝까지 스크롤해도 영원히
+   보이지 않는다(실제로 Try 컬럼이 이렇게 잘렸었다) — 안 넘칠 때는 컬럼이 flex:1이라 어차피
+   폭을 꽉 채우므로 flex-start로 바꿔도 보기엔 차이가 없다. */
 .flow-branch__cols {
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  justify-content: center;
+  justify-content: flex-start;
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding-bottom: 6px;
+}
+
+.flow-branch__cols-wrap {
+  position: relative;
+}
+
+/* 컬럼 카드 자체가 불투명해 배경 그라디언트만으로는 안 가려지므로, 별도 오버레이로 좌우 끝에
+   "더 있다"를 표시한다 — 실제로 그쪽으로 스크롤할 여지가 있을 때만 보인다(FlowSequence.vue의
+   스크롤/리사이즈 감지가 flow-branch__cols-wrap--can-left/right 클래스를 토글). */
+.flow-branch__cols-fade {
+  position: absolute;
+  top: 0;
+  bottom: 10px; /* 스크롤바 자리(padding-bottom)는 가리지 않는다 */
+  width: 28px;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.flow-branch__cols-fade--left {
+  left: 0;
+  background: linear-gradient(to right, var(--surface), transparent);
+}
+
+.flow-branch__cols-fade--right {
+  right: 0;
+  background: linear-gradient(to left, var(--surface), transparent);
+}
+
+.flow-branch__cols-wrap--can-left .flow-branch__cols-fade--left,
+.flow-branch__cols-wrap--can-right .flow-branch__cols-fade--right {
+  opacity: 1;
 }
 
 .flow-branch__col {
@@ -2110,7 +2251,7 @@ input {
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: #f7f9fb;
+  background: var(--surface-sunken);
 }
 
 /* 분기 컬럼은 좁아서(~200px) 라벨+메타(패키지 태그·신뢰도 뱃지)를 한 줄에 두면 한글 라벨이
@@ -2270,10 +2411,10 @@ input {
   margin-bottom: 16px;
   padding: 10px 14px;
   border-radius: 10px;
-  background: #f4f8fb;
+  background: var(--mid-bg);
   font-size: 0.85rem;
   font-weight: 700;
-  color: var(--brand-navy);
+  color: var(--mid);
 }
 
 .flow-live-status__caption {
@@ -2295,6 +2436,8 @@ input {
 .flow-box__meta {
   flex-shrink: 0;
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 8px;
 }
@@ -2801,6 +2944,10 @@ input {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* 스크롤바가 나타나고 사라질 때 콘텐츠 폭이 바뀌어(chat-message의 max-width:84%가
+     그만큼 다시 계산됨) 말풍선 너비가 미세하게 들쭉날쭉해지는 걸 막는다 — 스크롤 유무와
+     무관하게 항상 스크롤바 자리를 남겨 둔다. */
+  scrollbar-gutter: stable;
   padding: 16px;
   display: flex;
   flex-direction: column;

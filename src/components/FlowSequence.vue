@@ -5,7 +5,7 @@
 //  · 그 외 일반 액션 → 세로 박스.
 // 자식 본문은 자기 자신(FlowSequence)을 재귀 호출해 그린다 — 컬럼 안에 또 분기가 있으면
 // 그 안에서 다시 컬럼이 된다.
-import { computed } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import FlowNode from "./FlowNode.vue";
 import { isBranchNode, isBranchStarter, childItems, branchColumnExits, branchRole } from "../utils/recommendation";
 
@@ -19,6 +19,55 @@ const props = defineProps({
   detailed: { type: Boolean, default: false }, // 파라미터까지 (상세 패널)
   arrows: { type: Boolean, default: false }, // 세그먼트 사이 화살표 (다이어그램 모달)
   editing: { type: Boolean, default: false }, // 이 단계가 국소 수정 중 → 모든 노드 강조·깜빡
+});
+
+// 분기 컬럼이 좁아서 가로로 넘칠 때 — 기본 스크롤바(특히 오버레이 스타일)만으로는 스크롤
+// 가능하다는 게 잘 안 보이므로, 좌우 끝에 "더 있다" 페이드를 얹는다. 컬럼들 자체가 불투명한
+// 카드라 배경 그라디언트만으로는 안 가려져서(항상 카드 밑에 깔림), 별도 오버레이 요소를
+// 스크롤 상태에 따라 보이고/숨긴다. 패널을 리사이즈해 넘침 여부가 바뀔 수도 있어
+// ResizeObserver로도 다시 계산한다.
+const branchRefs = ref([]);
+let resizeObserver = null;
+
+function updateColsFade(colsEl) {
+  const wrap = colsEl?.parentElement;
+  if (!wrap) return;
+  const canLeft = colsEl.scrollLeft > 1;
+  const canRight = colsEl.scrollLeft < colsEl.scrollWidth - colsEl.clientWidth - 1;
+  wrap.classList.toggle("flow-branch__cols-wrap--can-left", canLeft);
+  wrap.classList.toggle("flow-branch__cols-wrap--can-right", canRight);
+}
+
+function onColsScroll(event) {
+  updateColsFade(event.target);
+}
+
+function colsElOf(branchEl) {
+  return branchEl?.querySelector(".flow-branch__cols") ?? null;
+}
+
+// 마운트 시점에 있던 분기 컬럼만 이 초기화를 거치면, 이후 데이터 변경(라이브 스트리밍·편집)으로
+// 새로 나타난 분기 컬럼은 초기 페이드 상태도 못 잡고 ResizeObserver에도 안 걸린다 — segments가
+// 바뀔 때마다 다시 불러야 한다.
+function setupBranchFades() {
+  branchRefs.value.forEach((branchEl) => {
+    const colsEl = colsElOf(branchEl);
+    if (!colsEl) return;
+    updateColsFade(colsEl);
+    resizeObserver?.observe(colsEl);
+  });
+}
+
+onMounted(async () => {
+  await nextTick();
+  resizeObserver = new ResizeObserver(() => {
+    branchRefs.value.forEach((branchEl) => updateColsFade(colsElOf(branchEl)));
+  });
+  setupBranchFades();
+});
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect();
 });
 
 const segments = computed(() => {
@@ -45,6 +94,12 @@ const segments = computed(() => {
   // 분기(Error handler·If)는 항상 '감싸는 블록(컬럼)'으로 렌더한다 — 단독 Try/If여도 들여쓰기가 아니라
   // 블록 안에 본문을 넣는다. (Loop/Step 같은 단일 컨테이너는 애초에 분기 그룹이 아니라 node로 중첩됨)
   return raw.map((s) => ({ ...s, key: s.type === "branch" ? s.items[0].path : s.item.path }));
+});
+
+// segments가 바뀌면(props.items 변경) 새로 렌더된 분기 컬럼에 대해 페이드 초기화를 다시 돈다.
+watch(segments, async () => {
+  await nextTick();
+  setupBranchFades();
 });
 
 function kids(item) {
@@ -118,9 +173,10 @@ function mergeBar(seg) {
     </template>
 
     <!-- 분기 그룹(2개 이상) → 각각 다른 열 -->
-    <div v-else class="flow-branch">
+    <div v-else class="flow-branch" ref="branchRefs">
       <div class="flow-branch__label">{{ branchLabel(seg.pkg) }}</div>
-      <div class="flow-branch__cols">
+      <div class="flow-branch__cols-wrap">
+      <div class="flow-branch__cols" @scroll="onColsScroll">
         <div v-for="col in seg.items" :key="col.path" class="flow-branch__col">
           <!-- 컨테이너 역할 뱃지: 이 컬럼이 Try/Catch/Finally(또는 If/Else) 중 무엇인지 명시 -->
           <span
@@ -158,6 +214,9 @@ function mergeBar(seg) {
               : '여기서 끝나지 않고 Finally로 합류한 뒤 진행됨'"
           ></div>
         </div>
+      </div>
+      <div class="flow-branch__cols-fade flow-branch__cols-fade--left" aria-hidden="true"></div>
+      <div class="flow-branch__cols-fade flow-branch__cols-fade--right" aria-hidden="true"></div>
       </div>
       <!-- 다이어그램(arrows): 실제 커넥터 — 출구 컬럼(Finally·If·Else)만 아래로 내려가 중앙에서
            병합해 완료/다음으로 이어지고, Try/Catch는 ✕로 종료(Finally로 합류)한다. -->

@@ -324,6 +324,11 @@ onBeforeUnmount(() => {
 
 <template>
 <div class="chat-widget">
+  <!-- 도킹 해제 상태에서도 그리드 트랙 개수를 그대로 유지하기 위한 폭 0짜리 자리표시자
+       (fab 버튼은 position:fixed라 그리드에 안 잡히므로 이게 있어야 트랙 모양이 안 바뀐다) —
+       그래야 도킹/해제 전환 때 grid-template-columns가 값만 부드럽게 애니메이션된다. -->
+  <div v-if="!docked" class="chat-widget__ghost-slot" aria-hidden="true"></div>
+
   <button
     v-if="!docked"
     type="button"
