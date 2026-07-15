@@ -9,6 +9,7 @@ export default {
     unspecified: "미지정",
     unspecifiedParen: "(미지정)",
     dragHandle: "드래그하여 패널 위치 이동",
+    resizeHandle: "드래그하거나 방향키로 패널 너비 조정",
     notesLabel: "참고:",
     stageAborted: "오류로 중단됨",
   },

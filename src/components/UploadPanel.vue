@@ -735,5 +735,7 @@ function startAddStep() {
         </template>
       </div>
     </div>
+
+    <div class="panel__bottom-fade" aria-hidden="true"></div>
   </section>
 </template>
