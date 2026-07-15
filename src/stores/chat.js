@@ -114,6 +114,9 @@ export const useChatStore = defineStore("chat", () => {
       // 타이밍 문제) 세션이 그대로여도 취소된 턴의 결과가 상태를 다시 채울 수 있다 — 콜백마다
       // signal.aborted를 확인하는 게 최종 방어선이다.
       const signal = pipeline.startTurnController();
+      // 부팅 시 loadAgentVersions()가 아직 끝나지 않았으면(로컬 저장 버전 복원 전) agentVersion이
+      // 잠깐 null이라 첫 턴이 저장된 선택을 무시하고 백엔드 기본값으로 나갈 수 있다 — 기다린다.
+      await useSettingsStore().loadAgentVersions();
 
       await turnStream(sessionId, trimmed, {
         operation,

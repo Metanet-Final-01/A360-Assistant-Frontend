@@ -143,6 +143,12 @@ export const usePipelineStore = defineStore("pipeline", () => {
     return sessionGeneration.value;
   }
 
+  // persistRecommendationTree()는 turnStream처럼 AbortController로 끊을 수 있는 SSE가 아니라
+  // 평범한 REST POST라 요청 자체는 계속 흐른다 — 세션은 그대로인 채 startAnalysis()가 추천
+  // 상태를 초기화한 뒤에 늦게 도착한 저장 응답이 그 초기화를 덮어쓰지 않도록 세대로 구분한다
+  // (세션 자체가 바뀐 경우는 sessionId 비교로 충분히 잡힌다).
+  let recommendGeneration = 0;
+
   let activeUploadController = null;
   function startUploadController() {
     activeUploadController?.abort();
@@ -354,6 +360,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     recommendUndoStack.value = [];
     recommendTreesByVersion.value = {};
     recommendSaveError.value = "";
+    recommendGeneration += 1;
     analysisEditSummaries.value = []; // 새 분석이 편집 대상 자체를 갈아치운다 — 반영 안 된 편집은 무효
     resetLiveFlow(); // 이전 라이브 스냅샷 정리 — 이 턴이 흐름도까지 만들면 첫 partial에서 다시 켜진다
 
@@ -364,6 +371,9 @@ export const usePipelineStore = defineStore("pipeline", () => {
     // (스트림 구현체 타이밍 문제) 세션이 그대로여도 취소된 턴의 결과가 새로 지운 상태를
     // 다시 채울 수 있다 — 이 턴 소유권 검사가 최종 방어선이다.
     const signal = startTurnController();
+    // chat.js의 sendTurn과 동일한 이유 — 버전 복원(loadAgentVersions)이 끝나기 전에 나가면
+    // 저장된 선택 대신 백엔드 기본값으로 보내진다.
+    await useSettingsStore().loadAgentVersions();
 
     await turnStream(sessionId.value, ANALYZE_MESSAGE, {
       agentVersion: useSettingsStore().agentVersion, // 설정에서 고른 버전 — null이면 필드 생략(백엔드 기본)
@@ -440,6 +450,8 @@ export const usePipelineStore = defineStore("pipeline", () => {
     // startAnalysis()와 동일한 이유(RPA-107) — 취소된 턴의 늦게 처리된 콜백이 방금 지운
     // 추천 상태를 다시 채우지 않도록 콜백마다 signal.aborted를 확인한다.
     const signal = startTurnController();
+    // startAnalysis()와 동일한 이유 — 버전 복원이 끝나기 전에 나가지 않도록 기다린다.
+    await useSettingsStore().loadAgentVersions();
 
     await turnStream(sessionId.value, RECOMMEND_MESSAGE, {
       agentVersion: useSettingsStore().agentVersion, // 설정에서 고른 버전 — null이면 필드 생략(백엔드 기본)
@@ -508,18 +520,25 @@ export const usePipelineStore = defineStore("pipeline", () => {
   }
 
   async function persistRecommendationTree(tree, changeSummary, source) {
+    const mySessionId = sessionId.value;
+    const myRecommendGeneration = recommendGeneration;
     try {
-      const saved = await saveRecommendation(sessionId.value, {
+      const saved = await saveRecommendation(mySessionId, {
         recommendation: tree,
         parentVersion: recommendation.value?.version,
         source,
         changeSummary,
       });
+      // 저장을 기다리는 동안 다른 세션으로 이동했거나(sessionId 변경) 같은 세션에서
+      // startAnalysis()가 추천 상태를 다시 초기화했으면(recommendGeneration 변경) 이 응답은
+      // 낡은 것이다 — 지금 상태를 덮어쓰지 않는다.
+      if (sessionId.value !== mySessionId || recommendGeneration !== myRecommendGeneration) return;
       recommendation.value = { ...saved, recommendation: tree };
       recommendTreesByVersion.value[saved.version] = JSON.parse(JSON.stringify(tree));
       recommendSaveError.value = "";
       loadRecommendationHistory();
     } catch (err) {
+      if (sessionId.value !== mySessionId || recommendGeneration !== myRecommendGeneration) return;
       // recommendStatus는 그대로 "done"으로 둔다 — 여기서 "error"로 바꾸면 이미 만들어진
       // 흐름도 보기/실행 취소 화면이 사라지고 "다시 시도"가 전체 재생성 버튼으로 바뀐다.
       // 대신 recommendSaveError로만 실패를 알린다(과거엔 이 필드가 없어 실패가 조용히 묻혔다).
@@ -533,8 +552,11 @@ export const usePipelineStore = defineStore("pipeline", () => {
   // applyAnalysisEditsToFlow의 명시 "저장" 버튼 1회 = 1버전으로만 태운다.
   async function saveRecommendationEdit(newTree, changeSummary) {
     if (!sessionId.value || !recommendation.value) return;
-    recommendUndoStack.value.push(JSON.parse(JSON.stringify(recommendation.value.recommendation)));
+    // 저장이 실패할 수 있으니 성공했을 때만 실행취소 스택에 쌓는다 — 미리 쌓으면 실패한
+    // (아무 변화도 없었던) 시도가 되돌릴 대상 없는 스냅샷을 남겨 실행취소 이력을 어긋나게 한다.
+    const previousTree = JSON.parse(JSON.stringify(recommendation.value.recommendation));
     await persistRecommendationTree(newTree, changeSummary ?? null, "drag");
+    if (!recommendSaveError.value) recommendUndoStack.value.push(previousTree);
   }
 
   // ----- 업무 단계 편집 → 흐름도 반영 (명시 저장 버튼) -----

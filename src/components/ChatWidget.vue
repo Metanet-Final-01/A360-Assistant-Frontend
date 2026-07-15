@@ -304,12 +304,21 @@ function closeVersionMenuOnOutsideClick(event) {
   }
 }
 
+// Esc로도 닫는다 — 마우스 없이 여닫는 드롭다운의 기본 기대 동작
+function closeVersionMenuOnEscape(event) {
+  if (versionMenuOpen.value && event.key === "Escape") {
+    versionMenuOpen.value = false;
+  }
+}
+
 onMounted(() => {
   window.addEventListener("pointerdown", closeVersionMenuOnOutsideClick);
+  window.addEventListener("keydown", closeVersionMenuOnEscape);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("pointerdown", closeVersionMenuOnOutsideClick);
+  window.removeEventListener("keydown", closeVersionMenuOnEscape);
 });
 </script>
 

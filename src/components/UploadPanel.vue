@@ -62,6 +62,13 @@ function switchMode(mode) {
   textDraft.value = "";
 }
 
+function resetUploadSection() {
+  // 접힌 상태로 리셋하면, 이 토글 버튼 자체가 analysisStatus==='idle'일 때 사라져서
+  // 다시 펼칠 방법이 없어진다 — 새 문서/요청을 시작할 땐 항상 펼쳐 둔다.
+  uploadSectionCollapsed.value = false;
+  pipeline.resetUpload();
+}
+
 // ----- 분석 결과(WorkStep, schemas/analysis.py) 확인·편집 -----
 // steps는 pipeline.analysis.steps와 동일한 참조 — splice/push로 직접 수정하면 그대로 반영된다.
 // 편집(드래그/수정/삭제/추가)은 우선 메모리에서만 일어나고, 흐름도가 이미 생성돼 있으면
@@ -351,6 +358,7 @@ function startAddStep() {
         class="upload-section-body"
         :class="{ 'upload-section-body--collapsed': uploadSectionCollapsed }"
         :aria-hidden="uploadSectionCollapsed"
+        :inert="uploadSectionCollapsed"
       >
        <div class="upload-section-body__inner">
         <div class="upload-mode-toggle" role="tablist">
@@ -508,7 +516,7 @@ function startAddStep() {
       </div>
 
       <div v-if="pipeline.file" class="upload-section-toggle">
-        <button type="button" class="btn btn--text" @click="pipeline.resetUpload">
+        <button type="button" class="btn btn--text" @click="resetUploadSection">
           {{ inputMode === "text" ? t("upload.newTextRequest") : t("upload.newDocumentUpload") }}
         </button>
         <button

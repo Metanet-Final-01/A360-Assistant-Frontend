@@ -39,27 +39,38 @@ export const useSettingsStore = defineStore("settings", () => {
   const agentVersions = ref([]); // versions[] 원본: { id, label, description, default }
   const agentVersionsStatus = ref("idle"); // idle | loading | done | error
 
-  async function loadAgentVersions() {
+  // 진행 중이거나 끝난 시도를 다른 호출자와 공유한다 — 반환값 없이 fire-and-forget으로
+  // 부르면(아래 부팅 시 1회 호출) 챗/분석/추천 턴을 이 로드보다 먼저 보내버릴 수 있어,
+  // 저장해 둔 버전 선택이 첫 턴에는 반영 안 되고 백엔드 기본값으로 나갈 위험이 있다 —
+  // 턴을 보내는 쪽은 이 promise를 await해서 복원이 끝난 뒤에 agentVersion을 읽는다.
+  let loadAgentVersionsPromise = null;
+
+  function loadAgentVersions() {
     // done이면 캐시 재사용, error면 재호출 시 재시도 허용
-    if (agentVersionsStatus.value === "loading" || agentVersionsStatus.value === "done") return;
-    agentVersionsStatus.value = "loading";
-    try {
-      const { versions, default: defaultId } = await getAgentVersions();
-      agentVersions.value = versions ?? [];
-      const saved = localStorage.getItem(AGENT_VERSION_KEY);
-      if (saved && agentVersions.value.some((v) => v.id === saved)) {
-        agentVersion.value = saved;
-      } else {
-        // 저장값이 없거나 목록에서 내려간 버전이면 백엔드 default로 리셋
-        if (saved) localStorage.removeItem(AGENT_VERSION_KEY);
-        agentVersion.value = defaultId ?? agentVersions.value.find((v) => v.default)?.id ?? null;
-      }
-      agentVersionsStatus.value = "done";
-    } catch {
-      agentVersionsStatus.value = "error";
-      agentVersions.value = [];
-      agentVersion.value = null; // 목록을 모르면 보내지 않는다 — 백엔드 기본 버전으로 동작
+    if (agentVersionsStatus.value === "loading" || agentVersionsStatus.value === "done") {
+      return loadAgentVersionsPromise;
     }
+    agentVersionsStatus.value = "loading";
+    loadAgentVersionsPromise = (async () => {
+      try {
+        const { versions, default: defaultId } = await getAgentVersions();
+        agentVersions.value = versions ?? [];
+        const saved = localStorage.getItem(AGENT_VERSION_KEY);
+        if (saved && agentVersions.value.some((v) => v.id === saved)) {
+          agentVersion.value = saved;
+        } else {
+          // 저장값이 없거나 목록에서 내려간 버전이면 백엔드 default로 리셋
+          if (saved) localStorage.removeItem(AGENT_VERSION_KEY);
+          agentVersion.value = defaultId ?? agentVersions.value.find((v) => v.default)?.id ?? null;
+        }
+        agentVersionsStatus.value = "done";
+      } catch {
+        agentVersionsStatus.value = "error";
+        agentVersions.value = [];
+        agentVersion.value = null; // 목록을 모르면 보내지 않는다 — 백엔드 기본 버전으로 동작
+      }
+    })();
+    return loadAgentVersionsPromise;
   }
 
   function setAgentVersion(id) {
