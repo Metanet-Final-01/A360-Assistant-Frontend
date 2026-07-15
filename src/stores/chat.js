@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { reactive, ref } from "vue";
+import { reactive, ref, watch } from "vue";
 import { turnStream } from "../api/agent";
 import { createSession, listChatMessages } from "../api/sessions";
 import { createInitialChatMessages, getChatGreeting, timeLabel } from "../utils/chatMessages";
@@ -7,7 +7,7 @@ import { formatTime } from "../utils/dateFormat";
 import { createTypewriter } from "../utils/typewriter";
 import { usePipelineStore } from "./pipeline";
 import { useSettingsStore } from "./settings";
-import { t } from "../i18n";
+import { i18n, t } from "../i18n";
 
 export const useChatStore = defineStore("chat", () => {
   const chatOpen = ref(false);
@@ -16,6 +16,18 @@ export const useChatStore = defineStore("chat", () => {
   const isCompacting = ref(false);
   const isSending = ref(false); // 이전 턴의 응답이 오기 전에는 새 턴을 보내지 않는다(응답 뒤섞임 방지)
   const lastCompact = ref(null); // 최신 압축본(고정 섹션 JSON) — 압축 상태/게이지 표시용
+  // 인사말만 있고 아직 실제 대화가 시작되지 않은 상태인지 — true일 때만 언어 변경 시 인사말을
+  // 새 로케일로 다시 만든다(getChatGreeting/formatTime은 호출 시점 로케일을 따르므로, 이미
+  // 만들어져 배열에 굳어 있는 문자열은 로케일이 바뀌어도 저절로 갱신되지 않는다). 실제 대화가
+  // 있으면 과거 메시지 언어는 건드리지 않는다.
+  const isPristineGreeting = ref(true);
+
+  watch(
+    () => i18n.global.locale.value,
+    () => {
+      if (isPristineGreeting.value) chatMessages.value = createInitialChatMessages();
+    },
+  );
 
   function toggleChat() {
     chatOpen.value = !chatOpen.value;
@@ -79,6 +91,7 @@ export const useChatStore = defineStore("chat", () => {
 
     isSending.value = true;
     try {
+      isPristineGreeting.value = false;
       chatMessages.value.push({ role: "user", text: trimmed, time: formatTime() });
 
       // stages는 이 턴 동안 받은 모든 진행 상태 메시지를 순서대로 쌓아 둔다 — 말풍선 위 작은
@@ -194,6 +207,7 @@ export const useChatStore = defineStore("chat", () => {
       text: m.content,
       time: timeLabel(m.created_at),
     }));
+    isPristineGreeting.value = !history.length;
     chatMessages.value = history.length
       ? history
       : [{ role: "assistant", text: getChatGreeting(), time: formatTime() }];
@@ -203,6 +217,7 @@ export const useChatStore = defineStore("chat", () => {
   function newChat() {
     chatOpen.value = false;
     chatMessages.value = createInitialChatMessages();
+    isPristineGreeting.value = true;
     isCompacting.value = false;
     lastCompact.value = null;
   }
