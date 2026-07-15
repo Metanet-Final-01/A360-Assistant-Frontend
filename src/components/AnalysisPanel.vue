@@ -110,6 +110,50 @@ async function downloadJson() {
     exportError.value = err?.message ?? t("recommendDetail.errors.exportFailed");
   }
 }
+
+// ── v3 품질 루프 진행 카드 (spec/candidates/verdict/scorecard 프레임) ──
+// v2 백엔드에선 이 값들이 항상 null이라 스트립 자체가 렌더되지 않는다(하위호환).
+const liveCandidates = computed(() => pipeline.liveCandidates);
+const liveVerdict = computed(() => pipeline.liveVerdict);
+const liveScorecard = computed(() => pipeline.liveScorecard);
+const candStatusText = { composing: "설계 중…", verifying: "검증 중…", failed: "실패" };
+
+// ── 질문 카드(needs_input, v3) — 미해소 카드만 보여주고 응답을 fill_cards 턴으로 보낸다 ──
+const flowConfidence = computed(() => activeRec.value?.flow_confidence ?? null);
+const questionCards = computed(() => (activeRec.value?.needs_input ?? []).filter((c) => !c.resolved));
+const cardAnswers = ref({});
+
+// 유효 응답 여부는 '지금 화면의 카드' 응답만으로 판단한다 — 사라진 카드의 잔여 응답이
+// 제출 버튼을 살리거나 payload에 섞이지 않게 한다.
+const answeredCardIds = computed(() =>
+  questionCards.value.filter((c) => {
+    const v = cardAnswers.value[c.card_id];
+    return v !== "" && v != null && v !== false;
+  }),
+);
+const canSubmitCards = computed(
+  () => !liveMode.value && pipeline.fillCardsStatus !== "sending" && answeredCardIds.value.length > 0,
+);
+
+// 카드 목록이 바뀌면(새 버전 반영 등) 더 이상 없는 카드의 응답을 제거한다.
+watch(questionCards, (cards) => {
+  const live = new Set(cards.map((c) => c.card_id));
+  for (const id of Object.keys(cardAnswers.value)) {
+    if (!live.has(id)) delete cardAnswers.value[id];
+  }
+});
+
+async function submitCards() {
+  const values = {};
+  for (const c of answeredCardIds.value) {
+    const v = cardAnswers.value[c.card_id];
+    values[c.card_id] = c.input_type === "number" ? Number(v) : v;
+  }
+  if (!Object.keys(values).length) return;
+  await pipeline.fillCards(values);
+  // 성공했을 때만 비운다 — 실패 시 사용자가 재시도할 수 있게 입력값을 보존한다.
+  if (pipeline.fillCardsStatus !== "error") cardAnswers.value = {};
+}
 </script>
 
 <template>
@@ -140,6 +184,33 @@ async function downloadJson() {
         <span v-if="liveViolationCount" class="flow-live-status__violations">
           검수 위반 {{ liveViolationCount }}건
         </span>
+      </div>
+
+      <!-- v3 품질 루프 진행 스트립 — 후보 카드(트리는 승자 확정 후에만) · 심판 · 검증 요약 -->
+      <div v-if="liveMode && (liveCandidates || liveVerdict || liveScorecard)" class="flow-quality-strip">
+        <div v-if="liveCandidates" class="flow-quality-strip__cands">
+          <span
+            v-for="c in liveCandidates"
+            :key="c.id"
+            class="quality-cand"
+            :class="`quality-cand--${c.status}`"
+          >
+            <strong>{{ c.persona }}</strong>
+            <em>{{ candStatusText[c.status] ?? `단계 ${c.steps} · 액션 ${c.actions}` }}</em>
+          </span>
+        </div>
+        <p v-if="liveVerdict" class="quality-verdict">
+          🏆 후보 {{ liveVerdict.winner }} 선택 — {{ liveVerdict.reason }}
+        </p>
+        <p v-if="liveScorecard" class="quality-scorecard">
+          must 커버리지
+          {{ liveScorecard.must_coverage != null ? Math.round(liveScorecard.must_coverage * 100) + "%" : "—" }}
+          · blocker {{ liveScorecard.blockers ?? 0 }}건
+          · 질문 카드 {{ liveScorecard.cards ?? 0 }}장
+          <template v-if="liveScorecard.flow_confidence != null">
+            · 흐름도 신뢰도 {{ Math.round(liveScorecard.flow_confidence * 100) }}%
+          </template>
+        </p>
       </div>
 
       <!-- 과거 세션 로딩 중 -->
@@ -215,6 +286,54 @@ async function downloadJson() {
         </div>
 
         <p v-if="notes" class="flow-notes"><strong>{{ t("common.notesLabel") }}</strong> {{ notes }}</p>
+
+        <!-- 질문 카드(v3) — 흐름도는 완성 상태이고, 카드는 시안값 확인/빈칸 채움 요청이다 -->
+        <div v-if="!liveMode && questionCards.length" class="question-cards">
+          <h4 class="question-cards__title">
+            확인이 필요한 항목 <span class="question-cards__count">{{ questionCards.length }}</span>
+          </h4>
+          <div
+            v-for="card in questionCards"
+            :key="card.card_id"
+            class="question-card"
+            :class="{ 'question-card--blocking': card.blocking }"
+          >
+            <p :id="`q-label-${card.card_id}`" class="question-card__q">
+              {{ card.question }}
+              <span v-if="card.blocking" class="question-card__badge">필수</span>
+            </p>
+            <p v-if="card.why" class="question-card__why">{{ card.why }}</p>
+            <select
+              v-if="card.input_type === 'select'"
+              v-model="cardAnswers[card.card_id]"
+              class="question-card__input"
+              :aria-labelledby="`q-label-${card.card_id}`"
+            >
+              <option value="" disabled>선택…</option>
+              <option v-for="opt in card.options || []" :key="String(opt)" :value="opt">{{ opt }}</option>
+            </select>
+            <label v-else-if="card.input_type === 'confirm'" class="question-card__confirm">
+              <input v-model="cardAnswers[card.card_id]" type="checkbox" />
+              이 전제대로 진행합니다
+            </label>
+            <input
+              v-else
+              v-model="cardAnswers[card.card_id]"
+              :type="card.input_type === 'number' ? 'number' : 'text'"
+              class="question-card__input"
+              :aria-labelledby="`q-label-${card.card_id}`"
+              :placeholder="card.default != null ? `시안값: ${card.default}` : '값을 입력하세요…'"
+            />
+          </div>
+          <button
+            type="button"
+            class="btn btn--primary question-cards__submit"
+            :disabled="!canSubmitCards"
+            @click="submitCards"
+          >
+            {{ pipeline.fillCardsStatus === "sending" ? "반영 중…" : "응답 반영" }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -225,6 +344,14 @@ async function downloadJson() {
         <div class="recommend-section__actions">
           <span v-if="pipeline.recommendation" class="recommend-section__version">
             v{{ pipeline.recommendation.version }}
+          </span>
+          <span
+            v-if="flowConfidence != null"
+            class="flow-confidence"
+            :class="flowConfidence >= 0.7 ? 'flow-confidence--high' : flowConfidence >= 0.4 ? 'flow-confidence--mid' : 'flow-confidence--low'"
+            title="흐름도 수준 신뢰도 — 요구 커버리지 × 검증 결과 × 시뮬레이션 (v3)"
+          >
+            신뢰도 {{ Math.round(flowConfidence * 100) }}%
           </span>
           <button
             type="button"

@@ -76,16 +76,45 @@ export const usePipelineStore = defineStore("pipeline", () => {
   // 라이브 분석 스냅샷(kind:"analysis") — 흐름도와 같은 partial 채널을 쓰되 분석 결과 전용.
   // 분석 스트리밍 중 업로드 패널이 이걸 인라인 렌더한다(요약 → 단계 하나씩 채워짐).
   const liveAnalysis = ref(null); // { summary, document_title, steps, ambiguities }
+  // v3 품질 루프 국면 스냅샷 — 후보 생성/심판/검증 요약을 담는 진행 카드용 상태.
+  // 모르는 kind는 여전히 무시된다(하위호환) — v2 백엔드에선 이 값들이 늘 null이다.
+  const liveSpec = ref(null); // FlowSpec { goal, requirements[] ... } — 요구 정형화 진행
+  const liveCandidates = ref(null); // [{id, persona, status, steps, actions}] — 후보 요약 카드
+  const liveVerdict = ref(null); // {winner, reason, scores[]} — 심판 점수판
+  const liveScorecard = ref(null); // {must_coverage, blockers, sim_pass_rate, cards, flow_confidence}
 
-  // partial 프레임 하나를 반영한다 — kind로 흐름도/분석을 가른다. 프레임마다 패널이 다시 그린다.
+  // partial 프레임 하나를 반영한다 — kind로 프레임 종류를 가른다. 프레임마다 패널이 다시 그린다.
   function applyLiveFrame(data) {
     if (!data) return;
     if (data.kind === "analysis") {
       liveAnalysis.value = data.analysis ?? null; // 분석 라이브 스냅샷 — 업로드 패널이 렌더
       return;
     }
+    if (data.kind === "spec") {
+      liveSpec.value = data.spec ?? null;
+      liveActive.value = true; // 품질 루프 시작 — 패널이 진행 카드를 보여준다
+      liveCaption.value = data.caption ?? "";
+      return;
+    }
+    if (data.kind === "candidates") {
+      liveCandidates.value = data.candidates ?? null;
+      liveActive.value = true;
+      liveCaption.value = data.caption ?? "";
+      return;
+    }
+    if (data.kind === "verdict") {
+      liveVerdict.value = data.verdict ?? null;
+      liveCaption.value = data.caption ?? "";
+      return;
+    }
+    if (data.kind === "scorecard") {
+      liveScorecard.value = data.scorecard ?? null;
+      liveCaption.value = data.caption ?? "";
+      return;
+    }
     if (data.kind !== "flow") return;
     liveActive.value = true;
+    liveCandidates.value = null; // 승자 확정 이후엔 후보 카드 대신 트리 라이브 렌더
     liveFlow.value = data.flow ?? { steps: [] };
     liveViolations.value = data.violations ?? [];
     liveCaption.value = data.caption ?? "";
@@ -99,6 +128,10 @@ export const usePipelineStore = defineStore("pipeline", () => {
     liveCaption.value = "";
     liveActiveStep.value = null;
     liveAnalysis.value = null;
+    liveSpec.value = null;
+    liveCandidates.value = null;
+    liveVerdict.value = null;
+    liveScorecard.value = null;
   }
 
   let timers = [];
@@ -509,6 +542,62 @@ export const usePipelineStore = defineStore("pipeline", () => {
     });
   }
 
+  // 질문 카드 응답 반영(v3) — operation="fill_cards" 결정론 턴. 값 대입은 백엔드
+  // 에이전트가 카드 targets 좌표로 수행하고, 결과는 새 추천 버전으로 저장된다.
+  const FILL_CARDS_MESSAGE = "질문 카드 응답을 흐름도에 반영해줘";
+  const fillCardsStatus = ref("idle"); // idle | sending | error
+
+  async function fillCards(cardValues) {
+    if (!sessionId.value || !cardValues || !Object.keys(cardValues).length) return;
+    if (fillCardsStatus.value === "sending" || useChatStore().isSending) return;
+    fillCardsStatus.value = "sending";
+
+    const assistantMessage = pushChatTurn(FILL_CARDS_MESSAGE);
+    const typewriter = createTypewriter(assistantMessage);
+    const signal = startTurnController();
+    await useSettingsStore().loadAgentVersions();
+
+    await turnStream(sessionId.value, FILL_CARDS_MESSAGE, {
+      operation: "fill_cards",
+      cardValues,
+      agentVersion: useSettingsStore().agentVersion,
+      signal,
+      onStage: (message) => {
+        if (signal.aborted) return;
+        if (message?.trim()) assistantMessage.stages.push(message.trim());
+      },
+      onPartial: (data) => {
+        if (signal.aborted) return;
+        applyLiveFrame(data);
+      },
+      onToken: (token) => {
+        if (signal.aborted) return;
+        typewriter.push(token);
+      },
+      onDone: (data) => {
+        if (signal.aborted) return;
+        applyTurnArtifacts(data); // recommendation이 오면 새 버전 반영 (기존 계약 그대로)
+        resetLiveFlow();
+        // recommendation 없이 종료되면 반영 실패 — 성공 문구 대신 실패 문구로 마무리한다
+        // (startAnalysis/startRecommend의 분기 동작과 일관).
+        const ok = !!data?.recommendation;
+        fillCardsStatus.value = ok ? "idle" : "error";
+        if (typewriter.started) typewriter.finish();
+        else typewriter.push(data?.answer || (ok ? "질문 카드 응답을 반영했어요." : "카드 반영에 실패했어요."));
+        if (assistantMessage.stages.length) assistantMessage.stagesDone = true;
+      },
+      onError: (code, message) => {
+        if (signal.aborted) return;
+        typewriter.finish();
+        resetLiveFlow();
+        fillCardsStatus.value = "error";
+        assistantMessage.text = assistantMessage.text
+          ? `${assistantMessage.text}\n\n⚠ ${message || "카드 반영에 실패했어요."}`
+          : `⚠ ${message || "카드 반영에 실패했어요."}`;
+      },
+    });
+  }
+
   async function loadRecommendationHistory() {
     if (!sessionId.value) return;
     try {
@@ -718,6 +807,11 @@ export const usePipelineStore = defineStore("pipeline", () => {
     liveActive,
     liveActiveStep,
     liveAnalysis,
+    liveSpec,
+    liveCandidates,
+    liveVerdict,
+    liveScorecard,
+    fillCardsStatus,
     applyLiveFrame,
     resetLiveFlow,
     selectFile,
@@ -725,6 +819,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     applyTurnArtifacts,
     startAnalysis,
     startRecommend,
+    fillCards,
     startTurnController,
     loadSession,
     loadRecommendationHistory,

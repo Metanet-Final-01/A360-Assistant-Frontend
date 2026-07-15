@@ -42,7 +42,7 @@ async function readErrorDetail(response) {
 export async function turnStream(
   sessionId,
   message,
-  { operation = "chat", agentVersion = null, onToken, onStage, onPartial, onDone, onError, signal },
+  { operation = "chat", agentVersion = null, cardValues = null, onToken, onStage, onPartial, onDone, onError, signal },
 ) {
   const token = getToken();
   const headers = { "Content-Type": "application/json" };
@@ -60,6 +60,8 @@ export async function turnStream(
         // 백엔드 라우팅 트리거(리터럴 매칭)가 깨진다. 미선택(null)이면 필드 자체를
         // 생략해 백엔드 기본 버전으로 동작한다.
         ...(agentVersion ? { agent_version: agentVersion } : {}),
+        // 질문 카드 응답 — operation="fill_cards"일 때만 실린다 (v3 결정론 반영 경로)
+        ...(cardValues ? { card_values: cardValues } : {}),
       }),
       signal,
     });
