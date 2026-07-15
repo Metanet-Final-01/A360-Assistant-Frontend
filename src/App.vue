@@ -21,7 +21,8 @@ const SettingsOverlay = defineAsyncComponent(() => import("./components/Settings
 const auth = useAuthStore();
 const chat = useChatStore();
 const pipeline = usePipelineStore();
-useSettingsStore(); // 앱 부팅 시 locale/theme(다크모드) 초기화 보장 — App.vue가 가장 이른 진입점
+// 앱 부팅 시 locale/theme(다크모드)·에이전트 버전 목록 초기화 보장 — App.vue가 가장 이른 진입점
+const settings = useSettingsStore();
 const { t } = useI18n();
 
 // 분석 화면 패널(업로드/분석 결과/도킹 챗봇) 배치 순서 — 헤더 그립 드래그로 변경.
@@ -145,6 +146,9 @@ function handleNewChat() {
             :compacting="chat.isCompacting"
             :sending="chatBlocked"
             :usage-gauge="pipeline.usageGauge"
+            :agent-versions="settings.agentVersions"
+            :agent-version="settings.agentVersion"
+            @select-version="settings.setAgentVersion"
             @toggle="chat.toggleChat"
             @close="chat.closeChat"
             @dock="chat.dockChat"

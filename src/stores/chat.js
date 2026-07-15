@@ -6,6 +6,7 @@ import { createInitialChatMessages, getChatGreeting, timeLabel } from "../utils/
 import { formatTime } from "../utils/dateFormat";
 import { createTypewriter } from "../utils/typewriter";
 import { usePipelineStore } from "./pipeline";
+import { useSettingsStore } from "./settings";
 import { t } from "../i18n";
 
 export const useChatStore = defineStore("chat", () => {
@@ -116,6 +117,7 @@ export const useChatStore = defineStore("chat", () => {
 
       await turnStream(sessionId, trimmed, {
         operation,
+        agentVersion: useSettingsStore().agentVersion, // 설정에서 고른 버전 — null이면 필드 생략(백엔드 기본)
         signal,
         onStage: (message) => {
           if (signal.aborted) return;

@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { reactive, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 import { uploadDocument, parseDocument, createDocumentFromText } from "../api/documents";
 import { turnStream } from "../api/agent";
 import { listRecommendations, saveRecommendation, getLatestRecommendation } from "../api/recommend";
@@ -7,6 +7,7 @@ import { getLatestAnalysis } from "../api/sessions";
 import { ApiError } from "../api/http";
 import { useChatStore } from "./chat";
 import { useArchiveStore } from "./archive";
+import { useSettingsStore } from "./settings";
 import { formatTime } from "../utils/dateFormat";
 import { createTypewriter } from "../utils/typewriter";
 import { t } from "../i18n";
@@ -15,10 +16,12 @@ import { t } from "../i18n";
 // (RPA-64/67 — 레거시 /analyze·/recommend는 제거). 버튼은 합성 메시지를 보내고, done.data의
 // 산출물 필드(analysis_result/recommendation)를 보고 상태를 갱신한다(applyTurnArtifacts —
 // 챗에서 만들어진 분석/흐름도도 같은 경로로 반영된다).
-// recommendation.recommendation이 흐름도 트리(steps→actions→children)
-// 원본이고, RecommendationFlowModal이 이를 렌더·편집한다 — 편집은 모달의 로컬 복사본에서만 하고
-// "저장" 버튼을 눌렀을 때 한 번만 새 버전으로 저장한다(POST .../recommendations, 호출마다 무조건
-// 새 버전 INSERT). 백엔드에 개별 버전 조회 API가 없어 실행취소·버전 되돌리기는 프론트가 들고 있는
+// recommendation.recommendation이 흐름도 트리(steps→actions→children) 원본이다.
+// 사용자 편집은 업로드 패널의 업무 단계 카드(analysis.steps, WorkStep[])에서 하고,
+// "흐름도에 저장" 버튼이 그 편집(순서/삭제/추가)을 추천 트리에 step_id 기준으로 투영해
+// 새 버전으로 저장한다(applyAnalysisEditsToFlow → POST .../recommendations, 호출마다 무조건
+// 새 버전 INSERT). RecommendationFlowModal은 읽기 전용 보기 + 버전 이력이다.
+// 백엔드에 개별 버전 조회 API가 없어 실행취소·버전 되돌리기는 프론트가 들고 있는
 // 트리(recommendUndoStack·recommendTreesByVersion)를 다시 저장하는 것으로 구현한다.
 
 const ALLOWED_EXT = ["pdf", "pptx", "ppt", "docx"];
@@ -166,6 +169,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     recommendUndoStack.value = [];
     recommendTreesByVersion.value = {};
     recommendSaveError.value = "";
+    analysisEditSummaries.value = [];
     resetLiveFlow();
   }
 
@@ -284,6 +288,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
       analysis.value = { ...data.analysis_result, analysis_id: data.analysis_id ?? null };
       analysisStatus.value = "done";
       analysisError.value = "";
+      analysisEditSummaries.value = []; // 새 분석본이 로컬 편집을 통째로 대체했다 — 반영 안 된 편집은 무효
     }
     if (data.recommendation) {
       recommendation.value = {
@@ -349,6 +354,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     recommendUndoStack.value = [];
     recommendTreesByVersion.value = {};
     recommendSaveError.value = "";
+    analysisEditSummaries.value = []; // 새 분석이 편집 대상 자체를 갈아치운다 — 반영 안 된 편집은 무효
     resetLiveFlow(); // 이전 라이브 스냅샷 정리 — 이 턴이 흐름도까지 만들면 첫 partial에서 다시 켜진다
 
     const assistantMessage = pushChatTurn(ANALYZE_MESSAGE);
@@ -360,6 +366,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     const signal = startTurnController();
 
     await turnStream(sessionId.value, ANALYZE_MESSAGE, {
+      agentVersion: useSettingsStore().agentVersion, // 설정에서 고른 버전 — null이면 필드 생략(백엔드 기본)
       signal,
       onStage: (message) => {
         if (signal.aborted) return;
@@ -435,6 +442,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     const signal = startTurnController();
 
     await turnStream(sessionId.value, RECOMMEND_MESSAGE, {
+      agentVersion: useSettingsStore().agentVersion, // 설정에서 고른 버전 — null이면 필드 생략(백엔드 기본)
       signal,
       onStage: (message) => {
         if (signal.aborted) return;
@@ -520,12 +528,44 @@ export const usePipelineStore = defineStore("pipeline", () => {
     }
   }
 
-  // 흐름도 모달(RecommendationFlowModal) 편집 모드에서 "저장" 버튼을 눌렀을 때 호출 —
-  // 항상 새 버전으로 저장한다(수정=UPDATE 아님). 미세 조작마다 부르면 버전이 폭발하니 주의.
+  // 완성된 Recommendation 트리를 새 버전으로 저장한다(수정=UPDATE 아님). 호출마다 무조건
+  // 새 버전이 쌓이므로 미세 조작마다 부르면 버전이 폭발한다 — 사용자 편집은 아래
+  // applyAnalysisEditsToFlow의 명시 "저장" 버튼 1회 = 1버전으로만 태운다.
   async function saveRecommendationEdit(newTree, changeSummary) {
     if (!sessionId.value || !recommendation.value) return;
     recommendUndoStack.value.push(JSON.parse(JSON.stringify(recommendation.value.recommendation)));
     await persistRecommendationTree(newTree, changeSummary ?? null, "drag");
+  }
+
+  // ----- 업무 단계 편집 → 흐름도 반영 (명시 저장 버튼) -----
+  // 업로드 패널의 단계 카드 편집(드래그/수정/삭제/추가)은 analysis.steps(WorkStep[])를
+  // 메모리에서만 고친다. 이 스키마는 저장 API가 받는 Recommendation 트리(steps[].actions[])와
+  // 달라 그대로 보내면 400 INVALID_RECOMMENDATION — 저장 시 분석 steps의 순서·구성을 추천
+  // 트리 steps에 step_id 기준으로 투영한다: 재정렬·삭제·삽입은 따라가고, 각 step의 actions
+  // 서브트리는 보존하며, 새로 추가된 step(추천 트리에 대응 없음)은 actions: []로 들어간다.
+  const analysisEditSummaries = ref([]); // 이번 저장에 묶일 편집 종류 모음 → change_summary
+  const analysisEditsDirty = computed(() => analysisEditSummaries.value.length > 0);
+  const isSavingAnalysisEdits = ref(false);
+
+  function markAnalysisEdited(summary) {
+    if (summary && !analysisEditSummaries.value.includes(summary)) {
+      analysisEditSummaries.value.push(summary);
+    }
+  }
+
+  async function applyAnalysisEditsToFlow() {
+    if (!sessionId.value || !recommendation.value || !analysis.value) return;
+    if (!analysisEditsDirty.value || isSavingAnalysisEdits.value) return;
+    isSavingAnalysisEdits.value = true;
+    const base = JSON.parse(JSON.stringify(recommendation.value.recommendation));
+    const recStepById = new Map((base.steps ?? []).map((s) => [s.step_id, s]));
+    base.steps = (analysis.value.steps ?? []).map(
+      (s) => recStepById.get(s.step_id) ?? { step_id: s.step_id, actions: [] },
+    );
+    await saveRecommendationEdit(base, analysisEditSummaries.value.join(", ").slice(0, 500) || null);
+    // 실패 시 recommendSaveError가 남고 편집 표시(dirty)도 유지된다 — 사용자가 다시 저장 가능
+    if (!recommendSaveError.value) analysisEditSummaries.value = [];
+    isSavingAnalysisEdits.value = false;
   }
 
   // 직전 트리 스냅샷을 다시 저장해서 "취소"한다 — 백엔드엔 삭제가 없고 항상 새 버전만 쌓인다.
@@ -669,6 +709,10 @@ export const usePipelineStore = defineStore("pipeline", () => {
     saveRecommendationEdit,
     undoRecommendationEdit,
     revertToRecommendationVersion,
+    analysisEditsDirty,
+    isSavingAnalysisEdits,
+    markAnalysisEdited,
+    applyAnalysisEditsToFlow,
     resetUpload,
   };
 });

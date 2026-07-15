@@ -170,6 +170,9 @@ export default {
     sendAria: "챗봇에게 메시지 보내기",
     send: "전송",
     compactTitle: "지금까지의 대화를 요약본으로 압축합니다",
+    // 드롭다운 옵션의 label/description은 백엔드(GET /api/agent/versions)가 주는 문자열을
+    // 그대로 노출한다 — 여기에 버전별 라벨을 하드코딩하지 말 것 (v3 추가 시 자동 반영)
+    agentVersionTitle: "에이전트 버전",
     compacting: "압축 중…",
     compactRecommended: "대화 압축 권장",
     compact: "대화 압축",
@@ -235,6 +238,8 @@ export default {
     },
     newTextRequest: "새 요청 입력",
     newDocumentUpload: "새 문서 업로드",
+    collapseSection: "접기",
+    expandSection: "펼치기",
     analyzingHint: "분석 중… 진행 상태는 챗봇에서 확인할 수 있습니다.",
     sessionLoadingHint: "분석 결과를 불러오는 중…",
     retry: "다시 시도",
@@ -258,9 +263,18 @@ export default {
     stepOptionsAria: "업무 단계 옵션",
     evidencePrefix: "근거: {evidence}",
     addStep: "+ 업무 단계 추가",
-    ambiguitiesTitle: "확인 필요",
     unnamedStep: "이름 없음",
     newStepDefaultName: "새 업무 단계",
+    applyToFlow: "편집 내용 흐름도에 저장",
+    applyingToFlow: "저장 중…",
+    applyToFlowDisabledHint: "저장할 편집 내용이 없습니다",
+    unsavedEditsHint: "저장하지 않은 편집이 있습니다 — 저장하면 흐름도 새 버전으로 기록됩니다.",
+    changeSummary: {
+      reorder: "단계 순서 변경",
+      edit: "단계 내용 수정",
+      remove: "단계 삭제",
+      add: "단계 추가",
+    },
   },
 
   pipeline: {
