@@ -122,23 +122,37 @@ const candStatusText = { composing: "설계 중…", verifying: "검증 중…",
 const flowConfidence = computed(() => activeRec.value?.flow_confidence ?? null);
 const questionCards = computed(() => (activeRec.value?.needs_input ?? []).filter((c) => !c.resolved));
 const cardAnswers = ref({});
-const canSubmitCards = computed(
-  () =>
-    !liveMode.value &&
-    pipeline.fillCardsStatus !== "sending" &&
-    Object.values(cardAnswers.value).some((v) => v !== "" && v != null && v !== false),
+
+// 유효 응답 여부는 '지금 화면의 카드' 응답만으로 판단한다 — 사라진 카드의 잔여 응답이
+// 제출 버튼을 살리거나 payload에 섞이지 않게 한다.
+const answeredCardIds = computed(() =>
+  questionCards.value.filter((c) => {
+    const v = cardAnswers.value[c.card_id];
+    return v !== "" && v != null && v !== false;
+  }),
 );
+const canSubmitCards = computed(
+  () => !liveMode.value && pipeline.fillCardsStatus !== "sending" && answeredCardIds.value.length > 0,
+);
+
+// 카드 목록이 바뀌면(새 버전 반영 등) 더 이상 없는 카드의 응답을 제거한다.
+watch(questionCards, (cards) => {
+  const live = new Set(cards.map((c) => c.card_id));
+  for (const id of Object.keys(cardAnswers.value)) {
+    if (!live.has(id)) delete cardAnswers.value[id];
+  }
+});
 
 async function submitCards() {
   const values = {};
-  for (const c of questionCards.value) {
+  for (const c of answeredCardIds.value) {
     const v = cardAnswers.value[c.card_id];
-    if (v === "" || v == null || v === false) continue; // 미응답 카드는 보내지 않는다(부분 응답 허용)
     values[c.card_id] = c.input_type === "number" ? Number(v) : v;
   }
   if (!Object.keys(values).length) return;
   await pipeline.fillCards(values);
-  cardAnswers.value = {};
+  // 성공했을 때만 비운다 — 실패 시 사용자가 재시도할 수 있게 입력값을 보존한다.
+  if (pipeline.fillCardsStatus !== "error") cardAnswers.value = {};
 }
 </script>
 
@@ -284,7 +298,7 @@ async function submitCards() {
             class="question-card"
             :class="{ 'question-card--blocking': card.blocking }"
           >
-            <p class="question-card__q">
+            <p :id="`q-label-${card.card_id}`" class="question-card__q">
               {{ card.question }}
               <span v-if="card.blocking" class="question-card__badge">필수</span>
             </p>
@@ -293,6 +307,7 @@ async function submitCards() {
               v-if="card.input_type === 'select'"
               v-model="cardAnswers[card.card_id]"
               class="question-card__input"
+              :aria-labelledby="`q-label-${card.card_id}`"
             >
               <option value="" disabled>선택…</option>
               <option v-for="opt in card.options || []" :key="String(opt)" :value="opt">{{ opt }}</option>
@@ -306,6 +321,7 @@ async function submitCards() {
               v-model="cardAnswers[card.card_id]"
               :type="card.input_type === 'number' ? 'number' : 'text'"
               class="question-card__input"
+              :aria-labelledby="`q-label-${card.card_id}`"
               :placeholder="card.default != null ? `시안값: ${card.default}` : '값을 입력하세요…'"
             />
           </div>

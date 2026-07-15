@@ -578,9 +578,12 @@ export const usePipelineStore = defineStore("pipeline", () => {
         if (signal.aborted) return;
         applyTurnArtifacts(data); // recommendation이 오면 새 버전 반영 (기존 계약 그대로)
         resetLiveFlow();
-        fillCardsStatus.value = data?.recommendation ? "idle" : "error";
+        // recommendation 없이 종료되면 반영 실패 — 성공 문구 대신 실패 문구로 마무리한다
+        // (startAnalysis/startRecommend의 분기 동작과 일관).
+        const ok = !!data?.recommendation;
+        fillCardsStatus.value = ok ? "idle" : "error";
         if (typewriter.started) typewriter.finish();
-        else typewriter.push(data?.answer || "질문 카드 응답을 반영했어요.");
+        else typewriter.push(data?.answer || (ok ? "질문 카드 응답을 반영했어요." : "카드 반영에 실패했어요."));
         if (assistantMessage.stages.length) assistantMessage.stagesDone = true;
       },
       onError: (code, message) => {
