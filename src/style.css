@@ -2286,6 +2286,155 @@ input {
   font-weight: 700;
 }
 
+/* ── v3 품질 루프 진행 스트립 (후보 카드 · 심판 · 검증 요약) ── */
+.flow-quality-strip {
+  margin: -6px 0 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--surface-2, #f8f9fb);
+  border: 1px solid var(--border, #e3e8ef);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.82rem;
+}
+
+.flow-quality-strip__cands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quality-cand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e3e8ef);
+}
+
+.quality-cand em {
+  font-style: normal;
+  color: var(--text-muted, #6b7280);
+}
+
+.quality-cand--done {
+  border-color: var(--success, #16a34a);
+}
+
+.quality-cand--failed {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.quality-verdict,
+.quality-scorecard {
+  margin: 0;
+  color: var(--text, #1f2937);
+}
+
+/* ── 질문 카드 (needs_input, v3) ── */
+.question-cards {
+  margin-top: 18px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px dashed var(--border, #d8dee7);
+  background: var(--surface-2, #fafbfd);
+}
+
+.question-cards__title {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+}
+
+.question-cards__count {
+  display: inline-block;
+  min-width: 20px;
+  text-align: center;
+  border-radius: 999px;
+  background: var(--brand-navy, #1f3a5f);
+  color: #fff;
+  font-size: 0.75rem;
+  padding: 1px 6px;
+}
+
+.question-card {
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e3e8ef);
+}
+
+.question-card--blocking {
+  border-left: 3px solid var(--danger, #dc2626);
+}
+
+.question-card__q {
+  margin: 0 0 4px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.question-card__badge {
+  margin-left: 6px;
+  font-size: 0.7rem;
+  color: var(--danger, #dc2626);
+  font-weight: 700;
+}
+
+.question-card__why {
+  margin: 0 0 8px;
+  font-size: 0.78rem;
+  color: var(--text-muted, #6b7280);
+}
+
+.question-card__input {
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #d8dee7);
+  background: var(--surface, #fff);
+  color: var(--text, #1f2937);
+  font-size: 0.83rem;
+}
+
+.question-card__confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.83rem;
+}
+
+.question-cards__submit {
+  margin-top: 4px;
+}
+
+/* ── 흐름도 수준 신뢰도 뱃지 (v3) ── */
+.flow-confidence {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.flow-confidence--high {
+  background: rgba(22, 163, 74, 0.12);
+  color: var(--success, #16a34a);
+}
+
+.flow-confidence--mid {
+  background: rgba(217, 119, 6, 0.12);
+  color: #d97706;
+}
+
+.flow-confidence--low {
+  background: rgba(220, 38, 38, 0.12);
+  color: var(--danger, #dc2626);
+}
+
 .flow-box__label {
   font-size: 0.85rem;
   font-weight: 700;
