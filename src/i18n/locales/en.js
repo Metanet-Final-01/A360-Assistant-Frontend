@@ -170,6 +170,9 @@ export default {
     sendAria: "Send message to chatbot",
     send: "Send",
     compactTitle: "Compress the conversation so far into a summary",
+    // Dropdown option labels/descriptions come from the backend (GET /api/agent/versions)
+    // and are shown as-is — do not hardcode per-version labels here.
+    agentVersionTitle: "Agent version",
     compacting: "Compressing…",
     compactRecommended: "Compress conversation (recommended)",
     compact: "Compress conversation",
@@ -235,6 +238,8 @@ export default {
     },
     newTextRequest: "Enter a new request",
     newDocumentUpload: "Upload a new document",
+    collapseSection: "Collapse",
+    expandSection: "Expand",
     analyzingHint: "Analyzing… you can check progress in the chatbot.",
     sessionLoadingHint: "Loading the analysis results…",
     retry: "Retry",
@@ -258,9 +263,18 @@ export default {
     stepOptionsAria: "Step options",
     evidencePrefix: "Evidence: {evidence}",
     addStep: "+ Add step",
-    ambiguitiesTitle: "Needs review",
     unnamedStep: "Unnamed",
     newStepDefaultName: "New work step",
+    applyToFlow: "Save edits to flow",
+    applyingToFlow: "Saving…",
+    applyToFlowDisabledHint: "No edits to save",
+    unsavedEditsHint: "You have unsaved edits — saving records a new flow version.",
+    changeSummary: {
+      reorder: "Reordered steps",
+      edit: "Edited step details",
+      remove: "Removed a step",
+      add: "Added a step",
+    },
   },
 
   pipeline: {

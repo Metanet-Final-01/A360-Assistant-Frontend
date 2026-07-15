@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { reactive, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 import { uploadDocument, parseDocument, createDocumentFromText } from "../api/documents";
 import { turnStream } from "../api/agent";
 import { listRecommendations, saveRecommendation, getLatestRecommendation } from "../api/recommend";
@@ -7,6 +7,7 @@ import { getLatestAnalysis } from "../api/sessions";
 import { ApiError } from "../api/http";
 import { useChatStore } from "./chat";
 import { useArchiveStore } from "./archive";
+import { useSettingsStore } from "./settings";
 import { formatTime } from "../utils/dateFormat";
 import { createTypewriter } from "../utils/typewriter";
 import { t } from "../i18n";
@@ -15,10 +16,12 @@ import { t } from "../i18n";
 // (RPA-64/67 — 레거시 /analyze·/recommend는 제거). 버튼은 합성 메시지를 보내고, done.data의
 // 산출물 필드(analysis_result/recommendation)를 보고 상태를 갱신한다(applyTurnArtifacts —
 // 챗에서 만들어진 분석/흐름도도 같은 경로로 반영된다).
-// recommendation.recommendation이 흐름도 트리(steps→actions→children)
-// 원본이고, RecommendationFlowModal이 이를 렌더·편집한다 — 편집은 모달의 로컬 복사본에서만 하고
-// "저장" 버튼을 눌렀을 때 한 번만 새 버전으로 저장한다(POST .../recommendations, 호출마다 무조건
-// 새 버전 INSERT). 백엔드에 개별 버전 조회 API가 없어 실행취소·버전 되돌리기는 프론트가 들고 있는
+// recommendation.recommendation이 흐름도 트리(steps→actions→children) 원본이다.
+// 사용자 편집은 업로드 패널의 업무 단계 카드(analysis.steps, WorkStep[])에서 하고,
+// "흐름도에 저장" 버튼이 그 편집(순서/삭제/추가)을 추천 트리에 step_id 기준으로 투영해
+// 새 버전으로 저장한다(applyAnalysisEditsToFlow → POST .../recommendations, 호출마다 무조건
+// 새 버전 INSERT). RecommendationFlowModal은 읽기 전용 보기 + 버전 이력이다.
+// 백엔드에 개별 버전 조회 API가 없어 실행취소·버전 되돌리기는 프론트가 들고 있는
 // 트리(recommendUndoStack·recommendTreesByVersion)를 다시 저장하는 것으로 구현한다.
 
 const ALLOWED_EXT = ["pdf", "pptx", "ppt", "docx"];
@@ -140,6 +143,12 @@ export const usePipelineStore = defineStore("pipeline", () => {
     return sessionGeneration.value;
   }
 
+  // persistRecommendationTree()는 turnStream처럼 AbortController로 끊을 수 있는 SSE가 아니라
+  // 평범한 REST POST라 요청 자체는 계속 흐른다 — 세션은 그대로인 채 startAnalysis()가 추천
+  // 상태를 초기화한 뒤에 늦게 도착한 저장 응답이 그 초기화를 덮어쓰지 않도록 세대로 구분한다
+  // (세션 자체가 바뀐 경우는 sessionId 비교로 충분히 잡힌다).
+  let recommendGeneration = 0;
+
   let activeUploadController = null;
   function startUploadController() {
     activeUploadController?.abort();
@@ -166,6 +175,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     recommendUndoStack.value = [];
     recommendTreesByVersion.value = {};
     recommendSaveError.value = "";
+    analysisEditSummaries.value = [];
     resetLiveFlow();
   }
 
@@ -284,6 +294,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
       analysis.value = { ...data.analysis_result, analysis_id: data.analysis_id ?? null };
       analysisStatus.value = "done";
       analysisError.value = "";
+      analysisEditSummaries.value = []; // 새 분석본이 로컬 편집을 통째로 대체했다 — 반영 안 된 편집은 무효
     }
     if (data.recommendation) {
       recommendation.value = {
@@ -349,6 +360,8 @@ export const usePipelineStore = defineStore("pipeline", () => {
     recommendUndoStack.value = [];
     recommendTreesByVersion.value = {};
     recommendSaveError.value = "";
+    recommendGeneration += 1;
+    analysisEditSummaries.value = []; // 새 분석이 편집 대상 자체를 갈아치운다 — 반영 안 된 편집은 무효
     resetLiveFlow(); // 이전 라이브 스냅샷 정리 — 이 턴이 흐름도까지 만들면 첫 partial에서 다시 켜진다
 
     const assistantMessage = pushChatTurn(ANALYZE_MESSAGE);
@@ -358,8 +371,12 @@ export const usePipelineStore = defineStore("pipeline", () => {
     // (스트림 구현체 타이밍 문제) 세션이 그대로여도 취소된 턴의 결과가 새로 지운 상태를
     // 다시 채울 수 있다 — 이 턴 소유권 검사가 최종 방어선이다.
     const signal = startTurnController();
+    // chat.js의 sendTurn과 동일한 이유 — 버전 복원(loadAgentVersions)이 끝나기 전에 나가면
+    // 저장된 선택 대신 백엔드 기본값으로 보내진다.
+    await useSettingsStore().loadAgentVersions();
 
     await turnStream(sessionId.value, ANALYZE_MESSAGE, {
+      agentVersion: useSettingsStore().agentVersion, // 설정에서 고른 버전 — null이면 필드 생략(백엔드 기본)
       signal,
       onStage: (message) => {
         if (signal.aborted) return;
@@ -433,8 +450,11 @@ export const usePipelineStore = defineStore("pipeline", () => {
     // startAnalysis()와 동일한 이유(RPA-107) — 취소된 턴의 늦게 처리된 콜백이 방금 지운
     // 추천 상태를 다시 채우지 않도록 콜백마다 signal.aborted를 확인한다.
     const signal = startTurnController();
+    // startAnalysis()와 동일한 이유 — 버전 복원이 끝나기 전에 나가지 않도록 기다린다.
+    await useSettingsStore().loadAgentVersions();
 
     await turnStream(sessionId.value, RECOMMEND_MESSAGE, {
+      agentVersion: useSettingsStore().agentVersion, // 설정에서 고른 버전 — null이면 필드 생략(백엔드 기본)
       signal,
       onStage: (message) => {
         if (signal.aborted) return;
@@ -500,18 +520,25 @@ export const usePipelineStore = defineStore("pipeline", () => {
   }
 
   async function persistRecommendationTree(tree, changeSummary, source) {
+    const mySessionId = sessionId.value;
+    const myRecommendGeneration = recommendGeneration;
     try {
-      const saved = await saveRecommendation(sessionId.value, {
+      const saved = await saveRecommendation(mySessionId, {
         recommendation: tree,
         parentVersion: recommendation.value?.version,
         source,
         changeSummary,
       });
+      // 저장을 기다리는 동안 다른 세션으로 이동했거나(sessionId 변경) 같은 세션에서
+      // startAnalysis()가 추천 상태를 다시 초기화했으면(recommendGeneration 변경) 이 응답은
+      // 낡은 것이다 — 지금 상태를 덮어쓰지 않는다.
+      if (sessionId.value !== mySessionId || recommendGeneration !== myRecommendGeneration) return;
       recommendation.value = { ...saved, recommendation: tree };
       recommendTreesByVersion.value[saved.version] = JSON.parse(JSON.stringify(tree));
       recommendSaveError.value = "";
       loadRecommendationHistory();
     } catch (err) {
+      if (sessionId.value !== mySessionId || recommendGeneration !== myRecommendGeneration) return;
       // recommendStatus는 그대로 "done"으로 둔다 — 여기서 "error"로 바꾸면 이미 만들어진
       // 흐름도 보기/실행 취소 화면이 사라지고 "다시 시도"가 전체 재생성 버튼으로 바뀐다.
       // 대신 recommendSaveError로만 실패를 알린다(과거엔 이 필드가 없어 실패가 조용히 묻혔다).
@@ -520,12 +547,47 @@ export const usePipelineStore = defineStore("pipeline", () => {
     }
   }
 
-  // 흐름도 모달(RecommendationFlowModal) 편집 모드에서 "저장" 버튼을 눌렀을 때 호출 —
-  // 항상 새 버전으로 저장한다(수정=UPDATE 아님). 미세 조작마다 부르면 버전이 폭발하니 주의.
+  // 완성된 Recommendation 트리를 새 버전으로 저장한다(수정=UPDATE 아님). 호출마다 무조건
+  // 새 버전이 쌓이므로 미세 조작마다 부르면 버전이 폭발한다 — 사용자 편집은 아래
+  // applyAnalysisEditsToFlow의 명시 "저장" 버튼 1회 = 1버전으로만 태운다.
   async function saveRecommendationEdit(newTree, changeSummary) {
     if (!sessionId.value || !recommendation.value) return;
-    recommendUndoStack.value.push(JSON.parse(JSON.stringify(recommendation.value.recommendation)));
+    // 저장이 실패할 수 있으니 성공했을 때만 실행취소 스택에 쌓는다 — 미리 쌓으면 실패한
+    // (아무 변화도 없었던) 시도가 되돌릴 대상 없는 스냅샷을 남겨 실행취소 이력을 어긋나게 한다.
+    const previousTree = JSON.parse(JSON.stringify(recommendation.value.recommendation));
     await persistRecommendationTree(newTree, changeSummary ?? null, "drag");
+    if (!recommendSaveError.value) recommendUndoStack.value.push(previousTree);
+  }
+
+  // ----- 업무 단계 편집 → 흐름도 반영 (명시 저장 버튼) -----
+  // 업로드 패널의 단계 카드 편집(드래그/수정/삭제/추가)은 analysis.steps(WorkStep[])를
+  // 메모리에서만 고친다. 이 스키마는 저장 API가 받는 Recommendation 트리(steps[].actions[])와
+  // 달라 그대로 보내면 400 INVALID_RECOMMENDATION — 저장 시 분석 steps의 순서·구성을 추천
+  // 트리 steps에 step_id 기준으로 투영한다: 재정렬·삭제·삽입은 따라가고, 각 step의 actions
+  // 서브트리는 보존하며, 새로 추가된 step(추천 트리에 대응 없음)은 actions: []로 들어간다.
+  const analysisEditSummaries = ref([]); // 이번 저장에 묶일 편집 종류 모음 → change_summary
+  const analysisEditsDirty = computed(() => analysisEditSummaries.value.length > 0);
+  const isSavingAnalysisEdits = ref(false);
+
+  function markAnalysisEdited(summary) {
+    if (summary && !analysisEditSummaries.value.includes(summary)) {
+      analysisEditSummaries.value.push(summary);
+    }
+  }
+
+  async function applyAnalysisEditsToFlow() {
+    if (!sessionId.value || !recommendation.value || !analysis.value) return;
+    if (!analysisEditsDirty.value || isSavingAnalysisEdits.value) return;
+    isSavingAnalysisEdits.value = true;
+    const base = JSON.parse(JSON.stringify(recommendation.value.recommendation));
+    const recStepById = new Map((base.steps ?? []).map((s) => [s.step_id, s]));
+    base.steps = (analysis.value.steps ?? []).map(
+      (s) => recStepById.get(s.step_id) ?? { step_id: s.step_id, actions: [] },
+    );
+    await saveRecommendationEdit(base, analysisEditSummaries.value.join(", ").slice(0, 500) || null);
+    // 실패 시 recommendSaveError가 남고 편집 표시(dirty)도 유지된다 — 사용자가 다시 저장 가능
+    if (!recommendSaveError.value) analysisEditSummaries.value = [];
+    isSavingAnalysisEdits.value = false;
   }
 
   // 직전 트리 스냅샷을 다시 저장해서 "취소"한다 — 백엔드엔 삭제가 없고 항상 새 버전만 쌓인다.
@@ -669,6 +731,10 @@ export const usePipelineStore = defineStore("pipeline", () => {
     saveRecommendationEdit,
     undoRecommendationEdit,
     revertToRecommendationVersion,
+    analysisEditsDirty,
+    isSavingAnalysisEdits,
+    markAnalysisEdited,
+    applyAnalysisEditsToFlow,
     resetUpload,
   };
 });

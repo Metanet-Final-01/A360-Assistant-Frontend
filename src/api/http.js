@@ -52,7 +52,18 @@ async function toApiError(response) {
     return new ApiError("VALIDATION_ERROR", describeValidationError(detail[0]), response.status, requestId);
   }
   if (detail && typeof detail === "object") {
-    return new ApiError(detail.code ?? "UNKNOWN", detail.message ?? response.statusText, response.status, requestId);
+    let message = detail.message ?? response.statusText;
+    // RPA-166: INVALID_RECOMMENDATION 등은 errors[]에 어느 필드가 왜 틀렸는지 실려 온다 —
+    // "…올바르지 않습니다: 1건"처럼 개수만 있는 message에 첫 항목을 붙여 원인을 바로 보여준다.
+    if (Array.isArray(detail.errors) && detail.errors.length) {
+      const first = detail.errors[0];
+      const firstText = [first?.field, first?.reason].filter(Boolean).join(": ");
+      if (firstText) {
+        const rest = detail.errors.length - 1;
+        message += ` (${firstText}${rest > 0 ? ` +${rest}` : ""})`;
+      }
+    }
+    return new ApiError(detail.code ?? "UNKNOWN", message, response.status, requestId);
   }
   return new ApiError(
     "UNKNOWN",

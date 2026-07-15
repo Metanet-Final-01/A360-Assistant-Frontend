@@ -86,6 +86,7 @@ onBeforeUnmount(() => {
             <span class="settings-switch__track" aria-hidden="true"><span class="settings-switch__thumb"></span></span>
           </label>
         </section>
+
       </div>
     </div>
   </div>

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { formatMessage } from "../utils/chatFormat";
 
@@ -25,6 +25,10 @@ const props = defineProps({
   // 매 턴 done.data.usage_gauge — 대화 누적 링 게이지 표시용 (RPA-83)
   // { intake_tokens, limit_tokens, ratio(0~1+), compact_recommended, compact_required }
   usageGauge: { type: Object, default: null },
+  // 에이전트 버전 선택 드롭다운 (RPA-167) — 목록은 GET /api/agent/versions 원본(versions[])을
+  // 그대로 받는다(하드코딩 금지). 비어 있으면(로드 실패 포함) 드롭다운 자체를 숨긴다.
+  agentVersions: { type: Array, default: () => [] },
+  agentVersion: { type: String, default: null },
   // 부모 그리드의 패널 재배치(usePanelReorder) 참여 키. 지정하면 도킹 상태에서만
   // 헤더에 재배치용 그립이 생긴다 — 플로팅 상태의 포인터 드래그(이동·도킹)와는 무관.
   panelKey: { type: String, default: "" },
@@ -32,7 +36,7 @@ const props = defineProps({
   // 그 패널의 원래 자리로 들어간다(usePanelReorder가 반환하는 인스턴스를 그대로 전달).
   panelReorder: { type: Object, default: null },
 });
-const emit = defineEmits(["toggle", "close", "dock", "undock", "send", "compact"]);
+const emit = defineEmits(["toggle", "close", "dock", "undock", "send", "compact", "select-version"]);
 
 const POPUP_WIDTH = 540;
 const POPUP_HEIGHT = 780;
@@ -279,6 +283,43 @@ const gaugeTitle = computed(() => {
   if (gauge.compact_recommended) return t("chat.gauge.compactRecommendedSuffix", { base });
   return base;
 });
+
+// ----- 에이전트 버전 드롭다운 (RPA-167) -----
+// 패널 하단에 붙어 있어 메뉴는 위쪽으로 펼친다. label/description은 API 값 그대로 노출.
+const versionMenuOpen = ref(false);
+
+const currentVersion = computed(
+  () => props.agentVersions.find((v) => v.id === props.agentVersion) ?? null,
+);
+
+function selectVersion(id) {
+  versionMenuOpen.value = false;
+  if (id !== props.agentVersion) emit("select-version", id);
+}
+
+// 드롭다운 바깥을 누르면 닫는다 — 다른 카드 메뉴들과 동일한 UX
+function closeVersionMenuOnOutsideClick(event) {
+  if (versionMenuOpen.value && !event.target.closest(".agent-version-dd")) {
+    versionMenuOpen.value = false;
+  }
+}
+
+// Esc로도 닫는다 — 마우스 없이 여닫는 드롭다운의 기본 기대 동작
+function closeVersionMenuOnEscape(event) {
+  if (versionMenuOpen.value && event.key === "Escape") {
+    versionMenuOpen.value = false;
+  }
+}
+
+onMounted(() => {
+  window.addEventListener("pointerdown", closeVersionMenuOnOutsideClick);
+  window.addEventListener("keydown", closeVersionMenuOnEscape);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("pointerdown", closeVersionMenuOnOutsideClick);
+  window.removeEventListener("keydown", closeVersionMenuOnEscape);
+});
 </script>
 
 <template>
@@ -441,6 +482,45 @@ const gaugeTitle = computed(() => {
         <button type="submit" :disabled="sending">{{ t("chat.send") }}</button>
       </form>
       <div class="chat-popup__footer">
+        <div v-if="agentVersions.length" class="agent-version-dd">
+          <button
+            type="button"
+            class="agent-version-dd__btn"
+            :class="{ 'agent-version-dd__btn--open': versionMenuOpen }"
+            :title="currentVersion?.description || t('chat.agentVersionTitle')"
+            :aria-label="t('chat.agentVersionTitle')"
+            :aria-expanded="versionMenuOpen"
+            aria-haspopup="listbox"
+            @click="versionMenuOpen = !versionMenuOpen"
+          >
+            <span class="agent-version-dd__label">{{ currentVersion?.label || agentVersion || t("chat.agentVersionTitle") }}</span>
+            <svg class="agent-version-dd__chevron" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M7 14.5 12 10l5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </button>
+          <Transition name="fade-up">
+            <div v-if="versionMenuOpen" class="agent-version-dd__menu" role="listbox" :aria-label="t('chat.agentVersionTitle')">
+              <button
+                v-for="version in agentVersions"
+                :key="version.id"
+                type="button"
+                role="option"
+                class="agent-version-dd__item"
+                :class="{ 'agent-version-dd__item--active': version.id === agentVersion }"
+                :aria-selected="version.id === agentVersion"
+                @click="selectVersion(version.id)"
+              >
+                <span class="agent-version-dd__item-row">
+                  <span class="agent-version-dd__item-label">{{ version.label || version.id }}</span>
+                  <svg v-if="version.id === agentVersion" class="agent-version-dd__check" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </span>
+                <span v-if="version.description" class="agent-version-dd__item-desc">{{ version.description }}</span>
+              </button>
+            </div>
+          </Transition>
+        </div>
         <button
           v-if="showCompact"
           type="button"

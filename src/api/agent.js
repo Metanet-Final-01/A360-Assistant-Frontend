@@ -1,7 +1,16 @@
-import { getToken, notifyUnauthorized } from "./http";
+import { apiRequest, getToken, notifyUnauthorized } from "./http";
 import { t } from "../i18n";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+
+// GET /api/agent/versions — 선택 가능한 에이전트 버전 목록 (RPA-167).
+// 응답: { versions: [{ id, label, description, default }], default: "v2" }
+// 셀렉터 옵션은 반드시 이 응답으로 동적 구성한다 — v3가 추가돼도 프론트 수정이 없도록
+// ["v1","v2"] 같은 하드코딩 금지. 실패 시 호출부(settings 스토어)가 셀렉터를 숨기고
+// 요청에서 agent_version을 생략해 백엔드 기본 버전으로 동작한다.
+export function getAgentVersions() {
+  return apiRequest("/api/agent/versions");
+}
 
 async function readErrorDetail(response) {
   try {
@@ -33,7 +42,7 @@ async function readErrorDetail(response) {
 export async function turnStream(
   sessionId,
   message,
-  { operation = "chat", onToken, onStage, onPartial, onDone, onError, signal },
+  { operation = "chat", agentVersion = null, onToken, onStage, onPartial, onDone, onError, signal },
 ) {
   const token = getToken();
   const headers = { "Content-Type": "application/json" };
@@ -44,7 +53,14 @@ export async function turnStream(
     response = await fetch(`${BASE_URL}/api/sessions/${sessionId}/turn`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ message, operation }),
+      body: JSON.stringify({
+        message,
+        operation,
+        // 버전은 반드시 별도 필드로만 보낸다 — 합성 메시지에 버전 문자열을 새기면
+        // 백엔드 라우팅 트리거(리터럴 매칭)가 깨진다. 미선택(null)이면 필드 자체를
+        // 생략해 백엔드 기본 버전으로 동작한다.
+        ...(agentVersion ? { agent_version: agentVersion } : {}),
+      }),
       signal,
     });
   } catch (err) {
