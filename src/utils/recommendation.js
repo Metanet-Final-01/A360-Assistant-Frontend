@@ -26,20 +26,6 @@ export function flattenDetailed(actions) {
   return result;
 }
 
-// confidence(0~1)를 뱃지 등급+텍스트로 변환. null/undefined면 뱃지를 표시하지 않으므로 null 반환.
-// 임계값: high >= 0.7, mid >= 0.4, 그 외 low.
-export function confidenceBadge(confidence) {
-  if (confidence == null) return null;
-  const level = confidence >= 0.7 ? "high" : confidence >= 0.4 ? "mid" : "low";
-  return {
-    level,
-    text: t("recommendation.confidenceBadge", {
-      label: t(`recommendation.confidence.${level}`),
-      percent: Math.round(confidence * 100),
-    }),
-  };
-}
-
 // 패키지별 색상은 고정된 의미 매핑이 아니라, steps를 훑으면서 처음 등장한 순서대로 팔레트를 배정한다.
 // steps 순서가 같으면 두 화면에서 같은 패키지가 항상 같은 색으로 보인다.
 export function buildPackageColorMap(steps) {
@@ -62,7 +48,7 @@ export function stepLabel(step, idx) {
 
 // 흐름도 steps를 트리 렌더용으로 정규화한다 — 상위 액션에 스텝을 가로지르는 전역 순번(1,2,3…)을
 // 매기고, 자식 번호(4.1…)와 중첩은 FlowNode가 재귀로 붙인다. path는 검수 위반 location과 매칭용.
-// 모달(FlowDiagram)과 패널(추천 흐름도 상세)이 같은 번호·경로를 쓰도록 공유한다.
+// 패널(추천 흐름도 상세)과 캔버스(FlowCanvas의 flowLayout)가 같은 번호를 쓰도록 공유한다.
 export function numberFlowSteps(steps) {
   let n = 0;
   return (steps ?? []).map((step, idx) => ({
@@ -125,6 +111,43 @@ export function branchColumnExits(pkg, node, cols) {
     return hasFinally ? node?.action === "errorHandlerFinally" : true;
   }
   return true;
+}
+
+// 분기 블록 라벨 — 패키지별로 사람이 읽는 이름(단독 Try여도 '분기'가 아니라 '예외 처리').
+// 읽기 전용 렌더러(FlowSequence)와 Vue Flow 편집 캔버스(flowLayout)가 공유.
+export function branchLabel(pkg) {
+  if (pkg === "Error handler") return t("recommendation.branchLabel.errorHandler");
+  if (pkg === "If") return t("recommendation.branchLabel.condition");
+  return t("recommendation.branchLabel.generic", { pkg });
+}
+
+// items(형제 액션 목록)를 "분기 그룹"과 "일반 노드"로 세그먼트화한다 — 연속한 분기 노드
+// (Try/Catch/Finally, If/Else 계열) 2개 이상은 하나의 branch 세그먼트로 묶이고, 그 외는
+// 각각 독립된 node 세그먼트다. 읽기 전용 렌더러(FlowSequence)와 Vue Flow 편집 캔버스
+// (flowLayout)가 이 함수 하나를 공유해야 "분기 세트는 항상 하나의 이동 단위"라는 규칙이
+// 두 화면에서 어긋나지 않는다.
+export function buildSegments(items) {
+  const raw = [];
+  let cur = null; // 진행 중인 분기 그룹
+  for (const item of items ?? []) {
+    if (isBranchNode(item.node)) {
+      const starter = isBranchStarter(item.node); // Try는 새 그룹 시작
+      if (cur && cur.pkg === item.node.package && !starter) {
+        cur.items.push(item); // Catch/Finally/Else — 앞 분기의 다른 열
+      } else {
+        if (cur) raw.push(cur);
+        cur = { type: "branch", pkg: item.node.package, items: [item] };
+      }
+    } else {
+      if (cur) {
+        raw.push(cur);
+        cur = null;
+      }
+      raw.push({ type: "node", item });
+    }
+  }
+  if (cur) raw.push(cur);
+  return raw.map((s) => ({ ...s, key: s.type === "branch" ? s.items[0].path : s.item.path }));
 }
 
 // 컨테이너 노드의 children을 트리 렌더용 항목으로 — 부모 번호/경로를 이어 계층 번호를 만든다.

@@ -204,6 +204,18 @@ export default {
     start: "Start",
     done: "Done",
     noResults: "No recommendation results to display.",
+    edit: "Edit",
+    exitEdit: "Exit editing",
+    save: "Save",
+    saving: "Saving…",
+    discard: "Discard edits",
+    discardConfirm: "You have unsaved changes. Discard them and close?",
+    editTextTitle: "Edit text",
+    unsavedHint: "You have unsaved changes.",
+    changeSummary: {
+      editLabel: "Edited action text",
+      reorder: "Reordered actions",
+    },
     source: {
       llm: "Auto-generated",
       drag: "Manually edited",
@@ -318,12 +330,13 @@ export default {
 
   recommendation: {
     stepFallback: "Step {n}",
-    confidence: {
-      high: "High",
-      mid: "Medium",
-      low: "Low",
+    untitledAction: "Action",
+    branchLabel: {
+      errorHandler: "Exception handling",
+      condition: "Conditional branch",
+      generic: "Branch · {pkg}",
     },
-    confidenceBadge: "{label} {percent}%",
+    terminalHint: "Doesn't end here — joins Finally and continues",
   },
 
   api: {

@@ -7,7 +7,7 @@
 // 그 안에서 다시 컬럼이 된다.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import FlowNode from "./FlowNode.vue";
-import { isBranchNode, isBranchStarter, childItems, branchColumnExits, branchRole } from "../utils/recommendation";
+import { buildSegments, childItems, branchColumnExits, branchRole, branchLabel } from "../utils/recommendation";
 
 defineOptions({ name: "FlowSequence" });
 
@@ -70,31 +70,10 @@ onBeforeUnmount(() => {
   resizeObserver?.disconnect();
 });
 
-const segments = computed(() => {
-  const raw = [];
-  let cur = null; // 진행 중인 분기 그룹
-  for (const item of props.items) {
-    if (isBranchNode(item.node)) {
-      const starter = isBranchStarter(item.node); // Try는 새 그룹 시작
-      if (cur && cur.pkg === item.node.package && !starter) {
-        cur.items.push(item); // Catch/Finally/Else — 앞 분기의 다른 열
-      } else {
-        if (cur) raw.push(cur);
-        cur = { type: "branch", pkg: item.node.package, items: [item] };
-      }
-    } else {
-      if (cur) {
-        raw.push(cur);
-        cur = null;
-      }
-      raw.push({ type: "node", item });
-    }
-  }
-  if (cur) raw.push(cur);
-  // 분기(Error handler·If)는 항상 '감싸는 블록(컬럼)'으로 렌더한다 — 단독 Try/If여도 들여쓰기가 아니라
-  // 블록 안에 본문을 넣는다. (Loop/Step 같은 단일 컨테이너는 애초에 분기 그룹이 아니라 node로 중첩됨)
-  return raw.map((s) => ({ ...s, key: s.type === "branch" ? s.items[0].path : s.item.path }));
-});
+// 분기(Error handler·If)는 항상 '감싸는 블록(컬럼)'으로 렌더한다 — 단독 Try/If여도 들여쓰기가 아니라
+// 블록 안에 본문을 넣는다. (Loop/Step 같은 단일 컨테이너는 애초에 분기 그룹이 아니라 node로 중첩됨)
+// 그룹핑 알고리즘 자체는 recommendation.js의 buildSegments가 담당 — Vue Flow 편집 캔버스와 공유.
+const segments = computed(() => buildSegments(props.items));
 
 // segments가 바뀌면(props.items 변경) 새로 렌더된 분기 컬럼에 대해 페이드 초기화를 다시 돈다.
 watch(segments, async () => {
@@ -117,13 +96,6 @@ function roleClass(role) {
   const key = { Try: "try", Catch: "catch", Finally: "finally", Throw: "throw" }[role];
   return key ? `flow-branch__role--${key}` : "flow-branch__role--cond";
 }
-// 분기 블록 라벨 — 패키지별로 사람이 읽는 이름(단독 Try여도 '분기'가 아니라 '예외 처리').
-function branchLabel(pkg) {
-  if (pkg === "Error handler") return "예외 처리";
-  if (pkg === "If") return "조건 분기";
-  return `분기 · ${pkg}`;
-}
-
 // 다이어그램(arrows) 모드 커넥터용 기하: 각 컬럼의 중심 x(%)와 출구 여부. 컬럼은 등폭(flex 1 1 0)
 // 이라 인덱스로 중심을 계산한다(열 몇 개·넓은 모달에서 오차 <1%). exit 컬럼만 아래로 내려가 병합.
 function convCols(seg) {
