@@ -285,6 +285,7 @@ input {
   padding: 16px 0;
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
 }
 
 .app-sidebar__nav-item {
@@ -324,7 +325,7 @@ input {
   display: grid;
   grid-template-rows: minmax(0, 0fr);
   transition: grid-template-rows 0.24s ease;
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
 }
 

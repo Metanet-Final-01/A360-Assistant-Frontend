@@ -301,9 +301,7 @@ async function removeSession(id, event) {
             </ul>
           </div>
         </div>
-      </nav>
 
-      <div class="app-sidebar__footer">
         <button
           type="button"
           class="app-sidebar__nav-item app-sidebar__help"
@@ -343,6 +341,9 @@ async function removeSession(id, event) {
           </svg>
           <span class="app-sidebar__nav-label">{{ t("sidebar.settings") }}</span>
         </button>
+      </nav>
+
+      <div class="app-sidebar__footer">
         <div class="app-sidebar__profile">
           <span class="app-sidebar__avatar" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none">
