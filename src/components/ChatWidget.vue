@@ -43,6 +43,7 @@ const POPUP_HEIGHT = 780;
 const MARGIN = 24;
 
 const draft = ref("");
+const composerRef = ref(null);
 const popupRef = ref(null);
 const messagesRef = ref(null);
 const position = reactive({ x: null, y: null });
@@ -252,6 +253,25 @@ async function handleSend() {
   if (!message) return;
   draft.value = "";
   emit("send", message);
+  await nextTick();
+  autoResizeComposer();
+}
+
+// Enter는 전송, Shift+Enter는 줄바꿈 — textarea의 기본 동작(Enter도 줄바꿈)을 덮어써야 한다.
+function handleComposerKeydown(event) {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    handleSend();
+  }
+}
+
+// 줄바꿈이 늘어난 만큼 textarea 높이를 따라가되(최대 120px, CSS와 동일), 그 이상은
+// 내부 스크롤에 맡긴다.
+function autoResizeComposer() {
+  const el = composerRef.value;
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
 }
 
 // ----- 대화 누적 링 게이지 (usage_gauge) -----
@@ -477,13 +497,16 @@ onBeforeUnmount(() => {
       </div>
 
       <form class="chat-popup__composer" @submit.prevent="handleSend">
-        <input
+        <textarea
+          ref="composerRef"
           v-model="draft"
-          type="text"
+          rows="1"
           :placeholder="t('chat.inputPlaceholder')"
           :aria-label="t('chat.sendAria')"
           :disabled="sending"
-        />
+          @keydown="handleComposerKeydown"
+          @input="autoResizeComposer"
+        ></textarea>
         <button type="submit" :disabled="sending">{{ t("chat.send") }}</button>
       </form>
       <div class="chat-popup__footer">
