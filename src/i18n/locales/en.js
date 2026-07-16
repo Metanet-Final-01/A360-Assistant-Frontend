@@ -212,6 +212,8 @@ export default {
     discardConfirm: "You have unsaved changes. Discard them and close?",
     editTextTitle: "Edit text",
     unsavedHint: "You have unsaved changes.",
+    maximize: "Maximize",
+    restore: "Restore",
     changeSummary: {
       editLabel: "Edited action text",
       reorder: "Reordered actions",

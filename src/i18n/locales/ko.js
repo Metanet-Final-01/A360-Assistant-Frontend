@@ -212,6 +212,8 @@ export default {
     discardConfirm: "저장하지 않은 변경사항이 있습니다. 버리고 닫으시겠습니까?",
     editTextTitle: "텍스트 수정",
     unsavedHint: "저장하지 않은 변경사항이 있습니다.",
+    maximize: "최대화",
+    restore: "축소",
     changeSummary: {
       editLabel: "액션 텍스트 수정",
       reorder: "액션 순서 변경",

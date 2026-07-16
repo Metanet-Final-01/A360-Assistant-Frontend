@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { usePipelineStore } from "../stores/pipeline";
 import { formatDateShort } from "../utils/dateFormat";
@@ -10,6 +10,19 @@ const { t } = useI18n();
 
 const emit = defineEmits(["close"]);
 
+// 이 모달이 열려 있는 동안은 브라우저 실제 전체화면 모드로 전환한다 — 최대화 시
+// "화면 전체"가 탭/주소창 아래 뷰포트가 아니라 모니터 전체를 뜻하게 하고, 축소 상태에서도
+// 주소창이 있던 자리까지 포함해 자유롭게 드래그할 수 있게 하기 위해서다. 클릭(사용자 제스처)
+// 직후인 mount 시점에 요청해야 브라우저가 허용한다 — 거부돼도(권한 없음 등) 조용히 무시하고
+// 뷰포트 기준 레이아웃으로 자연히 대체된다.
+onMounted(() => {
+  document.documentElement.requestFullscreen?.().catch(() => {});
+});
+
+onBeforeUnmount(() => {
+  if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+});
+
 // steps→actions→children 트리를 FlowCanvas가 분기 컬럼·중첩 그대로 그린다(Vue Flow 캔버스,
 // 확대/축소·팬·텍스트 편집·드래그 재정렬 가능). 편집은 캔버스 안의 로컬 버퍼에만 쌓이고,
 // 아래 저장 버튼을 눌러야 새 버전으로 저장된다.
@@ -19,6 +32,52 @@ const hasActions = computed(() => steps.value.some((s) => (s.actions?.length ?? 
 const flowCanvasRef = ref(null);
 const canvasDirty = ref(false);
 const canvasSaving = ref(false);
+const isMaximized = ref(false);
+
+// ----- 창 드래그 이동(챗봇 팝업과 동일한 방식) -----
+// 최대화 상태가 아닐 때만 헤더를 드래그해 창을 옮길 수 있다 — 전체화면 모드가 이미 켜져
+// 있으므로(위 onMounted) 이동 가능 범위는 주소창이 있던 자리까지 포함한 화면 전체다.
+const modalRef = ref(null);
+const position = reactive({ x: null, y: null });
+const isDragging = ref(false);
+let dragOffset = { x: 0, y: 0 };
+
+const modalStyle = computed(() => {
+  if (isMaximized.value || position.x === null) return {};
+  return { position: "fixed", left: `${position.x}px`, top: `${position.y}px`, margin: 0 };
+});
+
+function startDrag(event) {
+  if (isMaximized.value || !modalRef.value) return;
+  isDragging.value = true;
+  const rect = modalRef.value.getBoundingClientRect();
+  dragOffset = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  position.x = rect.left;
+  position.y = rect.top;
+  window.addEventListener("pointermove", onDragMove);
+  window.addEventListener("pointerup", stopDrag);
+}
+
+function onDragMove(event) {
+  if (!isDragging.value || !modalRef.value) return;
+  const width = modalRef.value.offsetWidth;
+  const height = modalRef.value.offsetHeight;
+  const maxX = window.innerWidth - width;
+  const maxY = window.innerHeight - height;
+  position.x = Math.min(Math.max(0, event.clientX - dragOffset.x), Math.max(0, maxX));
+  position.y = Math.min(Math.max(0, event.clientY - dragOffset.y), Math.max(0, maxY));
+}
+
+function stopDrag() {
+  isDragging.value = false;
+  window.removeEventListener("pointermove", onDragMove);
+  window.removeEventListener("pointerup", stopDrag);
+}
+
+onBeforeUnmount(() => {
+  window.removeEventListener("pointermove", onDragMove);
+  window.removeEventListener("pointerup", stopDrag);
+});
 
 // "편집" 버튼을 눌러야만 텍스트 수정·드래그 재정렬이 가능하다 — 그 전에는 확대/축소·화면
 // 이동처럼 흐름도 내용에 영향을 주지 않는 조작만 허용한다(FlowCanvas의 editable prop이
@@ -93,15 +152,50 @@ const formatDate = formatDateShort;
 
 <template>
   <div class="modal-overlay" @click.self="handleClose">
-    <div class="modal modal--flow" role="dialog" aria-modal="true" aria-labelledby="rec-flow-modal-title">
-      <header class="modal__header">
+    <div
+      ref="modalRef"
+      class="modal modal--flow"
+      :class="{ 'modal--flow-maximized': isMaximized, 'modal--flow-dragging': isDragging }"
+      :style="modalStyle"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="rec-flow-modal-title"
+    >
+      <header class="modal__header" @pointerdown="startDrag">
         <h2 id="rec-flow-modal-title">
           {{ t("recommendFlow.title") }}
           <span v-if="pipeline.recommendation?.version" class="flow-version-badge">
             v{{ pipeline.recommendation.version }}
           </span>
         </h2>
-        <button type="button" class="modal__close" :aria-label="t('common.close')" @click="handleClose">✕</button>
+        <div class="modal__header-actions">
+          <button
+            type="button"
+            class="modal__maximize"
+            :aria-label="isMaximized ? t('recommendFlow.restore') : t('recommendFlow.maximize')"
+            @click="isMaximized = !isMaximized"
+          >
+            <svg v-if="!isMaximized" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+          <button type="button" class="modal__close" :aria-label="t('common.close')" @click="handleClose">✕</button>
+        </div>
       </header>
 
       <div class="modal__body modal__body--flow">
