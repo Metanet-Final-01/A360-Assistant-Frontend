@@ -25,13 +25,20 @@ const rootRef = ref(null);
 // 1:1이 아니므로(에이전트가 자유롭게 합치고 쪼갠다), step_id로 분석 결과와 매칭하지 않고
 // 흐름도 데이터만으로 독립적으로 렌더한다.
 const hasSteps = computed(() => (pipeline.analysis?.steps ?? []).length > 0);
-// "흐름도 보기"/"JSON 내보내기" 버튼(타이틀 우측)을 보여줄지: 분석이 단계를 찾아 새로 생성할 수
+// "흐름도 보기"/"JSON 내보내기" 버튼(타이틀 우측)이 활성화될지: 분석이 단계를 찾아 새로 생성할 수
 // 있거나(hasSteps), 텍스트 업로드처럼 분석이 단계를 못 찾았어도 챗봇 대화(예: "분석해서 흐름도까지
-// 만들어줘")로 이미 흐름도가 만들어져 있으면(pipeline.recommendation) 보여준다 — 이 경우
-// analysisStatus/hasSteps만으로는 판단할 수 없다. 업무정의서 업로드 전에는 버튼 자체가 보이지 않는다.
+// 만들어줘")로 이미 흐름도가 만들어져 있으면(pipeline.recommendation) 활성화한다 — 이 경우
+// analysisStatus/hasSteps만으로는 판단할 수 없다.
 const canUseFlowActions = computed(
   () => (pipeline.analysisStatus === "done" && hasSteps.value) || !!pipeline.recommendation,
 );
+
+// 버튼 자체를 보여줄지: sessionId가 있으면(새 문서를 업로드했거나 이력에서 과거 세션을 불러온
+// 경우) 보여준다 — "새 채팅"으로 막 들어와 아직 아무 것도 업로드하지 않은 순간에만 sessionId가
+// null이라 숨겨진다. loadSession이 과거 세션의 analysisStatus/recommendation을 늦게 채우는
+// 동안(로딩 중)에도 버튼이 사라졌다 나타나는 깜빡임 없이 그대로 보이고, 활성화 여부만
+// canUseFlowActions로 갈린다.
+const hasActiveSession = computed(() => !!pipeline.sessionId);
 
 // 스트리밍 중이면 라이브 스냅샷(liveFlow)을, 아니면 저장된 최종 추천안을 소스로 삼는다 —
 // 이 패널이 흐름도 생성/수정 과정을 실시간으로, 완료 후 최종본을 "같은 자리"에서 보여준다.
@@ -174,7 +181,7 @@ async function submitCards() {
         >⠿</span
       >
       <h2 id="analysis-panel-title">{{ t("recommendDetail.title") }}</h2>
-      <div v-if="canUseFlowActions" class="panel__header-actions">
+      <div v-if="hasActiveSession" class="panel__header-actions">
         <span v-if="pipeline.recommendation" class="panel__header-version">
           v{{ pipeline.recommendation.version }}
         </span>
@@ -189,7 +196,7 @@ async function submitCards() {
         <button
           type="button"
           class="btn btn--outline panel__header-btn"
-          :disabled="pipeline.recommendStatus === 'generating' || liveMode"
+          :disabled="!canUseFlowActions || pipeline.recommendStatus === 'generating' || liveMode"
           @click="openFlowView"
         >
           {{ pipeline.recommendStatus === "generating" || liveMode ? t("recommendDetail.generating") : t("recommendDetail.viewFlow") }}

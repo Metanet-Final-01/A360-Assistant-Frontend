@@ -204,6 +204,16 @@ export default {
     start: "Start",
     done: "Done",
     noResults: "No recommendation results to display.",
+    edit: "Edit",
+    exitEdit: "Exit editing",
+    save: "Save",
+    saving: "Saving…",
+    discard: "Discard edits",
+    unsavedHint: "You have unsaved changes.",
+    changeSummary: {
+      editLabel: "Edited action text",
+      reorder: "Reordered actions",
+    },
     source: {
       llm: "Auto-generated",
       drag: "Manually edited",
@@ -318,12 +328,6 @@ export default {
 
   recommendation: {
     stepFallback: "Step {n}",
-    confidence: {
-      high: "High",
-      mid: "Medium",
-      low: "Low",
-    },
-    confidenceBadge: "{label} {percent}%",
   },
 
   api: {

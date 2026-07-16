@@ -1,9 +1,9 @@
 <script setup>
-// A360 흐름도 액션 하나의 "박스"만 그린다 — 번호·라벨·패키지 색·신뢰도 뱃지·검수 위반 표시,
+// A360 흐름도 액션 하나의 "박스"만 그린다 — 번호·라벨·패키지 색·검수 위반 표시,
 // 상세 모드면 파라미터 목록까지. 자식(본문) 렌더와 분기 컬럼 배치는 FlowSequence가 맡는다
 // (트리 재귀·분기 그룹핑을 한 곳에 모으기 위함).
 import { computed } from "vue";
-import { confidenceBadge, formatParamValue } from "../utils/recommendation";
+import { formatParamValue } from "../utils/recommendation";
 
 const props = defineProps({
   // { node, prefix, path } — numberFlowSteps/childItems가 만든 렌더 항목
@@ -19,7 +19,6 @@ const props = defineProps({
 
 const node = computed(() => props.item.node);
 const isContainer = computed(() => (node.value.children?.length ?? 0) > 0);
-const badge = computed(() => confidenceBadge(node.value.confidence));
 const pkg = computed(() => node.value.package || "미지정");
 const label = computed(() => node.value.label || node.value.action || "액션");
 const parameters = computed(() => node.value.parameters ?? []);
@@ -39,13 +38,6 @@ const hasViolation = computed(() => !!props.violationPaths && props.violationPat
       </span>
       <span class="flow-box__meta">
         <span class="flow-box__tag" :style="{ background: colorFor(pkg) }">{{ pkg }}</span>
-        <span
-          v-if="badge"
-          class="confidence-badge"
-          :class="`confidence-badge--${badge.level}`"
-        >
-          {{ badge.text }}
-        </span>
         <span v-if="hasViolation" class="flow-box__violation-mark" title="검수 위반">⚠</span>
       </span>
     </div>

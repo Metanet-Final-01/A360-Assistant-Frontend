@@ -1249,30 +1249,6 @@ input {
   color: var(--text);
 }
 
-.confidence-badge {
-  flex-shrink: 0;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 0.76rem;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.confidence-badge--high {
-  color: var(--success);
-  background: var(--success-bg);
-}
-
-.confidence-badge--mid {
-  color: var(--mid);
-  background: var(--mid-bg);
-}
-
-.confidence-badge--low {
-  color: var(--warning);
-  background: var(--warning-bg);
-}
-
 .rec-card__grid {
   display: flex;
   flex-direction: column;
@@ -2048,6 +2024,7 @@ input {
 
 .flow-save-status {
   margin: 0 0 12px;
+  margin-left: 10px;
   font-size: 0.82rem;
   color: var(--accent-text);
   font-weight: 700;
@@ -2446,7 +2423,7 @@ input {
   margin: -6px 0 16px;
   padding: 10px 14px;
   border-radius: 10px;
-  background: var(--surface-2, #f8f9fb);
+  background: var(--surface-sunken);
   border: 1px solid var(--border, #e3e8ef);
   display: flex;
   flex-direction: column;
@@ -2496,7 +2473,7 @@ input {
   padding: 14px;
   border-radius: 12px;
   border: 1px dashed var(--border, #d8dee7);
-  background: var(--surface-2, #fafbfd);
+  background: var(--surface-sunken);
 }
 
 .question-cards__title {
@@ -2654,7 +2631,7 @@ input {
 }
 
 .flow-notes {
-  margin: 16px 0 0;
+  margin: 16px 0 8px;
   font-size: 0.82rem;
   color: var(--text-muted);
 }
@@ -4324,4 +4301,237 @@ input {
 
 .tour-card__next:hover {
   background: var(--brand-navy);
+}
+
+/* ---------- Vue Flow 편집 캔버스(FlowCanvas) — 추천 작업 흐름도 모달 ---------- */
+
+.flow-canvas {
+  position: relative;
+  width: 100%;
+  height: min(70vh, 640px);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface-sunken);
+}
+
+.flow-canvas .vue-flow__pane {
+  cursor: grab;
+}
+
+.flow-canvas .vue-flow__pane.dragging {
+  cursor: grabbing;
+}
+
+.flow-canvas .vue-flow__edge-path {
+  stroke: var(--accent-text);
+  stroke-width: 1.6;
+}
+
+.flow-canvas .vue-flow__arrowhead polyline,
+.flow-canvas .vue-flow__arrowhead path {
+  stroke: var(--accent-text);
+  fill: var(--accent-text);
+}
+
+.flow-canvas .vue-flow__background circle {
+  fill: var(--border);
+}
+
+.flow-canvas .vue-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.flow-canvas .vue-flow__controls-button {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  fill: var(--text);
+}
+
+.flow-canvas .vue-flow__controls-button:hover {
+  background: var(--surface-sunken-hover);
+}
+
+.flow-canvas .vue-flow__handle {
+  width: 8px;
+  height: 8px;
+  background: var(--brand-teal-dark);
+  border: 1px solid var(--surface);
+}
+
+/* 노드 컴포넌트 루트(ActionNode/ContainerNode/BranchSetNode/BranchColumnNode) — Vue Flow가
+   width/height를 인라인 스타일로 주는 바깥 래퍼를 그대로 채운다. */
+.flow-canvas-node {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.flow-canvas-box {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  max-width: none;
+  cursor: grab;
+}
+
+/* 번호-액션-패키지가 한 줄에 나란히, 남는 공간은 액션 텍스트가 차지하고 넘치면 말줄임(1줄) */
+.flow-canvas-box__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.flow-canvas-box__row .flow-node__num,
+.flow-canvas-box__row .flow-node__container-tag {
+  flex-shrink: 0;
+}
+
+.flow-canvas-box__text {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flow-canvas-box__edit-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.flow-canvas-box__edit-btn:hover {
+  background: var(--surface-sunken-hover);
+  color: var(--text);
+}
+
+.flow-canvas-box__input {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  resize: none;
+  border: 1px solid var(--brand-teal-dark);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+}
+
+/* 컨테이너/분기세트/분기컬럼 프레임 — 헤더(ActionBox)는 위쪽에 두고 자식들은 FlowCanvas가
+   별도 절대좌표 노드로 얹으므로, 프레임 자신은 배경·테두리만 그린다. */
+.flow-canvas-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border-radius: 12px;
+  border: 1px dashed var(--brand-teal-dark);
+  background: var(--brand-teal-light);
+}
+
+.flow-canvas-frame__header {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 0 8px;
+}
+
+.flow-canvas-frame__header .flow-canvas-box {
+  width: 100%;
+}
+
+.flow-canvas-frame--branch-set {
+  background: rgba(31, 47, 90, 0.03);
+  border: 1px solid var(--border);
+  border-style: solid;
+  padding-top: 6px;
+  box-sizing: border-box;
+}
+
+.flow-canvas-frame__label {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.flow-canvas-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.flow-canvas-col--terminal {
+  position: relative;
+}
+
+.flow-canvas-col__terminal {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  color: var(--danger);
+  font-weight: 800;
+  font-size: 0.8rem;
+}
+
+.flow-canvas-pill {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flow-canvas-step-title {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  margin: 0;
+}
+
+/* 드래그 중 드롭 대상 하이라이트 — FlowCanvas가 대상 노드에 이 클래스를 얹는다. */
+.flow-canvas-drop--before {
+  box-shadow: 0 -3px 0 0 var(--brand-teal-dark);
+}
+
+.flow-canvas-drop--after {
+  box-shadow: 0 3px 0 0 var(--brand-teal-dark);
+}
+
+.flow-canvas-drop--inside {
+  box-shadow: inset 0 0 0 2px var(--brand-teal-dark);
 }

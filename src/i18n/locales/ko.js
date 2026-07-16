@@ -204,6 +204,16 @@ export default {
     start: "시작",
     done: "완료",
     noResults: "표시할 추천 결과가 없습니다.",
+    edit: "편집",
+    exitEdit: "편집 종료",
+    save: "저장",
+    saving: "저장 중…",
+    discard: "편집 취소",
+    unsavedHint: "저장하지 않은 변경사항이 있습니다.",
+    changeSummary: {
+      editLabel: "액션 텍스트 수정",
+      reorder: "액션 순서 변경",
+    },
     source: {
       llm: "자동 생성",
       drag: "직접 편집",
@@ -318,12 +328,6 @@ export default {
 
   recommendation: {
     stepFallback: "단계 {n}",
-    confidence: {
-      high: "높음",
-      mid: "보통",
-      low: "낮음",
-    },
-    confidenceBadge: "{label} {percent}%",
   },
 
   api: {
