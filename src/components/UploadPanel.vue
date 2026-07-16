@@ -61,9 +61,15 @@ function onFileChange(event) {
   event.target.value = "";
 }
 
-function handleTextSubmit() {
+// 텍스트 입력은 파일과 달리 파싱이 곧장 끝나(status가 바로 "parsed") 검토할 추출 결과가
+// 따로 없다 — 그래서 제출 즉시 분석까지 이어 붙여, 파일 업로드처럼 "분석 시작"을 한 번 더
+// 눌러야 하는 중간 단계 없이 바로 분석 진행 상태로 넘어가게 한다.
+async function handleTextSubmit() {
   if (!textDraft.value.trim()) return;
-  pipeline.submitTextRequest(textDraft.value);
+  await pipeline.submitTextRequest(textDraft.value);
+  if (pipeline.document?.status === "parsed") {
+    pipeline.startAnalysis();
+  }
 }
 
 function switchMode(mode) {
