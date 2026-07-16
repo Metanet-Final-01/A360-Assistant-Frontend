@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
+import { computed, onBeforeUnmount, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { usePipelineStore } from "../stores/pipeline";
 import { formatDateShort } from "../utils/dateFormat";
@@ -9,15 +9,6 @@ const pipeline = usePipelineStore();
 const { t } = useI18n();
 
 const emit = defineEmits(["close"]);
-
-// 이 모달이 열려 있는 동안은 브라우저 실제 전체화면 모드로 전환한다 — 최대화 시
-// "화면 전체"가 탭/주소창 아래 뷰포트가 아니라 모니터 전체를 뜻하게 하고, 축소 상태에서도
-// 주소창이 있던 자리까지 포함해 자유롭게 드래그할 수 있게 하기 위해서다. 클릭(사용자 제스처)
-// 직후인 mount 시점에 요청해야 브라우저가 허용한다 — 거부돼도(권한 없음 등) 조용히 무시하고
-// 뷰포트 기준 레이아웃으로 자연히 대체된다.
-onMounted(() => {
-  document.documentElement.requestFullscreen?.().catch(() => {});
-});
 
 onBeforeUnmount(() => {
   if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
@@ -34,9 +25,21 @@ const canvasDirty = ref(false);
 const canvasSaving = ref(false);
 const isMaximized = ref(false);
 
+// 최대화 버튼을 누른 순간에만 브라우저 실제 전체화면 모드로 전환한다 — 주소창까지 포함해
+// 화면을 진짜로 다 채우려면 이 방법뿐이다(전체화면 진입 토스트·Esc로 풀리는 건 감수하기로 함).
+// 모달을 그냥 열기만 했을 때는 전체화면으로 전환하지 않는다.
+function toggleMaximize() {
+  isMaximized.value = !isMaximized.value;
+  if (isMaximized.value) {
+    document.documentElement.requestFullscreen?.().catch(() => {});
+  } else if (document.fullscreenElement) {
+    document.exitFullscreen?.().catch(() => {});
+  }
+}
+
 // ----- 창 드래그 이동(챗봇 팝업과 동일한 방식) -----
-// 최대화 상태가 아닐 때만 헤더를 드래그해 창을 옮길 수 있다 — 전체화면 모드가 이미 켜져
-// 있으므로(위 onMounted) 이동 가능 범위는 주소창이 있던 자리까지 포함한 화면 전체다.
+// 최대화 상태가 아닐 때만 헤더를 드래그해 창을 옮길 수 있다 — 이때는 전체화면 모드가 꺼져
+// 있으므로 이동 가능 범위는 브라우저 뷰포트(주소창 아래) 안으로 제한된다.
 const modalRef = ref(null);
 const position = reactive({ x: null, y: null });
 const isDragging = ref(false);
@@ -173,7 +176,7 @@ const formatDate = formatDateShort;
             type="button"
             class="modal__maximize"
             :aria-label="isMaximized ? t('recommendFlow.restore') : t('recommendFlow.maximize')"
-            @click="isMaximized = !isMaximized"
+            @click="toggleMaximize"
           >
             <svg v-if="!isMaximized" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path
