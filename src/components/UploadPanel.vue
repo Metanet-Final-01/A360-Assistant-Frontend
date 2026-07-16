@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { usePipelineStore } from "../stores/pipeline";
 import { evidenceLabel, formatBytes } from "../utils/format";
@@ -15,6 +15,16 @@ const textDraft = ref("");
 // 아래 분석 결과가 좁아 보인다 — 패널 자체 높이는 고정(.panel--wide)이라 접어도 패널 크기는
 // 그대로고, 접힌 만큼 분석 결과 영역이 넓어 보이는 효과만 낸다.
 const uploadSectionCollapsed = ref(false);
+
+// 텍스트 입력은 store가 아니라 이 컴포넌트가 로컬로 들고 있어서, 세션 전환(loadSession)이나
+// "새 요청 입력"처럼 store 쪽에서 pipeline.file이 지워지는 모든 경로를 여기서 따로 다 챙겨
+// 부르기보다, file이 사라지는 시점 자체를 감시해서 지운다 — 놓치는 경로가 없다.
+watch(
+  () => pipeline.file,
+  (file) => {
+    if (!file) textDraft.value = "";
+  },
+);
 
 const fileSizeLabel = computed(() =>
   pipeline.file ? formatBytes(pipeline.file.size) : "",
@@ -59,7 +69,6 @@ function handleTextSubmit() {
 function switchMode(mode) {
   inputMode.value = mode;
   pipeline.resetUpload();
-  textDraft.value = "";
 }
 
 function resetUploadSection() {
