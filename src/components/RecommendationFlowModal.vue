@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, reactive, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { usePipelineStore } from "../stores/pipeline";
 import { formatDateShort } from "../utils/dateFormat";
@@ -10,7 +10,19 @@ const { t } = useI18n();
 
 const emit = defineEmits(["close"]);
 
+// isMaximized는 실제 브라우저 전체화면 여부를 뒤따를 뿐, 직접 켜고 끄지 않는다 — 요청이
+// 거부되거나(권한 없음 등) 사용자가 Esc로 전체화면을 빠져나가면 fullscreenchange가 그 사실을
+// 알려주므로 그때 반영한다. 클릭 핸들러에서 미리 값을 바꾸면 그 사이 상태가 어긋난다.
+function syncMaximizedFromFullscreen() {
+  isMaximized.value = !!document.fullscreenElement;
+}
+
+onMounted(() => {
+  document.addEventListener("fullscreenchange", syncMaximizedFromFullscreen);
+});
+
 onBeforeUnmount(() => {
+  document.removeEventListener("fullscreenchange", syncMaximizedFromFullscreen);
   if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
 });
 
@@ -26,14 +38,13 @@ const canvasSaving = ref(false);
 const isMaximized = ref(false);
 
 // 최대화 버튼을 누른 순간에만 브라우저 실제 전체화면 모드로 전환한다 — 주소창까지 포함해
-// 화면을 진짜로 다 채우려면 이 방법뿐이다(전체화면 진입 토스트·Esc로 풀리는 건 감수하기로 함).
-// 모달을 그냥 열기만 했을 때는 전체화면으로 전환하지 않는다.
+// 화면을 진짜로 다 채우려면 이 방법뿐이다. 모달을 그냥 열기만 했을 때는 전체화면으로
+// 전환하지 않는다. isMaximized 자체는 위 fullscreenchange 리스너가 갱신한다.
 function toggleMaximize() {
-  isMaximized.value = !isMaximized.value;
-  if (isMaximized.value) {
-    document.documentElement.requestFullscreen?.().catch(() => {});
-  } else if (document.fullscreenElement) {
+  if (document.fullscreenElement) {
     document.exitFullscreen?.().catch(() => {});
+  } else {
+    document.documentElement.requestFullscreen?.().catch(() => {});
   }
 }
 
