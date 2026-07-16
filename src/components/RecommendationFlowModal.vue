@@ -8,7 +8,7 @@ import FlowCanvas from "./flow-canvas/FlowCanvas.vue";
 const pipeline = usePipelineStore();
 const { t } = useI18n();
 
-defineEmits(["close"]);
+const emit = defineEmits(["close"]);
 
 // steps→actions→children 트리를 FlowCanvas가 분기 컬럼·중첩 그대로 그린다(Vue Flow 캔버스,
 // 확대/축소·팬·텍스트 편집·드래그 재정렬 가능). 편집은 캔버스 안의 로컬 버퍼에만 쌓이고,
@@ -39,6 +39,18 @@ function exitEditMode() {
 function discardCanvasEdits() {
   flowCanvasRef.value?.discard();
   isEditMode.value = false;
+}
+
+// 오버레이 클릭·닫기 버튼 모두 이 핸들러를 거친다 — 저장 중엔 닫지 않고(비동기 저장이
+// 언마운트된 캔버스에 대고 끝나 버리는 걸 막는다), 저장 안 한 편집이 있으면 확인 없이
+// 조용히 버리지 않는다.
+function handleClose() {
+  if (canvasSaving.value) return;
+  if (canvasDirty.value) {
+    if (!window.confirm(t("recommendFlow.discardConfirm"))) return;
+    flowCanvasRef.value?.discard();
+  }
+  emit("close");
 }
 
 // FlowCanvas는 steps 배열만 다루지만, 저장 API는 Recommendation 트리 전체({ steps, notes, ... })를
@@ -80,7 +92,7 @@ const formatDate = formatDateShort;
 </script>
 
 <template>
-  <div class="modal-overlay" @click.self="$emit('close')">
+  <div class="modal-overlay" @click.self="handleClose">
     <div class="modal modal--flow" role="dialog" aria-modal="true" aria-labelledby="rec-flow-modal-title">
       <header class="modal__header">
         <h2 id="rec-flow-modal-title">
@@ -89,7 +101,7 @@ const formatDate = formatDateShort;
             v{{ pipeline.recommendation.version }}
           </span>
         </h2>
-        <button type="button" class="modal__close" :aria-label="t('common.close')" @click="$emit('close')">✕</button>
+        <button type="button" class="modal__close" :aria-label="t('common.close')" @click="handleClose">✕</button>
       </header>
 
       <div class="modal__body modal__body--flow">

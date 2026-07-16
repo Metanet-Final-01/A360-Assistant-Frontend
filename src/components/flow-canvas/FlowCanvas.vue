@@ -44,12 +44,15 @@ const pendingSummaries = ref([]);
 watch(dirty, (v) => emit("update:dirty", v));
 watch(saving, (v) => emit("update:saving", v));
 
-// 저장 안 된 로컬 편집이 있으면 외부(버전 되돌리기 등)에서 온 steps 변경을 조용히 덮어쓰지 않는다.
+// 외부(버전 되돌리기 등)에서 steps가 바뀌면 그게 새 정답이다 — 저장 안 한 로컬 편집(dirty)이
+// 있어도 무시하고 무조건 새 steps로 다시 맞춘다. 예전엔 dirty면 건너뛰어서, 되돌리기 직후
+// "저장"을 누르면 낡은 로컬 편집이 방금 되돌린 버전을 덮어써 버리는 문제가 있었다.
 watch(
   () => props.steps,
   (next) => {
-    if (dirty.value) return;
     editableTree.value = assignUiIds(cloneTree(next));
+    dirty.value = false;
+    pendingSummaries.value = [];
   },
 );
 

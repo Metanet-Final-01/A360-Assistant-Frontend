@@ -3,9 +3,12 @@
 // 역할이 고정된 구조 노드라 개별로는 드래그 불가(FlowCanvas가 draggable:false로 배치) —
 // 세트 전체를 옮기려면 BranchSetNode(부모 프레임)를 잡아야 한다.
 import { computed } from "vue";
+import { useI18n } from "vue-i18n";
 import { Handle, Position } from "@vue-flow/core";
 import ActionBox from "./ActionBox.vue";
 import { LAYOUT } from "../../utils/flowLayout";
+
+const { t } = useI18n();
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -34,7 +37,7 @@ const outTop = computed(() => LAYOUT.ROLE_BADGE_H + LAYOUT.NODE_H);
         @commit="data.onCommit?.($event)"
       />
     </div>
-    <span v-if="data.terminal" class="flow-canvas-col__terminal" title="여기서 끝나지 않고 Finally로 합류한 뒤 진행됨">✕</span>
+    <span v-if="data.terminal" class="flow-canvas-col__terminal" :title="t('recommendation.terminalHint')">✕</span>
     <Handle type="source" :position="Position.Bottom" id="out" :style="{ top: `${outTop}px`, bottom: 'auto' }" />
   </div>
 </template>

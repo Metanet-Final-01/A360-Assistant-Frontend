@@ -209,6 +209,8 @@ export default {
     save: "저장",
     saving: "저장 중…",
     discard: "편집 취소",
+    discardConfirm: "저장하지 않은 변경사항이 있습니다. 버리고 닫으시겠습니까?",
+    editTextTitle: "텍스트 수정",
     unsavedHint: "저장하지 않은 변경사항이 있습니다.",
     changeSummary: {
       editLabel: "액션 텍스트 수정",
@@ -328,6 +330,13 @@ export default {
 
   recommendation: {
     stepFallback: "단계 {n}",
+    untitledAction: "액션",
+    branchLabel: {
+      errorHandler: "예외 처리",
+      condition: "조건 분기",
+      generic: "분기 · {pkg}",
+    },
+    terminalHint: "여기서 끝나지 않고 Finally로 합류한 뒤 진행됨",
   },
 
   api: {

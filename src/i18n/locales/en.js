@@ -209,6 +209,8 @@ export default {
     save: "Save",
     saving: "Saving…",
     discard: "Discard edits",
+    discardConfirm: "You have unsaved changes. Discard them and close?",
+    editTextTitle: "Edit text",
     unsavedHint: "You have unsaved changes.",
     changeSummary: {
       editLabel: "Edited action text",
@@ -328,6 +330,13 @@ export default {
 
   recommendation: {
     stepFallback: "Step {n}",
+    untitledAction: "Action",
+    branchLabel: {
+      errorHandler: "Exception handling",
+      condition: "Conditional branch",
+      generic: "Branch · {pkg}",
+    },
+    terminalHint: "Doesn't end here — joins Finally and continues",
   },
 
   api: {

@@ -2,6 +2,9 @@
 // Vue Flow 캔버스의 액션 "박스" — action/container/branchColumn 세 노드 타입이 공통으로 쓰는
 // 프레젠테이션 컴포넌트. 더블클릭 또는 연필 버튼으로 라벨을 인라인 편집한다.
 import { nextTick, ref } from "vue";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const props = defineProps({
   prefix: { type: String, default: "" },
@@ -49,8 +52,8 @@ function cancel() {
         v-if="editable"
         type="button"
         class="flow-canvas-box__edit-btn nodrag nopan"
-        title="텍스트 수정"
-        aria-label="텍스트 수정"
+        :title="t('recommendFlow.editTextTitle')"
+        :aria-label="t('recommendFlow.editTextTitle')"
         @pointerdown.stop
         @click.stop="startEdit"
       >

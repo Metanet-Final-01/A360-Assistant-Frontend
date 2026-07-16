@@ -116,9 +116,9 @@ export function branchColumnExits(pkg, node, cols) {
 // 분기 블록 라벨 — 패키지별로 사람이 읽는 이름(단독 Try여도 '분기'가 아니라 '예외 처리').
 // 읽기 전용 렌더러(FlowSequence)와 Vue Flow 편집 캔버스(flowLayout)가 공유.
 export function branchLabel(pkg) {
-  if (pkg === "Error handler") return "예외 처리";
-  if (pkg === "If") return "조건 분기";
-  return `분기 · ${pkg}`;
+  if (pkg === "Error handler") return t("recommendation.branchLabel.errorHandler");
+  if (pkg === "If") return t("recommendation.branchLabel.condition");
+  return t("recommendation.branchLabel.generic", { pkg });
 }
 
 // items(형제 액션 목록)를 "분기 그룹"과 "일반 노드"로 세그먼트화한다 — 연속한 분기 노드

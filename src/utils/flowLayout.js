@@ -48,8 +48,8 @@ const NUM_FONT = "800 13px Inter, Pretendard, ui-sans-serif, sans-serif";
 
 // ActionBox.vue의 실제 CSS(.flow-box padding, gap 등)에 대략 맞춘 여유값을 더해 헤더 폭을 추정한다.
 function estimateNodeWidth(node) {
-  const label = node.label || node.action || "액션";
-  const pkg = node.package || "미지정";
+  const label = node.label || node.action || t("recommendation.untitledAction");
+  const pkg = node.package || t("common.unspecified");
   const numW = measureTextWidth("00.00", NUM_FONT) + 4; // 번호("12.3" 등) 최대 폭 여유
   const labelW = measureTextWidth(label, LABEL_FONT);
   const tagW = measureTextWidth(pkg, TAG_FONT) + 20; // 태그 좌우 패딩
@@ -93,9 +93,9 @@ function layoutNodeSegment(item, centerX, y, ctx) {
   const uid = node.__uid;
   const hasChildren = (node.children?.length ?? 0) > 0;
   const data = {
-    label: node.label || node.action || "액션",
+    label: node.label || node.action || t("recommendation.untitledAction"),
     prefix: ctx.prefixes.get(uid) ?? "",
-    pkg: node.package || "미지정",
+    pkg: node.package || t("common.unspecified"),
     color: ctx.colorFor(node.package),
     isContainer: hasChildren,
     nodePath: item.nodePath,
@@ -138,6 +138,23 @@ function layoutNodeSegment(item, centerX, y, ctx) {
   };
 }
 
+// measureColumnSize(크기만 필요)와 layoutColumn(실제 위치까지 필요)이 같은 자식 목록을 각각
+// layoutList로 다시 계산하면 중첩 분기에서 하위 서브트리가 계속 두 번씩 겹쳐 계산된다(깊이가
+// 늘수록 배로 불어남). layoutList의 결과 좌표는 (centerX, y) 시작점의 선형함수라 원점(0,0)
+// 기준으로 한 번만 계산해 캐싱해 두고, 실제 위치가 필요할 때는 그 결과를 델타만큼 평행이동해
+// 재사용한다 — 버려질 그래프를 두 번 만들지 않는다. col.node.__uid로 캐시해 두 함수가 같은
+// 컬럼의 자식 목록에 대해 항상 같은 결과를 공유한다.
+function layoutListCached(items, uid, ctx) {
+  if (ctx.listCache.has(uid)) return ctx.listCache.get(uid);
+  const result = layoutList(items, 0, 0, ctx);
+  ctx.listCache.set(uid, result);
+  return result;
+}
+
+function translateLayout(layout, dx, dy) {
+  return { ...layout, nodes: layout.nodes.map((n) => ({ ...n, position: { x: n.position.x + dx, y: n.position.y + dy } })) };
+}
+
 // 분기 컬럼 하나(Try/Catch/Finally 또는 If/ElseIf/Else 중 하나)의 프레임 크기만 먼저 잰다
 // (좌우로 나란히 놓기 전에 각 컬럼 폭을 알아야 하는 2-pass 중 1pass).
 function measureColumnSize(col, ctx) {
@@ -147,7 +164,7 @@ function measureColumnSize(col, ctx) {
     return { width: headerW + LAYOUT.PAD * 2, height: LAYOUT.ROLE_BADGE_H + LAYOUT.NODE_H + LAYOUT.PAD * 2 };
   }
   const childItems = col.node.children.map((c, i) => ({ node: c, nodePath: [...col.nodePath, "children", i] }));
-  const childSize = layoutList(childItems, 0, 0, ctx); // 위치는 버리고 크기만 쓴다
+  const childSize = layoutListCached(childItems, col.node.__uid, ctx); // 위치는 버리고 크기만 쓴다
   return {
     width: Math.max(headerW, childSize.width) + LAYOUT.PAD * 2,
     height: LAYOUT.ROLE_BADGE_H + LAYOUT.NODE_H + LAYOUT.PAD + childSize.height + LAYOUT.PAD * 2,
@@ -160,9 +177,9 @@ function layoutColumn(col, colCenterX, y, size, exits, ctx) {
   const hasChildren = (node.children?.length ?? 0) > 0;
   const frameX = colCenterX - size.width / 2;
   const data = {
-    label: node.label || node.action || "액션",
+    label: node.label || node.action || t("recommendation.untitledAction"),
     prefix: ctx.prefixes.get(uid) ?? "",
-    pkg: node.package || "미지정",
+    pkg: node.package || t("common.unspecified"),
     color: ctx.colorFor(node.package),
     isContainer: hasChildren,
     role: branchRole(node),
@@ -176,7 +193,8 @@ function layoutColumn(col, colCenterX, y, size, exits, ctx) {
   if (hasChildren) {
     const childItems = node.children.map((c, i) => ({ node: c, nodePath: [...col.nodePath, "children", i] }));
     const headerBottom = y + LAYOUT.ROLE_BADGE_H + LAYOUT.NODE_H + LAYOUT.PAD;
-    const childLayout = layoutList(childItems, colCenterX, headerBottom, ctx);
+    const cached = layoutListCached(childItems, uid, ctx);
+    const childLayout = translateLayout(cached, colCenterX, headerBottom);
     nodes.push(...childLayout.nodes);
     edges.push(...childLayout.edges);
     if (childLayout.topId) edges.push(makeEdge(uid, childLayout.topId));
@@ -264,8 +282,8 @@ function computePrefixes(steps) {
 export function buildFlowGraph(steps) {
   const prefixes = computePrefixes(steps);
   const packageColor = buildPackageColorMap(steps);
-  const colorFor = (pkg) => packageColor.get(pkg || "미지정") ?? "#888888";
-  const ctx = { prefixes, colorFor };
+  const colorFor = (pkg) => packageColor.get(pkg || t("common.unspecified")) ?? "#888888";
+  const ctx = { prefixes, colorFor, listCache: new Map() };
 
   const centerX = 0;
   const nodes = [];
