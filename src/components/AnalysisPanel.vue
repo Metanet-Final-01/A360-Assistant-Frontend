@@ -25,11 +25,11 @@ const rootRef = ref(null);
 // 1:1이 아니므로(에이전트가 자유롭게 합치고 쪼갠다), step_id로 분석 결과와 매칭하지 않고
 // 흐름도 데이터만으로 독립적으로 렌더한다.
 const hasSteps = computed(() => (pipeline.analysis?.steps ?? []).length > 0);
-// "흐름도 보기"/"JSON 다운로드" 버튼을 보여줄지: 분석이 단계를 찾아 새로 생성할 수 있거나(hasSteps),
-// 텍스트 업로드처럼 분석이 단계를 못 찾았어도 챗봇 대화(예: "분석해서 흐름도까지 만들어줘")로 이미
-// 흐름도가 만들어져 있으면(pipeline.recommendation) 보여준다 — 이 경우 analysisStatus/hasSteps만으로는
-// 판단할 수 없다.
-const canShowRecommendFooter = computed(
+// "흐름도 보기"/"JSON 내보내기" 버튼(타이틀 우측)을 보여줄지: 분석이 단계를 찾아 새로 생성할 수
+// 있거나(hasSteps), 텍스트 업로드처럼 분석이 단계를 못 찾았어도 챗봇 대화(예: "분석해서 흐름도까지
+// 만들어줘")로 이미 흐름도가 만들어져 있으면(pipeline.recommendation) 보여준다 — 이 경우
+// analysisStatus/hasSteps만으로는 판단할 수 없다. 업무정의서 업로드 전에는 버튼 자체가 보이지 않는다.
+const canUseFlowActions = computed(
   () => (pipeline.analysisStatus === "done" && hasSteps.value) || !!pipeline.recommendation,
 );
 
@@ -174,6 +174,36 @@ async function submitCards() {
         >⠿</span
       >
       <h2 id="analysis-panel-title">{{ t("recommendDetail.title") }}</h2>
+      <div v-if="canUseFlowActions" class="panel__header-actions">
+        <span v-if="pipeline.recommendation" class="panel__header-version">
+          v{{ pipeline.recommendation.version }}
+        </span>
+        <span
+          v-if="flowConfidence != null"
+          class="flow-confidence"
+          :class="flowConfidence >= 0.7 ? 'flow-confidence--high' : flowConfidence >= 0.4 ? 'flow-confidence--mid' : 'flow-confidence--low'"
+          title="흐름도 수준 신뢰도 — 요구 커버리지 × 검증 결과 × 시뮬레이션 (v3)"
+        >
+          신뢰도 {{ Math.round(flowConfidence * 100) }}%
+        </span>
+        <button
+          type="button"
+          class="btn btn--outline panel__header-btn"
+          :disabled="pipeline.recommendStatus === 'generating' || liveMode"
+          @click="openFlowView"
+        >
+          {{ pipeline.recommendStatus === "generating" || liveMode ? t("recommendDetail.generating") : t("recommendDetail.viewFlow") }}
+        </button>
+        <button
+          type="button"
+          class="btn btn--outline panel__header-btn"
+          :disabled="!canExport"
+          :title="canExport ? '' : t('recommendDetail.exportDisabledHint')"
+          @click="downloadJson"
+        >
+          {{ t("recommendDetail.exportJson") }}
+        </button>
+      </div>
     </header>
 
     <div class="panel__body">
@@ -337,54 +367,13 @@ async function submitCards() {
       </div>
     </div>
 
-    <div v-if="canShowRecommendFooter" class="panel__footer">
-      <div class="recommend-section">
-        <h3 class="export-section__title">{{ t("recommendDetail.recommendSectionTitle") }}</h3>
-
-        <div class="recommend-section__actions">
-          <span v-if="pipeline.recommendation" class="recommend-section__version">
-            v{{ pipeline.recommendation.version }}
-          </span>
-          <span
-            v-if="flowConfidence != null"
-            class="flow-confidence"
-            :class="flowConfidence >= 0.7 ? 'flow-confidence--high' : flowConfidence >= 0.4 ? 'flow-confidence--mid' : 'flow-confidence--low'"
-            title="흐름도 수준 신뢰도 — 요구 커버리지 × 검증 결과 × 시뮬레이션 (v3)"
-          >
-            신뢰도 {{ Math.round(flowConfidence * 100) }}%
-          </span>
-          <button
-            type="button"
-            class="btn btn--primary"
-            :disabled="pipeline.recommendStatus === 'generating' || liveMode"
-            @click="openFlowView"
-          >
-            {{ pipeline.recommendStatus === "generating" || liveMode ? t("recommendDetail.generating") : t("recommendDetail.viewFlow") }}
-          </button>
-        </div>
-        <p v-if="pipeline.recommendStatus === 'error'" class="upload-error recommend-section__save-error">
-          {{ pipeline.recommendError }}
-        </p>
-        <p v-if="pipeline.recommendSaveError" class="upload-error recommend-section__save-error">
-          {{ pipeline.recommendSaveError }}
-        </p>
-      </div>
-
-      <div class="export-section">
-        <h3 class="export-section__title">{{ t("recommendDetail.exportTitle") }}</h3>
-        <div class="export-section__actions">
-          <button
-            type="button"
-            class="btn btn--outline"
-            :disabled="!canExport"
-            :title="canExport ? '' : t('recommendDetail.exportDisabledHint')"
-            @click="downloadJson"
-          >
-            {{ t("recommendDetail.exportJson") }}
-          </button>
-        </div>
-        <p v-if="exportError" class="upload-error recommend-section__save-error">{{ exportError }}</p>
-      </div>
+    <div
+      v-if="pipeline.recommendStatus === 'error' || pipeline.recommendSaveError || exportError"
+      class="panel__footer panel__footer--errors"
+    >
+      <p v-if="pipeline.recommendStatus === 'error'" class="upload-error">{{ pipeline.recommendError }}</p>
+      <p v-if="pipeline.recommendSaveError" class="upload-error">{{ pipeline.recommendSaveError }}</p>
+      <p v-if="exportError" class="upload-error">{{ exportError }}</p>
     </div>
   </section>
 

@@ -476,10 +476,10 @@ function startAddStep() {
               fill="none"
               :aria-label="t('upload.status.done')"
             >
-              <circle cx="12" cy="12" r="10" fill="#e8f8ee" />
+              <circle cx="12" cy="12" r="10" fill="var(--success-bg)" />
               <path
                 d="M8 12.5l2.5 2.5L16 9.5"
-                stroke="#1f9d55"
+                stroke="var(--success)"
                 stroke-width="1.8"
                 stroke-linecap="round"
                 stroke-linejoin="round"

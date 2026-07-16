@@ -16,6 +16,7 @@
   --mid-bg: #eaf1fb;
   --warning: #b7791f;
   --warning-bg: #fdf3e2;
+  --warning-rgb: 183, 121, 31; /* --warning의 RGB — 반투명(rgba) 강조에 rgba(var(--warning-rgb), α)로 쓴다 */
   --danger: #d84a3a;
   --danger-bg: #fbeceb;
   --danger-rgb: 216, 74, 58; /* --danger의 RGB — 반투명(rgba) 강조에 rgba(var(--danger-rgb), α)로 쓴다 */
@@ -59,8 +60,10 @@
   --mid-bg: #17293c;
   --warning: #e0a83f;
   --warning-bg: #3a2e12;
+  --warning-rgb: 224, 168, 63;
   --danger: #e8695a;
   --danger-bg: #3a1e1c;
+  --danger-rgb: 232, 105, 90;
 
   --surface-sunken: #26313b;
   --surface-sunken-hover: #303e49;
@@ -580,13 +583,6 @@ input {
   .panel__footer {
     flex-direction: column;
   }
-
-  .panel__footer > .export-section {
-    border-left: 0;
-    padding-left: 0;
-    border-top: 1px dashed var(--border);
-    padding-top: 18px;
-  }
 }
 
 .chat-widget {
@@ -679,17 +675,42 @@ input {
   cursor: grabbing;
 }
 
-/* 드래그 중인 패널은 흐리게, 드롭 대상 패널은 점선 테두리로 표시.
+/* 드래그 중인 패널은 흐리게 표시.
    챗봇은 래퍼(display: contents)에 클래스가 달리므로 자식 팝업에 적용한다. */
 .panel-reorder-source,
 .panel-reorder-source > .chat-popup--docked {
   opacity: 0.45;
 }
 
+/* 드롭 대상 표시 — 패널 전체가 아니라, 놓였을 때 실제로 끼워지는 자리(대상 패널의 왼쪽,
+   패널 사이 간격 한가운데)에 세로 점선 하나만 그린다. commitDrop()이 드래그한 패널을
+   "대상의 인덱스 자리"에 꽂아 넣으므로(대상과 그 뒤 패널들은 한 칸씩 밀림), 실제로 새로
+   생기는 경계는 항상 대상 패널의 왼쪽이다 — 패널 하나를 통째로 감싸면 "이 패널을 덮어쓴다"
+   처럼 보여 오해를 사므로, 경계선만 보여준다. */
 .panel-reorder-target,
 .panel-reorder-target > .chat-popup--docked {
-  outline: 3px dashed var(--brand-teal);
-  outline-offset: 4px;
+  position: relative;
+}
+
+.panel-reorder-target::before,
+.panel-reorder-target > .chat-popup--docked::before {
+  content: "";
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: calc(var(--panel-gap, 24px) * -0.5 - 1.5px);
+  width: 0;
+  border-left: 3px dashed var(--brand-teal);
+  pointer-events: none;
+}
+
+/* 900px 이하에서는 패널이 좌우가 아니라 위아래로 쌓인다(.app-main__grid의 반응형 규칙 참고) —
+   왼쪽 경계에 세로 점선을 긋는 위 마커는 이 레이아웃에서 의미가 없으므로 숨긴다. */
+@media (max-width: 900px) {
+  .panel-reorder-target::before,
+  .panel-reorder-target > .chat-popup--docked::before {
+    display: none;
+  }
 }
 
 /* ---------- Panel ---------- */
@@ -707,6 +728,7 @@ input {
   padding: 16px 20px;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -715,6 +737,37 @@ input {
   color: #ffffff;
   font-size: 1rem;
   font-weight: 800;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+/* .btn 기본 규칙(패딩 12px/폰트 0.9rem)이 소스 순서상 뒤에 나와 동률 우선순위에서 이겨버리므로,
+   클래스 두 개를 겹친 선택자로 우선순위를 올려 확실히 덮어쓴다. */
+.btn.panel__header-btn {
+  padding: 5px 12px;
+  font-size: 0.76rem;
+  line-height: 1.3;
+}
+
+.panel__header-version {
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1.3;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.18);
+  padding: 3px 8px;
+  border-radius: 999px;
 }
 
 .panel__body {
@@ -1448,28 +1501,9 @@ input {
   flex-shrink: 0;
 }
 
-.panel__footer > .recommend-section,
-.panel__footer > .export-section {
-  flex: 1;
-  min-width: 0;
-}
-
-.panel__footer > .export-section {
-  border-left: 1px dashed var(--border);
-  padding-left: 24px;
-}
-
-.export-section__title {
-  margin: 0 0 12px;
-  font-size: 0.92rem;
-  font-weight: 800;
-  color: var(--text);
-}
-
-.export-section__actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+.panel__footer--errors {
+  flex-direction: column;
+  gap: 8px;
 }
 
 /* ---------- Transitions ---------- */
@@ -1988,26 +2022,6 @@ input {
 
 /* ---------- Recommendation flow (RPA-61) ---------- */
 
-.recommend-section__actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.recommend-section__version {
-  font-size: 0.8rem;
-  font-weight: 800;
-  color: var(--accent-text);
-  background: var(--brand-teal-light);
-  padding: 4px 10px;
-  border-radius: 999px;
-}
-
-.recommend-section__save-error {
-  margin: 10px 0 0;
-}
-
 .modal--recommend-loading {
   width: min(100%, 320px);
 }
@@ -2138,7 +2152,7 @@ input {
   border-radius: 999px;
   font-size: 0.64rem;
   font-weight: 700;
-  color: var(--brand-teal-dark);
+  color: var(--accent-text);
   background: var(--brand-teal-light);
   vertical-align: middle;
 }
@@ -2392,7 +2406,7 @@ input {
   border-radius: 999px;
   font-size: 0.72rem;
   font-weight: 700;
-  color: var(--brand-navy);
+  color: var(--text);
   background: rgba(31, 47, 90, 0.06);
 }
 
@@ -2963,18 +2977,18 @@ input {
 
 /* 게이지가 압축 권장/필요 상태면 버튼을 강조해 사용자가 누르도록 유도한다 (RPA-83) */
 .chat-popup__compact--recommended {
-  border-color: #b7791f;
-  color: #b7791f;
+  border-color: var(--warning);
+  color: var(--warning);
   animation: compact-pulse 1.6s ease-in-out infinite;
 }
 
 @keyframes compact-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(183, 121, 31, 0.35);
+    box-shadow: 0 0 0 0 rgba(var(--warning-rgb), 0.35);
   }
   50% {
-    box-shadow: 0 0 0 5px rgba(183, 121, 31, 0);
+    box-shadow: 0 0 0 5px rgba(var(--warning-rgb), 0);
   }
 }
 
@@ -3008,13 +3022,13 @@ input {
 }
 
 .chat-gauge__fill {
-  stroke: #1f9d55;
+  stroke: var(--success);
   stroke-linecap: round;
   transition: stroke-dasharray 0.4s ease;
 }
 
 .chat-gauge--warn .chat-gauge__fill {
-  stroke: #b7791f;
+  stroke: var(--warning);
 }
 
 .chat-gauge--critical .chat-gauge__fill {
@@ -3028,7 +3042,7 @@ input {
 }
 
 .chat-gauge--warn .chat-gauge__label {
-  color: #b7791f;
+  color: var(--warning);
 }
 
 .chat-gauge--critical .chat-gauge__label {
@@ -3319,24 +3333,29 @@ input {
   background: var(--surface);
 }
 
-.chat-popup__composer input {
+.chat-popup__composer textarea {
   flex: 1;
   min-width: 0;
+  max-height: 120px;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 12px;
+  font-family: inherit;
   font-size: 0.86rem;
+  line-height: 1.4;
+  resize: none;
+  overflow-y: auto;
   background: var(--surface);
   color: var(--text);
 }
 
-.chat-popup__composer input:focus {
+.chat-popup__composer textarea:focus {
   outline: none;
   border-color: var(--brand-teal);
   box-shadow: 0 0 0 3px var(--brand-teal-light);
 }
 
-.chat-popup__composer input:disabled {
+.chat-popup__composer textarea:disabled {
   background: var(--bg);
   color: var(--text-muted);
   cursor: not-allowed;

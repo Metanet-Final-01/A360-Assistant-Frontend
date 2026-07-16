@@ -86,11 +86,13 @@ function toggleHistory() {
 
 onMounted(() => {
   mobileMql.addEventListener("change", handleMobileChange);
+  window.addEventListener("pointerdown", closeMenuOnOutsideClick);
   archive.loadSessions();
 });
 
 onBeforeUnmount(() => {
   mobileMql.removeEventListener("change", handleMobileChange);
+  window.removeEventListener("pointerdown", closeMenuOnOutsideClick);
 });
 
 const filteredSessions = computed(() => {
@@ -123,7 +125,8 @@ function toggleMenu(id, event) {
   openMenuId.value = openMenuId.value === id ? null : id;
 }
 
-function handleHistoryClick(event) {
+// 메뉴 바깥 어디를 눌러도 닫는다 — 이력 목록 안쪽 클릭으로만 닫히던 것을 문서 전체로 넓힌다.
+function closeMenuOnOutsideClick(event) {
   if (openMenuId.value && !event.target.closest(".archive-chat__item-menu-wrap")) {
     openMenuId.value = null;
   }
@@ -216,7 +219,7 @@ async function removeSession(id, event) {
           class="app-sidebar__history-wrap"
           :class="{ 'app-sidebar__history-wrap--open': historyExpanded }"
         >
-          <div class="app-sidebar__history" @click="handleHistoryClick">
+          <div class="app-sidebar__history">
             <button
               type="button"
               class="app-sidebar__new-chat"
