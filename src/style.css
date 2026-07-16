@@ -285,6 +285,7 @@ input {
   padding: 16px 0;
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
 }
 
 .app-sidebar__nav-item {
@@ -324,7 +325,7 @@ input {
   display: grid;
   grid-template-rows: minmax(0, 0fr);
   transition: grid-template-rows 0.24s ease;
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
 }
 
@@ -3947,22 +3948,6 @@ input {
   height: 15px;
   accent-color: var(--accent-text);
   cursor: pointer;
-}
-
-.login-forgot {
-  font-size: 0.84rem;
-  font-weight: 700;
-  color: var(--accent-text);
-  text-decoration: none;
-}
-
-.login-forgot:hover {
-  text-decoration: underline;
-}
-
-.login-forgot--center {
-  align-self: center;
-  margin-top: 4px;
 }
 
 /* ---------- 사이드바 세션 이력 (구 아카이브 화면에서 이동, RPA-100) ---------- */

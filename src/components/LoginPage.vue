@@ -138,8 +138,6 @@ async function handleSubmit() {
             {{ t("auth.login.rememberMe") }}
           </label>
         </div>
-
-        <a class="login-forgot login-forgot--center" href="#" @click.prevent>{{ t("auth.login.forgotPassword") }}</a>
       </form>
     </section>
   </AuthCard>

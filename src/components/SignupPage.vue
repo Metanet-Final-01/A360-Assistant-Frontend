@@ -62,11 +62,6 @@ async function handleSubmit() {
 
       <div class="modal__body">
         <section class="login-card login-card--modal" aria-labelledby="signup-title">
-          <p class="login-card__inline-link">
-            {{ t("auth.signup.hasAccount") }}
-            <button type="button" class="login-card__link-btn" @click="$emit('login')">{{ t("auth.signup.loginLink") }}</button>
-          </p>
-
           <form class="login-form" @submit.prevent="handleSubmit">
             <div class="login-field">
               <label class="login-field__label" for="signup-email">{{ t("auth.signup.emailLabel") }}</label>

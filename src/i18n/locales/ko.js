@@ -109,7 +109,6 @@ export default {
       submit: "로그인",
       submitting: "로그인 중…",
       rememberMe: "로그인 상태 유지",
-      forgotPassword: "비밀번호를 잊으셨나요?",
       errors: {
         missingFields: "이메일과 비밀번호를 모두 입력해주세요.",
         generic: "로그인 중 오류가 발생했습니다.",
@@ -117,8 +116,6 @@ export default {
     },
     signup: {
       title: "회원가입",
-      hasAccount: "이미 계정이 있으신가요?",
-      loginLink: "로그인",
       emailLabel: "이메일",
       emailPlaceholder: "이메일 주소를 입력하세요",
       passwordLabel: "비밀번호",

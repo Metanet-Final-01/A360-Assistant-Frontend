@@ -109,7 +109,6 @@ export default {
       submit: "Log in",
       submitting: "Logging in…",
       rememberMe: "Keep me signed in",
-      forgotPassword: "Forgot your password?",
       errors: {
         missingFields: "Please enter both email and password.",
         generic: "An error occurred while logging in.",
@@ -117,8 +116,6 @@ export default {
     },
     signup: {
       title: "Sign up",
-      hasAccount: "Already have an account?",
-      loginLink: "Log in",
       emailLabel: "Email",
       emailPlaceholder: "Enter your email address",
       passwordLabel: "Password",
