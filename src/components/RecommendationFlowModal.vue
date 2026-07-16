@@ -10,16 +10,19 @@ const { t } = useI18n();
 
 const emit = defineEmits(["close"]);
 
-// 이 모달이 열려 있는 동안은 브라우저 실제 전체화면 모드로 전환한다 — 최대화 시
-// "화면 전체"가 탭/주소창 아래 뷰포트가 아니라 모니터 전체를 뜻하게 하고, 축소 상태에서도
-// 주소창이 있던 자리까지 포함해 자유롭게 드래그할 수 있게 하기 위해서다. 클릭(사용자 제스처)
-// 직후인 mount 시점에 요청해야 브라우저가 허용한다 — 거부돼도(권한 없음 등) 조용히 무시하고
-// 뷰포트 기준 레이아웃으로 자연히 대체된다.
+// isMaximized는 실제 브라우저 전체화면 여부를 뒤따를 뿐, 직접 켜고 끄지 않는다 — 요청이
+// 거부되거나(권한 없음 등) 사용자가 Esc로 전체화면을 빠져나가면 fullscreenchange가 그 사실을
+// 알려주므로 그때 반영한다. 클릭 핸들러에서 미리 값을 바꾸면 그 사이 상태가 어긋난다.
+function syncMaximizedFromFullscreen() {
+  isMaximized.value = !!document.fullscreenElement;
+}
+
 onMounted(() => {
-  document.documentElement.requestFullscreen?.().catch(() => {});
+  document.addEventListener("fullscreenchange", syncMaximizedFromFullscreen);
 });
 
 onBeforeUnmount(() => {
+  document.removeEventListener("fullscreenchange", syncMaximizedFromFullscreen);
   if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
 });
 
@@ -34,9 +37,20 @@ const canvasDirty = ref(false);
 const canvasSaving = ref(false);
 const isMaximized = ref(false);
 
+// 최대화 버튼을 누른 순간에만 브라우저 실제 전체화면 모드로 전환한다 — 주소창까지 포함해
+// 화면을 진짜로 다 채우려면 이 방법뿐이다. 모달을 그냥 열기만 했을 때는 전체화면으로
+// 전환하지 않는다. isMaximized 자체는 위 fullscreenchange 리스너가 갱신한다.
+function toggleMaximize() {
+  if (document.fullscreenElement) {
+    document.exitFullscreen?.().catch(() => {});
+  } else {
+    document.documentElement.requestFullscreen?.().catch(() => {});
+  }
+}
+
 // ----- 창 드래그 이동(챗봇 팝업과 동일한 방식) -----
-// 최대화 상태가 아닐 때만 헤더를 드래그해 창을 옮길 수 있다 — 전체화면 모드가 이미 켜져
-// 있으므로(위 onMounted) 이동 가능 범위는 주소창이 있던 자리까지 포함한 화면 전체다.
+// 최대화 상태가 아닐 때만 헤더를 드래그해 창을 옮길 수 있다 — 이때는 전체화면 모드가 꺼져
+// 있으므로 이동 가능 범위는 브라우저 뷰포트(주소창 아래) 안으로 제한된다.
 const modalRef = ref(null);
 const position = reactive({ x: null, y: null });
 const isDragging = ref(false);
@@ -127,6 +141,39 @@ const revertingVersion = ref(null);
 
 pipeline.loadRecommendationHistory();
 
+// grid-template-rows(0fr↔1fr)로 열고 닫으면 목록 내용의 max-content 높이를 매 프레임 다시
+// 재는 과정에서 버벅였다 — 대신 실제 픽셀 높이(scrollHeight) 사이를 보간하는 표준적인
+// "auto 높이로 트랜지션" 기법을 쓴다: 시작/끝 높이를 한 번만 측정해 그 사이를 선형 보간하므로
+// 프레임마다 다시 측정할 필요가 없어 부드럽다.
+function onHistoryEnter(el, done) {
+  el.style.height = "0px";
+  const targetHeight = el.scrollHeight;
+  requestAnimationFrame(() => {
+    el.style.transition = "height 0.22s ease";
+    el.style.height = `${targetHeight}px`;
+  });
+  el.addEventListener("transitionend", function onEnd(event) {
+    if (event.propertyName !== "height") return;
+    el.removeEventListener("transitionend", onEnd);
+    el.style.height = "";
+    el.style.transition = "";
+    done();
+  });
+}
+
+function onHistoryLeave(el, done) {
+  el.style.height = `${el.scrollHeight}px`;
+  requestAnimationFrame(() => {
+    el.style.transition = "height 0.22s ease";
+    el.style.height = "0px";
+  });
+  el.addEventListener("transitionend", function onEnd(event) {
+    if (event.propertyName !== "height") return;
+    el.removeEventListener("transitionend", onEnd);
+    done();
+  });
+}
+
 const KNOWN_SOURCES = ["llm", "drag", "chat", "feedback"];
 
 function versionDescription(v) {
@@ -173,7 +220,7 @@ const formatDate = formatDateShort;
             type="button"
             class="modal__maximize"
             :aria-label="isMaximized ? t('recommendFlow.restore') : t('recommendFlow.maximize')"
-            @click="isMaximized = !isMaximized"
+            @click="toggleMaximize"
           >
             <svg v-if="!isMaximized" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path
@@ -229,36 +276,40 @@ const formatDate = formatDateShort;
 
         <p v-if="pipeline.recommendSaveError" class="upload-error">{{ pipeline.recommendSaveError }}</p>
 
-        <div v-if="showHistory" class="flow-history">
-          <h3 class="flow-history__title">{{ t("recommendFlow.versionHistory") }}</h3>
-          <p v-if="!pipeline.recommendVersions.length" class="flow-history__empty">
-            {{ t("recommendFlow.noVersions") }}
-          </p>
-          <ol v-else class="flow-history__list">
-            <li v-for="v in pipeline.recommendVersions" :key="v.id" class="flow-history__item">
-              <div class="flow-history__meta">
-                <strong>v{{ v.version }}</strong>
-                <span v-if="v.version === pipeline.recommendation?.version" class="flow-history__current">
-                  {{ t("recommendFlow.current") }}
-                </span>
-                <span class="flow-history__desc">{{ versionDescription(v) }}</span>
-                <time class="flow-history__date">{{ formatDate(v.created_at) }}</time>
-              </div>
-              <button
-                v-if="canRevert(v)"
-                type="button"
-                class="btn btn--outline flow-history__revert"
-                :disabled="revertingVersion !== null"
-                @click="revertTo(v.version)"
-              >
-                {{ revertingVersion === v.version ? t("recommendFlow.reverting") : t("recommendFlow.revert") }}
-              </button>
-            </li>
-          </ol>
-          <p class="flow-history__hint">
-            {{ t("recommendFlow.revertHint") }}
-          </p>
-        </div>
+        <Transition :css="false" @enter="onHistoryEnter" @leave="onHistoryLeave">
+          <div v-if="showHistory" class="flow-history-collapse">
+            <div class="flow-history">
+              <h3 class="flow-history__title">{{ t("recommendFlow.versionHistory") }}</h3>
+              <p v-if="!pipeline.recommendVersions.length" class="flow-history__empty">
+                {{ t("recommendFlow.noVersions") }}
+              </p>
+              <ol v-else class="flow-history__list">
+                <li v-for="v in pipeline.recommendVersions" :key="v.id" class="flow-history__item">
+                  <div class="flow-history__meta">
+                    <strong>v{{ v.version }}</strong>
+                    <span v-if="v.version === pipeline.recommendation?.version" class="flow-history__current">
+                      {{ t("recommendFlow.current") }}
+                    </span>
+                    <span class="flow-history__desc">{{ versionDescription(v) }}</span>
+                    <time class="flow-history__date">{{ formatDate(v.created_at) }}</time>
+                  </div>
+                  <button
+                    v-if="canRevert(v)"
+                    type="button"
+                    class="btn btn--outline flow-history__revert"
+                    :disabled="revertingVersion !== null"
+                    @click="revertTo(v.version)"
+                  >
+                    {{ revertingVersion === v.version ? t("recommendFlow.reverting") : t("recommendFlow.revert") }}
+                  </button>
+                </li>
+              </ol>
+              <p class="flow-history__hint">
+                {{ t("recommendFlow.revertHint") }}
+              </p>
+            </div>
+          </div>
+        </Transition>
 
         <FlowCanvas
           v-if="hasActions"
