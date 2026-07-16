@@ -17,8 +17,10 @@ const textDraft = ref("");
 const uploadSectionCollapsed = ref(false);
 
 // 텍스트 입력은 store가 아니라 이 컴포넌트가 로컬로 들고 있어서, 세션 전환(loadSession)이나
-// "새 요청 입력"처럼 store 쪽에서 pipeline.file이 지워지는 모든 경로를 여기서 따로 다 챙겨
-// 부르기보다, file이 사라지는 시점 자체를 감시해서 지운다 — 놓치는 경로가 없다.
+// "새 요청 입력"처럼 store 쪽에서 pipeline.file이 지워지는 경로를 여기서 따로 다 챙겨 부르기보다,
+// file이 사라지는 시점 자체를 감시해서 지운다. 다만 watch는 값이 실제로 바뀔 때만 발동해서
+// file이 이미 null인 상태(예: 파일 없이 텍스트만 쓰던 중)의 리셋은 못 잡는다 — 그 경우는
+// switchMode에서 명시적으로 지운다.
 watch(
   () => pipeline.file,
   (file) => {
@@ -66,14 +68,15 @@ function onFileChange(event) {
 // 눌러야 하는 중간 단계 없이 바로 분석 진행 상태로 넘어가게 한다.
 async function handleTextSubmit() {
   if (!textDraft.value.trim()) return;
-  await pipeline.submitTextRequest(textDraft.value);
-  if (pipeline.document?.status === "parsed") {
+  const doc = await pipeline.submitTextRequest(textDraft.value);
+  if (doc?.status === "parsed") {
     pipeline.startAnalysis();
   }
 }
 
 function switchMode(mode) {
   inputMode.value = mode;
+  textDraft.value = "";
   pipeline.resetUpload();
 }
 
