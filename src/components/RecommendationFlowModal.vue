@@ -21,9 +21,21 @@ onMounted(() => {
   document.addEventListener("fullscreenchange", syncMaximizedFromFullscreen);
 });
 
+// requestFullscreen()은 즉시 끝나지 않는다 — 최대화 클릭 직후 모달을 바로 닫으면(언마운트)
+// 그 시점엔 아직 fullscreenElement가 비어 있어 아래 정리를 그냥 지나치고, 요청이 뒤늦게
+// 성공하면 빠져나올 코드 없이 브라우저가 전체화면에 갇는다 — 진행 중인 요청을 들고 있다가
+// 언마운트 시점에 그 결과까지 기다려 필요하면 빠져나온다.
+let pendingFullscreenRequest = null;
+
 onBeforeUnmount(() => {
   document.removeEventListener("fullscreenchange", syncMaximizedFromFullscreen);
-  if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  if (document.fullscreenElement) {
+    document.exitFullscreen?.().catch(() => {});
+  } else if (pendingFullscreenRequest) {
+    pendingFullscreenRequest.then(() => {
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    });
+  }
 });
 
 // steps→actions→children 트리를 FlowCanvas가 분기 컬럼·중첩 그대로 그린다(Vue Flow 캔버스,
@@ -44,7 +56,7 @@ function toggleMaximize() {
   if (document.fullscreenElement) {
     document.exitFullscreen?.().catch(() => {});
   } else {
-    document.documentElement.requestFullscreen?.().catch(() => {});
+    pendingFullscreenRequest = document.documentElement.requestFullscreen?.().catch(() => {});
   }
 }
 
