@@ -2697,6 +2697,10 @@ input {
   flex-shrink: 0;
 }
 
+.flow-history-collapse {
+  overflow: hidden;
+}
+
 .flow-history {
   border: 1px solid var(--border);
   border-radius: 10px;

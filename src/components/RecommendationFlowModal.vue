@@ -130,6 +130,39 @@ const revertingVersion = ref(null);
 
 pipeline.loadRecommendationHistory();
 
+// grid-template-rows(0fr↔1fr)로 열고 닫으면 목록 내용의 max-content 높이를 매 프레임 다시
+// 재는 과정에서 버벅였다 — 대신 실제 픽셀 높이(scrollHeight) 사이를 보간하는 표준적인
+// "auto 높이로 트랜지션" 기법을 쓴다: 시작/끝 높이를 한 번만 측정해 그 사이를 선형 보간하므로
+// 프레임마다 다시 측정할 필요가 없어 부드럽다.
+function onHistoryEnter(el, done) {
+  el.style.height = "0px";
+  const targetHeight = el.scrollHeight;
+  requestAnimationFrame(() => {
+    el.style.transition = "height 0.22s ease";
+    el.style.height = `${targetHeight}px`;
+  });
+  el.addEventListener("transitionend", function onEnd(event) {
+    if (event.propertyName !== "height") return;
+    el.removeEventListener("transitionend", onEnd);
+    el.style.height = "";
+    el.style.transition = "";
+    done();
+  });
+}
+
+function onHistoryLeave(el, done) {
+  el.style.height = `${el.scrollHeight}px`;
+  requestAnimationFrame(() => {
+    el.style.transition = "height 0.22s ease";
+    el.style.height = "0px";
+  });
+  el.addEventListener("transitionend", function onEnd(event) {
+    if (event.propertyName !== "height") return;
+    el.removeEventListener("transitionend", onEnd);
+    done();
+  });
+}
+
 const KNOWN_SOURCES = ["llm", "drag", "chat", "feedback"];
 
 function versionDescription(v) {
@@ -232,36 +265,40 @@ const formatDate = formatDateShort;
 
         <p v-if="pipeline.recommendSaveError" class="upload-error">{{ pipeline.recommendSaveError }}</p>
 
-        <div v-if="showHistory" class="flow-history">
-          <h3 class="flow-history__title">{{ t("recommendFlow.versionHistory") }}</h3>
-          <p v-if="!pipeline.recommendVersions.length" class="flow-history__empty">
-            {{ t("recommendFlow.noVersions") }}
-          </p>
-          <ol v-else class="flow-history__list">
-            <li v-for="v in pipeline.recommendVersions" :key="v.id" class="flow-history__item">
-              <div class="flow-history__meta">
-                <strong>v{{ v.version }}</strong>
-                <span v-if="v.version === pipeline.recommendation?.version" class="flow-history__current">
-                  {{ t("recommendFlow.current") }}
-                </span>
-                <span class="flow-history__desc">{{ versionDescription(v) }}</span>
-                <time class="flow-history__date">{{ formatDate(v.created_at) }}</time>
-              </div>
-              <button
-                v-if="canRevert(v)"
-                type="button"
-                class="btn btn--outline flow-history__revert"
-                :disabled="revertingVersion !== null"
-                @click="revertTo(v.version)"
-              >
-                {{ revertingVersion === v.version ? t("recommendFlow.reverting") : t("recommendFlow.revert") }}
-              </button>
-            </li>
-          </ol>
-          <p class="flow-history__hint">
-            {{ t("recommendFlow.revertHint") }}
-          </p>
-        </div>
+        <Transition :css="false" @enter="onHistoryEnter" @leave="onHistoryLeave">
+          <div v-if="showHistory" class="flow-history-collapse">
+            <div class="flow-history">
+              <h3 class="flow-history__title">{{ t("recommendFlow.versionHistory") }}</h3>
+              <p v-if="!pipeline.recommendVersions.length" class="flow-history__empty">
+                {{ t("recommendFlow.noVersions") }}
+              </p>
+              <ol v-else class="flow-history__list">
+                <li v-for="v in pipeline.recommendVersions" :key="v.id" class="flow-history__item">
+                  <div class="flow-history__meta">
+                    <strong>v{{ v.version }}</strong>
+                    <span v-if="v.version === pipeline.recommendation?.version" class="flow-history__current">
+                      {{ t("recommendFlow.current") }}
+                    </span>
+                    <span class="flow-history__desc">{{ versionDescription(v) }}</span>
+                    <time class="flow-history__date">{{ formatDate(v.created_at) }}</time>
+                  </div>
+                  <button
+                    v-if="canRevert(v)"
+                    type="button"
+                    class="btn btn--outline flow-history__revert"
+                    :disabled="revertingVersion !== null"
+                    @click="revertTo(v.version)"
+                  >
+                    {{ revertingVersion === v.version ? t("recommendFlow.reverting") : t("recommendFlow.revert") }}
+                  </button>
+                </li>
+              </ol>
+              <p class="flow-history__hint">
+                {{ t("recommendFlow.revertHint") }}
+              </p>
+            </div>
+          </div>
+        </Transition>
 
         <FlowCanvas
           v-if="hasActions"
