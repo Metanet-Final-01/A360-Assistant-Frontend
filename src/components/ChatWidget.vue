@@ -258,7 +258,10 @@ async function handleSend() {
 }
 
 // Enter는 전송, Shift+Enter는 줄바꿈 — textarea의 기본 동작(Enter도 줄바꿈)을 덮어써야 한다.
+// 한글 등 IME 조합 중 확정 Enter도 keydown에 Enter로 잡히므로(event.isComposing/keyCode 229)
+// 그 경우는 전송하지 않고 조합만 끝내게 둔다.
 function handleComposerKeydown(event) {
+  if (event.isComposing || event.keyCode === 229) return;
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
     handleSend();

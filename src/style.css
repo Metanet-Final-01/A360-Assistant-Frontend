@@ -704,6 +704,15 @@ input {
   pointer-events: none;
 }
 
+/* 900px 이하에서는 패널이 좌우가 아니라 위아래로 쌓인다(.app-main__grid의 반응형 규칙 참고) —
+   왼쪽 경계에 세로 점선을 긋는 위 마커는 이 레이아웃에서 의미가 없으므로 숨긴다. */
+@media (max-width: 900px) {
+  .panel-reorder-target::before,
+  .panel-reorder-target > .chat-popup--docked::before {
+    display: none;
+  }
+}
+
 /* ---------- Panel ---------- */
 
 .panel {
