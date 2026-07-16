@@ -276,11 +276,14 @@ export const usePipelineStore = defineStore("pipeline", () => {
 
   // 파일 없이 자연어로 업무를 설명해 곧장 분석 단계로 들어간다 (RPA-43). 파싱이 필요 없어
   // 응답이 바로 status="parsed"로 온다 — parseDocument() 호출이 필요 없다.
+  // 반환값은 이 호출이 실제로 받아온 문서다 — 호출부가 await 이후 공유 상태(document)를
+  // 다시 읽으면 그 사이 다른 업로드/텍스트 요청이 덮어쓴 값을 볼 수 있어(세대가 다르면
+  // 이 함수는 상태를 갱신하지 않고 null을 반환), 이 문서 자체를 기준으로 판단하게 한다.
   async function submitTextRequest(text) {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed) return null;
     // 챗 턴 진행 중엔 취소하지 않고 거부한다 — selectFile()과 동일한 이유(RPA-107)
-    if (useChatStore().isSending) return;
+    if (useChatStore().isSending) return null;
 
     clearTimers();
     uploadError.value = "";
@@ -293,19 +296,21 @@ export const usePipelineStore = defineStore("pipeline", () => {
 
     try {
       const doc = await createDocumentFromText(trimmed, sessionId.value, { signal });
-      if (myGeneration !== uploadGeneration) return; // 그 사이 새 업로드/초기화가 시작됨
+      if (myGeneration !== uploadGeneration) return null; // 그 사이 새 업로드/초기화가 시작됨
       sessionId.value = doc.session_id;
       document.value = doc;
       uploadStatus.value = doc.status === "failed" ? "error" : "uploaded";
       if (doc.status === "failed") {
         uploadError.value = doc.error || t("pipeline.errors.textRequestFailed");
       }
+      return doc;
     } catch (err) {
-      if (err?.name === "AbortError") return; // 새 업로드/초기화로 의도적으로 취소됨
-      if (myGeneration !== uploadGeneration) return;
+      if (err?.name === "AbortError") return null; // 새 업로드/초기화로 의도적으로 취소됨
+      if (myGeneration !== uploadGeneration) return null;
       uploadStatus.value = "error";
       uploadError.value =
         err instanceof ApiError ? err.message : t("pipeline.errors.textRequestUnknown");
+      return null;
     }
   }
 
