@@ -3,7 +3,7 @@
 // 드래그앤드롭 재정렬(컨테이너 무결성 유지)을 제공한다. 소스 오브 트루스는 항상 로컬 편집
 // 버퍼(editableTree)고, 화면(nodes/edges)은 매번 그 트리로부터 buildFlowGraph로 다시 계산한다 —
 // 드롭이 무효면 다음 렌더에서 트리 기준 위치로 자연히 스냅백된다.
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { VueFlow, useVueFlow } from "@vue-flow/core";
 import { Controls } from "@vue-flow/controls";
@@ -112,12 +112,13 @@ watch(
 // fitView(nodes 서브셋 + padding)로는 대칭 패딩 때문에 "시작"이 항상 화면 중앙에 오게 돼서,
 // 대신 setCenter로 "시작 필 중심에서 화면 절반 - 여백만큼 아래"인 지점을 화면 중앙에 맞춘다
 // (그러면 시작 필 자체는 화면 상단 여백(topMargin)에 위치하게 된다).
-const { setCenter, onNodesInitialized } = useVueFlow();
+const canvasRootRef = ref(null);
+const { setCenter, onNodesInitialized, getViewport, setViewport } = useVueFlow();
 let didInitialFit = false;
 onNodesInitialized(() => {
   if (didInitialFit || !nodes.value.length) return;
   const startNode = nodes.value.find((n) => n.id === "__start");
-  const paneEl = document.querySelector(".flow-canvas .vue-flow__pane");
+  const paneEl = canvasRootRef.value?.querySelector(".vue-flow__pane");
   if (!startNode || !paneEl) return;
   didInitialFit = true;
   const zoom = 1;
@@ -127,6 +128,33 @@ onNodesInitialized(() => {
   const startCenterY = startNode.position.y + (startNode.height ?? 0) / 2;
   const targetY = startCenterY + (paneHeight / 2 - topMargin) / zoom;
   setCenter(startCenterX, targetY, { zoom, duration: 0 });
+});
+
+// 모달 최대화처럼 캔버스 컨테이너 크기가 바뀌면, 팬/줌은 그대로인데 컨테이너만 넓어져
+// 콘텐츠가 화면 왼쪽/위로 쏠려 보인다 — 크기 변화분의 절반만큼 팬을 보정해 화면상
+// 중심을 그대로 유지한다.
+let lastCanvasSize = null;
+function handleCanvasResize(entries) {
+  const { width, height } = entries[0].contentRect;
+  if (lastCanvasSize && didInitialFit) {
+    const dx = (width - lastCanvasSize.width) / 2;
+    const dy = (height - lastCanvasSize.height) / 2;
+    if (dx || dy) {
+      const vp = getViewport();
+      setViewport({ x: vp.x + dx, y: vp.y + dy, zoom: vp.zoom });
+    }
+  }
+  lastCanvasSize = { width, height };
+}
+
+let canvasResizeObserver = null;
+onMounted(() => {
+  if (!canvasRootRef.value) return;
+  canvasResizeObserver = new ResizeObserver(handleCanvasResize);
+  canvasResizeObserver.observe(canvasRootRef.value);
+});
+onBeforeUnmount(() => {
+  canvasResizeObserver?.disconnect();
 });
 
 // ----- 드래그 재정렬 -----
@@ -240,7 +268,7 @@ defineExpose({ dirty, saving, save, discard });
 </script>
 
 <template>
-  <div class="flow-canvas">
+  <div class="flow-canvas" ref="canvasRootRef">
     <VueFlow
       :nodes="nodes"
       :edges="edges"
