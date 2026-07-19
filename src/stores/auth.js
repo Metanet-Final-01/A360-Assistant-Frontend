@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { register as apiRegister, login as apiLogin, getMe } from "../api/auth";
-import { getToken, setToken, clearToken, setUnauthorizedHandler } from "../api/http";
+import { register as apiRegister, login as apiLogin, logout as apiLogout, getMe } from "../api/auth";
+import { getToken, getRefreshToken, setTokens, clearTokens, setUnauthorizedHandler } from "../api/http";
 import { usePipelineStore } from "./pipeline";
 import { useChatStore } from "./chat";
 import { useArchiveStore } from "./archive";
@@ -23,29 +23,37 @@ export const useAuthStore = defineStore("auth", () => {
       userEmail.value = me.email;
       isLoggedIn.value = true;
     } catch {
-      clearToken();
+      clearTokens();
     } finally {
       authChecking.value = false;
     }
   }
 
   async function loginWithPassword(email, password) {
-    const { access_token } = await apiLogin(email, password);
-    setToken(access_token);
+    const { access_token, refresh_token } = await apiLogin(email, password);
+    setTokens(access_token, refresh_token);
     userEmail.value = email;
     isLoggedIn.value = true;
     useChatStore().dockChat(); // 로그인 직후 챗 위젯을 닫고 도킹 상태로 초기화
   }
 
-  // 가입 API는 access_token을 바로 내려주지만(자동 로그인용), 제품 정책상 가입 후에는
+  // 가입 API는 토큰을 바로 내려주지만(자동 로그인용), 제품 정책상 가입 후에는
   // 로그인 화면으로 보내고 사용자가 직접 로그인하도록 한다 — 그 토큰은 쓰지 않는다.
   async function registerWithPassword(email, password) {
     await apiRegister(email, password);
   }
 
   function logout() {
+    // 로컬 상태 정리보다 먼저 호출해야 아직 지우지 않은 액세스 토큰으로 Authorization 헤더가
+    // 붙는다(붙지 않아도 서버는 body의 refresh_token만으로 세션을 끊는다). 서버 응답을 기다리지
+    // 않는 베스트 에포트 호출 — 실패해도 로컬 로그아웃은 그대로 진행한다(204는 멱등이라
+    // 이미 폐기된 토큰이어도 안전).
+    const refreshToken = getRefreshToken();
+    if (refreshToken) {
+      apiLogout(refreshToken).catch(() => {});
+    }
     usePipelineStore().resetUpload();
-    clearToken();
+    clearTokens();
     isLoggedIn.value = false;
     userEmail.value = null;
     useChatStore().resetForLogout();
