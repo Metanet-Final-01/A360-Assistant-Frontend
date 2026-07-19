@@ -1,7 +1,5 @@
-import { apiRequest, getToken, notifyUnauthorized } from "./http";
+import { apiRequest, fetchWithAuth, notifyUnauthorized } from "./http";
 import { t } from "../i18n";
-
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 // GET /api/agent/versions — 선택 가능한 에이전트 버전 목록 (RPA-167).
 // 응답: { versions: [{ id, label, description, default }], default: "v2" }
@@ -44,15 +42,11 @@ export async function turnStream(
   message,
   { operation = "chat", agentVersion = null, cardValues = null, onToken, onStage, onPartial, onDone, onError, signal },
 ) {
-  const token = getToken();
-  const headers = { "Content-Type": "application/json" };
-  if (token) headers.Authorization = `Bearer ${token}`;
-
   let response;
   try {
-    response = await fetch(`${BASE_URL}/api/sessions/${sessionId}/turn`, {
+    response = await fetchWithAuth(`/api/sessions/${sessionId}/turn`, {
       method: "POST",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message,
         operation,

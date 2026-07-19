@@ -1,7 +1,5 @@
-import { apiRequest, getToken, notifyUnauthorized } from "./http";
+import { apiRequest, fetchWithAuth, notifyUnauthorized } from "./http";
 import { t } from "../i18n";
-
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 // POST /api/documents — 업무정의서 업로드. 검증·저장만 하고 즉시 반환한다 (status="uploaded").
 // 파싱은 분리되어 있어 이어서 parseDocument()로 진행해야 status가 "parsed"로 바뀐다.
@@ -14,15 +12,10 @@ export function uploadDocument(file, sessionId, { signal } = {}) {
 
 // POST /api/documents/{id}/parse — 업로드된 문서 파싱 진행. SSE(fetch 스트리밍): stage → done/error.
 export async function parseDocument(documentId, { onStage, onDone, onError, signal }) {
-  const token = getToken();
-  const headers = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-
   let response;
   try {
-    response = await fetch(`${BASE_URL}/api/documents/${documentId}/parse`, {
+    response = await fetchWithAuth(`/api/documents/${documentId}/parse`, {
       method: "POST",
-      headers,
       signal,
     });
   } catch (err) {

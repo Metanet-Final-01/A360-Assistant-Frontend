@@ -1,7 +1,5 @@
-import { apiRequest, getToken, ApiError, notifyUnauthorized } from "./http";
+import { apiRequest, fetchWithAuth, ApiError, notifyUnauthorized } from "./http";
 import { t } from "../i18n";
-
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 // NOTE: 흐름도 생성(POST /api/sessions/{id}/recommend)은 레거시로 제거됐다 (RPA-67) —
 // 생성은 POST /api/sessions/{id}/turn(api/agent.js turnStream)에 합성 메시지를 보내는
@@ -22,13 +20,9 @@ export function listRecommendations(sessionId) {
 // recommendation_version, source, exported_at, recommendation } + Content-Disposition.
 // 프론트 로컬 Blob 대신 이 응답 그대로를 파일로 저장해야 채점 포맷과 일치한다.
 export async function downloadRecommendationExport(sessionId, version) {
-  const token = getToken();
-  const headers = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-
   let response;
   try {
-    response = await fetch(`${BASE_URL}/api/sessions/${sessionId}/recommendations/${version}/export`, { headers });
+    response = await fetchWithAuth(`/api/sessions/${sessionId}/recommendations/${version}/export`);
   } catch {
     throw new ApiError("NETWORK_ERROR", t("api.errors.networkUnreachable"), 0);
   }
