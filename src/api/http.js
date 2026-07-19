@@ -94,8 +94,10 @@ export function setUnauthorizedHandler(handler) {
 }
 
 export function notifyUnauthorized() {
-  clearTokens();
+  // logout()이 이 핸들러 안에서 리프레시 토큰으로 서버 세션을 폐기한다 — clearTokens()를
+  // 먼저 부르면 그 토큰을 읽지 못해 자동 만료 경로에서는 서버 세션이 폐기되지 않는다.
   unauthorizedHandler?.();
+  clearTokens();
 }
 
 // 로그인/가입/갱신은 만료된 액세스 토큰으로 재시도할 대상이 아니다(로그인·가입은 토큰 자체가
@@ -141,13 +143,17 @@ async function doRefresh() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refreshToken }),
+      signal: AbortSignal.timeout(10000), // 갱신 응답이 멈추면 single-flight를 기다리는 모든 요청이 함께 걸린다
     });
   } catch {
-    return null; // 네트워크 오류 — 갱신 실패로 취급하고 원 요청의 401을 그대로 호출부에 넘긴다
+    return null; // 네트워크 오류·타임아웃 — 갱신 실패로 취급하고 원 요청의 401을 그대로 호출부에 넘긴다
   }
   if (!response.ok) return null; // INVALID_REFRESH_TOKEN 등 — 재로그인 필요
 
   const data = await response.json();
+  // 갱신이 진행되는 동안 로그아웃 등으로 리프레시 토큰이 바뀌었으면(교체·삭제) 이 응답은
+  // 낡은 것이다 — 그대로 저장하면 이미 로그아웃한 사용자의 토큰이 되살아난다.
+  if (getRefreshToken() !== refreshToken) return null;
   setTokens(data.access_token, data.refresh_token);
   return data.access_token;
 }
