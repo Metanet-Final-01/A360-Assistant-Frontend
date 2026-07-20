@@ -22,11 +22,15 @@ const SettingsOverlay = defineAsyncComponent(() => import("./components/Settings
 // 보인다. 배포 직후 브라우저가 옛 index.html로 새 해시의 청크를 찾는 경우처럼 재요청으로
 // 해결되는 실패도 있어 몇 번은 자동 재시도하고, 그래도 안 되면 새로고침을 안내한다.
 function ChunkLoadingFallback() {
-  return h("div", { class: "chunk-fallback" }, [h("div", { class: "analyzing-state__spinner" })]);
+  return h(
+    "div",
+    { class: "chunk-fallback", role: "status", "aria-live": "polite", "aria-label": t("app.chunkLoading") },
+    [h("div", { class: "analyzing-state__spinner" })],
+  );
 }
 
 function ChunkErrorFallback() {
-  return h("div", { class: "chunk-fallback chunk-fallback--error" }, [
+  return h("div", { class: "chunk-fallback chunk-fallback--error", role: "alert" }, [
     h("p", t("app.chunkLoadError")),
     h(
       "button",
