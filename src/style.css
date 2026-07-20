@@ -1,14 +1,101 @@
 :root {
-  color: #172026;
-  background: #f5f7f8;
+  --bg: #eef2f6;
+  --surface: #ffffff;
+  --border: #dbe3ea;
+  --text: #1f2733;
+  --text-muted: #66727e;
+
+  --brand-navy: #172026;
+  --brand-teal: #2f9ab2;
+  --brand-teal-dark: #1f6f8b;
+  --brand-teal-light: #e7f4f7;
+
+  --success: #1f9d55;
+  --success-bg: #e8f8ee;
+  --mid: #2f6fa8;
+  --mid-bg: #eaf1fb;
+  --warning: #b7791f;
+  --warning-bg: #fdf3e2;
+  --warning-rgb: 183, 121, 31; /* --warning의 RGB — 반투명(rgba) 강조에 rgba(var(--warning-rgb), α)로 쓴다 */
+  --danger: #d84a3a;
+  --danger-bg: #fbeceb;
+  --danger-rgb: 216, 74, 58; /* --danger의 RGB — 반투명(rgba) 강조에 rgba(var(--danger-rgb), α)로 쓴다 */
+
+  --surface-sunken: #fbfcfd;
+  --surface-sunken-hover: #e7edf1;
+
+  /* brand-teal-dark은 헤더/버튼 등 "고정 채색 배경(fill)" 용도 — 테마와 무관하게 흰 텍스트와의
+     대비를 유지해야 해서 다크모드에서도 값을 바꾸지 않는다. 반면 같은 색을 텍스트/아이콘/보더
+     악센트로 쓰는 곳(--accent-text)은 다크모드에서 어두운 배경 위에 놓이므로 밝게 바꿔야 한다. */
+  --accent-text: var(--brand-teal-dark);
+  --code-bg-subtle: rgba(0, 0, 0, 0.06);
+
+  color: var(--text);
+  background: var(--bg);
   font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    Inter, "Pretendard", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "Malgun Gothic", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
 
+/* 다크모드 — 로그인 이후 앱 셸(사이드바/업로드·분석 패널/챗봇/모달/설정 오버레이)에 적용.
+   로그인 전 화면의 브랜드 비주얼(AuthVisual.vue)은 이번 스코프에서 제외한다 — 로그인 폼
+   자체(AuthCard.vue)는 시맨틱 변수를 쓰므로 자동으로 다크 대응된다. */
+:root[data-theme="dark"] {
+  --bg: #0c1114;
+  --surface: #1e2830;
+  --border: #3c4a55;
+  --text: #e6ebef;
+  --text-muted: #93a1ac;
+
+  --brand-teal: #4db8cf;
+  --brand-teal-light: #16333b;
+  --accent-text: #6fcadd;
+  --code-bg-subtle: rgba(255, 255, 255, 0.12);
+
+  --success: #3ecb7a;
+  --success-bg: #163826;
+  --mid: #5b9bd6;
+  --mid-bg: #17293c;
+  --warning: #e0a83f;
+  --warning-bg: #3a2e12;
+  --warning-rgb: 224, 168, 63;
+  --danger: #e8695a;
+  --danger-bg: #3a1e1c;
+  --danger-rgb: 232, 105, 90;
+
+  --surface-sunken: #26313b;
+  --surface-sunken-hover: #303e49;
+}
+
 * {
   box-sizing: border-box;
+}
+
+/* 전역 스크롤바 — 브라우저 기본 스크롤바는 라이트 색상 고정이라 다크모드에서 흰 줄처럼
+   튀어 보인다. 시맨틱 변수를 써서 테마 전환에 자동으로 맞춰지게 한다. */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 body {
@@ -20,191 +107,4490 @@ body {
 button,
 input {
   font: inherit;
+  color: inherit;
 }
 
-.page {
-  display: grid;
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- Layout shell ---------- */
+
+.app-shell {
   min-height: 100vh;
-  place-items: center;
+  display: flex;
+  flex-direction: row;
+}
+
+.app-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-loading {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.chunk-fallback {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.chunk-fallback--error {
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
   padding: 24px;
 }
 
-.panel {
-  width: min(100%, 720px);
-  border: 1px solid #d7e0e3;
-  border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 24px 70px rgba(20, 31, 36, 0.1);
-  padding: 28px;
+/* ---------- Header ---------- */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 14px 28px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 20;
 }
 
-.masthead {
+.app-header__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.app-header__logo {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+}
+
+.app-header__titles {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.app-header__eyebrow {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--accent-text);
+}
+
+.app-header__title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--brand-navy);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Sidebar ---------- */
+
+.app-sidebar {
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100vh;
+  width: 240px;
+  flex-shrink: 0;
+  background: linear-gradient(180deg, #1b2a33 0%, var(--brand-navy) 55%, #10181e 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  z-index: 40;
+  transition: width 0.22s ease;
+}
+
+.app-sidebar--collapsed {
+  width: 74px;
+}
+
+.app-sidebar__inner {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 18px 12px 16px;
+}
+
+.app-sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 4px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  min-width: 0;
+}
+
+.app-sidebar__logo {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+}
+
+.app-sidebar__brand-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.86rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #e8f1f5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-sidebar__toggle {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #7d8f9b;
+  cursor: pointer;
   display: grid;
-  grid-template-columns: 56px 1fr auto;
+  place-items: center;
+}
+
+.app-sidebar__toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e3edf2;
+}
+
+.app-sidebar__toggle svg {
+  width: 17px;
+  height: 17px;
+  transition: transform 0.22s ease;
+}
+
+.app-sidebar--collapsed .app-sidebar__toggle svg {
+  transform: rotate(180deg);
+}
+
+.app-sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 0;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.app-sidebar__nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 11px 13px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: #93a5b1;
+  text-align: left;
+  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.app-sidebar__nav-chevron {
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+  flex-shrink: 0;
+  transition: transform 0.18s ease;
+}
+
+.app-sidebar__nav-chevron--open {
+  transform: rotate(180deg);
+}
+
+/* 채팅 이력 서브메뉴 — 높이를 0fr↔1fr로 트랜지션해 내용물 높이가 가변이어도
+   펼침/접힘이 부드럽게 애니메이션되도록 한다(grid-template-rows 트릭). */
+.app-sidebar__history-wrap {
+  display: grid;
+  grid-template-rows: minmax(0, 0fr);
+  transition: grid-template-rows 0.24s ease;
+  flex: 0 1 auto;
+  min-height: 0;
+}
+
+.app-sidebar__history-wrap--open {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.app-sidebar__history {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  gap: 6px;
+  padding: 4px 2px 8px;
+}
+
+.app-sidebar__new-chat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #cfe3ea;
+  cursor: pointer;
+  padding: 13px 12px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.app-sidebar__new-chat svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.app-sidebar__new-chat:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e3edf2;
+}
+
+.app-sidebar__nav-item svg {
+  width: 21px;
+  height: 21px;
+  flex-shrink: 0;
+}
+
+.app-sidebar__nav-item:hover {
+  color: #e3edf2;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.app-sidebar__nav-item--active {
+  color: #8fd8e8;
+  background: rgba(47, 154, 178, 0.18);
+}
+
+.app-sidebar__footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 12px;
+}
+
+.app-sidebar__profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+  border-radius: 12px;
+  min-width: 0;
+}
+
+.app-sidebar__avatar {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: #aebfca;
+  display: grid;
+  place-items: center;
+}
+
+.app-sidebar__avatar svg {
+  width: 20px;
+  height: 20px;
+}
+
+.app-sidebar__profile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.app-sidebar__profile-name {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #7d8f9b;
+  white-space: nowrap;
+}
+
+.app-sidebar__profile-email {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #dbe6ec;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-sidebar__logout {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #93a5b1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.app-sidebar__logout:hover {
+  color: #ff9d8f;
+  background: rgba(216, 74, 58, 0.16);
+}
+
+.app-sidebar__logout svg {
+  width: 18px;
+  height: 18px;
+}
+
+.app-sidebar--collapsed .app-sidebar__inner {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.app-sidebar--collapsed .app-sidebar__brand-title,
+.app-sidebar--collapsed .app-sidebar__nav-label,
+.app-sidebar--collapsed .app-sidebar__nav-chevron,
+.app-sidebar--collapsed .app-sidebar__profile-info {
+  display: none;
+}
+
+.app-sidebar--collapsed .app-sidebar__brand {
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+}
+
+.app-sidebar--collapsed .app-sidebar__nav-item {
+  justify-content: center;
+  padding: 11px 0;
+}
+
+.app-sidebar--collapsed .app-sidebar__profile {
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.app-sidebar__help {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+/* ---------- 사이드바 반응형 (900px 이하 = 본문 그리드가 1열로 접히는 지점과 동일) ----------
+   본문 폭을 잠식하지 않도록 사이드바를 flex 흐름에서 빼서 고정 오버레이로 띄운다.
+   .app-shell의 padding-left만큼만 본문에 항상 여백을 주고(접힘 폭과 동일), 펼친 상태는
+   그 위에 겹쳐 뜨는 드로어로 표시한다(AppSidebar.vue의 mobileOpen이 열림 여부를 담당). */
+@media (max-width: 900px) {
+  .app-shell {
+    padding-left: 74px;
+  }
+
+  .app-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    align-self: auto;
+    z-index: 100;
+    box-shadow: 0 20px 50px rgba(10, 16, 20, 0.35);
+  }
+
+  .app-sidebar__backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(16, 24, 30, 0.5);
+    z-index: 90;
+  }
+}
+
+/* ---------- Main layout ---------- */
+
+.app-main {
+  flex: 1;
+  padding: 52px 28px 28px;
+}
+
+.app-main__grid {
+  /* 열 폭은 슬롯 위치가 아니라 패널 종류에 따라 붙는다 — 패널 재배치(usePanelReorder)가
+     인라인 --grid-cols 변수로 현재 순서·너비 비율에 맞춰 조합한다(패널-핸들-패널-핸들-패널
+     순으로, 핸들 트랙이 기존 gap 자리(24px)를 대신한다 — 그래서 컨테이너 자체의 gap은 0).
+     챗봇이 도킹 해제돼도 트랙 자체는 사라지지 않고 0으로 접힐 뿐이라(usePanelReorder의
+     layout 참고) 항상 "패널-핸들-패널-핸들-패널" 5트랙 모양 그대로다. max-width도 고정해
+     챗봇을 접어도 화면 폭을 그대로 쓴다. 각 패널은 fr 비율로 잡혀서, 사이드바 접힘/펼침이나
+     창 크기 변경으로 그리드 가용 폭이 바뀔 때 패널들이 지금 조정된 비율 그대로 함께 줄고
+     늘어난다. minmax의 하한은 각 패널이 실사용 가능한 최소 폭 아래로는 줄어들지 않게 하는
+     바닥값이다.
+     grid-template-columns 자체는 기본적으로 transition을 걸지 않는다 — 손으로 경계를
+     드래그/키보드 조정할 때마다(매 프레임 새 값) 애니메이션이 겹쳐 커서를 따라가지 못하고
+     늘어지는 느낌이 나기 때문. 챗봇 도킹/해제처럼 "한 번에 훅 바뀌는" 경우에만
+     .app-main__grid--dock-transition을 잠깐 붙여 그때만 부드럽게 보간되게 한다. */
+  --panel-col-side: minmax(240px, 3fr);
+  --panel-col-chat: minmax(300px, 4fr);
+  --panel-gap: 24px;
+  max-width: 1760px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: var(
+    --grid-cols,
+    var(--panel-col-side) var(--panel-gap) minmax(380px, 8fr) var(--panel-gap) var(--panel-col-chat)
+  );
+  gap: 0;
+  align-items: start;
+  border-radius: 16px;
+  transition: outline-color 0.15s ease, background 0.15s ease;
+  outline: 3px dashed transparent;
+  outline-offset: 6px;
+}
+
+/* 챗봇 도킹/해제 순간에만 붙는 일시적 클래스(App.vue) — 이때만 남은 패널들이 그 자리를
+   부드럽게 채워 들어가도록 grid-template-columns를 보간한다. */
+.app-main__grid--dock-transition {
+  transition: outline-color 0.15s ease, background 0.15s ease, grid-template-columns 0.32s ease;
+}
+
+.app-main__grid > * {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .app-main__grid,
+  .app-main__grid--dock-transition {
+    grid-template-columns: 1fr;
+    transition: outline-color 0.15s ease, background 0.15s ease;
+  }
+
+  .panel-resize-handle {
+    display: none;
+  }
+
+  .panel__footer {
+    flex-direction: column;
+  }
+}
+
+.chat-widget {
+  display: contents;
+}
+
+.app-main--drop-active .app-main__grid {
+  outline-color: var(--brand-teal);
+  background: var(--brand-teal-light);
+}
+
+/* ---------- Panel reorder (드래그앤드롭 배치 변경) ---------- */
+
+/* 순서는 DOM이 아니라 CSS order로 반영한다. .chat-widget은 display: contents라
+   order가 먹지 않으므로, 상속된 변수를 도킹된 팝업에 직접 적용한다. */
+.app-main__grid > [data-panel-key] {
+  order: var(--panel-order, 0);
+}
+
+.chat-popup--docked {
+  order: var(--panel-order, 0);
+}
+
+/* 챗봇 도킹 해제 시 그리드 트랙 모양을 유지시켜 주는 자리표시자 — 폭 0인 트랙을 차지할
+   뿐 아무것도 그리지 않는다. */
+.chat-widget__ghost-slot {
+  order: var(--panel-order, 0);
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ---------- Panel resize (좌우 경계 드래그로 너비 조정) ---------- */
+
+/* 패널 사이 24px 트랙 전체가 그랩 영역이고, 가운데 얇은 선만 시각적으로 보여준다.
+   align-self:stretch로 그리드의 align-items:start를 덮어써 행 높이 전체를 채운다 —
+   패널 높이가 서로 달라도 손잡이를 놓치지 않게. */
+.panel-resize-handle {
+  align-self: stretch;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.panel-resize-handle::before {
+  content: "";
+  width: 2px;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--border);
+  transition: background 0.15s ease, width 0.15s ease;
+}
+
+.panel-resize-handle:hover::before,
+.panel-resize-handle:focus-visible::before,
+.panel-resize-handle--active::before {
+  width: 4px;
+  background: var(--brand-teal-dark);
+}
+
+.panel-resize-handle:focus-visible {
+  outline: none;
+}
+
+/* 챗봇 도킹 해제 등으로 한쪽 패널이 숨겨져 트랙이 0으로 접히는 중인 핸들 — 전환 애니메이션
+   도중 잠깐 폭이 남아 있어도 잡히지 않게 한다. */
+.panel-resize-handle--collapsed {
+  pointer-events: none;
+  cursor: default;
+}
+
+.panel-drag-handle {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-drag: element;
+}
+
+.panel-drag-handle:hover {
+  color: #ffffff;
+}
+
+.panel-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* 드래그 중인 패널은 흐리게 표시.
+   챗봇은 래퍼(display: contents)에 클래스가 달리므로 자식 팝업에 적용한다. */
+.panel-reorder-source,
+.panel-reorder-source > .chat-popup--docked {
+  opacity: 0.45;
+}
+
+/* 드롭 대상 표시 — 패널 전체가 아니라, 놓였을 때 실제로 끼워지는 자리(대상 패널의 왼쪽,
+   패널 사이 간격 한가운데)에 세로 점선 하나만 그린다. commitDrop()이 드래그한 패널을
+   "대상의 인덱스 자리"에 꽂아 넣으므로(대상과 그 뒤 패널들은 한 칸씩 밀림), 실제로 새로
+   생기는 경계는 항상 대상 패널의 왼쪽이다 — 패널 하나를 통째로 감싸면 "이 패널을 덮어쓴다"
+   처럼 보여 오해를 사므로, 경계선만 보여준다. */
+.panel-reorder-target,
+.panel-reorder-target > .chat-popup--docked {
+  position: relative;
+}
+
+.panel-reorder-target::before,
+.panel-reorder-target > .chat-popup--docked::before {
+  content: "";
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: calc(var(--panel-gap, 24px) * -0.5 - 1.5px);
+  width: 0;
+  border-left: 3px dashed var(--brand-teal);
+  pointer-events: none;
+}
+
+/* 900px 이하에서는 패널이 좌우가 아니라 위아래로 쌓인다(.app-main__grid의 반응형 규칙 참고) —
+   왼쪽 경계에 세로 점선을 긋는 위 마커는 이 레이아웃에서 의미가 없으므로 숨긴다. */
+@media (max-width: 900px) {
+  .panel-reorder-target::before,
+  .panel-reorder-target > .chat-popup--docked::before {
+    display: none;
+  }
+}
+
+/* ---------- Panel ---------- */
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 18px 40px rgba(23, 32, 38, 0.06);
+}
+
+.panel__header {
+  background: linear-gradient(135deg, var(--brand-teal-dark), var(--brand-navy));
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.panel__header h2 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 800;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+/* .btn 기본 규칙(패딩 12px/폰트 0.9rem)이 소스 순서상 뒤에 나와 동률 우선순위에서 이겨버리므로,
+   클래스 두 개를 겹친 선택자로 우선순위를 올려 확실히 덮어쓴다. */
+.btn.panel__header-btn {
+  padding: 5px 12px;
+  font-size: 0.76rem;
+  line-height: 1.3;
+}
+
+.panel__header-version {
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1.3;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.18);
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+.panel__body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.analysis-results {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ---------- Upload mode toggle ---------- */
+
+.upload-mode-toggle {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg);
+  border-radius: 10px;
+}
+
+.upload-mode-toggle__btn {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.upload-mode-toggle__btn--active {
+  background: var(--surface);
+  color: var(--accent-text);
+  box-shadow: 0 1px 4px rgba(23, 32, 38, 0.1);
+}
+
+.text-input-area {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.text-input-area__field {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  font: inherit;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  background: var(--surface);
+  color: var(--text);
+  resize: vertical;
+}
+
+.text-input-area__field:focus {
+  outline: none;
+  border-color: var(--brand-teal);
+}
+
+/* ---------- Dropzone ---------- */
+
+.dropzone {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 32px 16px;
+  text-align: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.dropzone:hover,
+.dropzone:focus-visible {
+  border-color: var(--brand-teal);
+  background: var(--brand-teal-light);
+  outline: none;
+}
+
+.dropzone--active {
+  border-color: var(--brand-teal);
+  background: var(--brand-teal-light);
+}
+
+.dropzone__icon {
+  width: 34px;
+  height: 34px;
+  color: var(--accent-text);
+}
+
+.dropzone__text {
+  margin: 0;
+  line-height: 1.5;
+  font-size: 0.92rem;
+  white-space: pre-line;
+}
+
+.dropzone__text strong {
+  color: var(--text);
+}
+
+.dropzone__button {
+  margin-top: 4px;
+  padding: 8px 18px;
+  border-radius: 8px;
+  background: var(--brand-teal-dark);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.86rem;
+}
+
+.upload-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 0.86rem;
+  font-weight: 700;
+  white-space: pre-line;
+}
+
+/* ---------- Uploaded doc ---------- */
+
+.uploaded-doc {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.uploaded-doc__label {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+
+.doc-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--surface-sunken);
+}
+
+.doc-card__icon {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 0.68rem;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+
+.doc-card__info {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.doc-card__name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.doc-card__size {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.doc-card__status {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+
+.doc-card__status--loading {
+  border: 2.5px solid var(--border);
+  border-top-color: var(--accent-text);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.extraction-meta {
+  margin: 0;
+  padding: 10px 12px;
+  list-style: none;
+  border-left: 3px solid var(--brand-teal);
+  background: var(--brand-teal-light);
+  border-radius: 0 8px 8px 0;
+  color: var(--accent-text);
+  font-size: 0.82rem;
+  font-weight: 700;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.extraction-meta__warning {
+  color: var(--danger);
+}
+
+.upload-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.upload-section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.upload-section-toggle__btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
+.upload-section-toggle__btn:hover {
+  background: var(--surface-sunken);
+}
+
+.upload-section-toggle__chevron {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  transition: transform 0.18s ease;
+  transform: rotate(180deg);
+}
+
+.upload-section-toggle__chevron--collapsed {
+  transform: rotate(0deg);
+}
+
+/* grid-template-rows를 1fr↔0fr로 트랜지션해 높이를 몰라도 부드럽게 접고 펼친다
+   (내용 높이를 JS로 재지 않아도 되는 CSS 전용 아코디언 트릭). __inner에 실제
+   패딩 없는 flex 레이아웃(panel__body와 같은 gap)을 둬서, 래퍼 div가 끼어들며
+   사라졌던 항목 간 여백을 그대로 복원한다. */
+.upload-section-body {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.22s ease;
+}
+
+.upload-section-body--collapsed {
+  grid-template-rows: 0fr;
+}
+
+.upload-section-body__inner {
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ---------- Buttons ---------- */
+
+.btn {
+  border: 0;
+  border-radius: 9px;
+  padding: 12px 16px;
+  font-weight: 800;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.btn--primary {
+  background: var(--brand-teal-dark);
+  color: #ffffff;
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: var(--brand-navy);
+}
+
+.btn--primary:disabled {
+  background: var(--border);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.btn--text {
+  background: transparent;
+  color: var(--text-muted);
+  padding: 6px 8px;
+  text-decoration: underline;
+}
+
+.btn--outline {
+  background: var(--surface);
+  border: 1px solid var(--accent-text);
+  color: var(--accent-text);
+}
+
+.btn--outline:hover {
+  background: var(--brand-teal-light);
+}
+
+/* ---------- Analysis panel ---------- */
+
+.panel--wide {
+  position: relative; /* .panel__bottom-fade가 이 박스 바닥에 고정되는 기준 */
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 150px);
+  max-height: calc(100vh - 150px);
+}
+
+.panel--wide .panel__body {
+  gap: 20px;
+  overflow-y: auto;
+  overflow-anchor: none;
+  flex: 1;
+  min-height: 0;
+}
+
+/* 스크롤 위치와 무관하게 패널 하단(둥근 모서리)에 콘텐츠가 여백 없이 바로 잘려 보이는 문제
+   보정 — 스크롤되는 콘텐츠 바깥(패널__body의 형제)에 절대 위치로 얹어, 스크롤 위치와 무관하게
+   항상 패널 바닥에서 배경색으로 옅게 페이드시킨다. (스크롤 콘텐츠 안쪽에 넣으면 position:sticky여도
+   맨 끝에 다다랐을 때만 붙고 중간 스크롤 중엔 안 보인다 — 그래서 스크롤 밖의 오버레이로 둔다.) */
+.panel--wide .panel__bottom-fade {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 24px;
+  background: linear-gradient(to bottom, transparent, var(--surface));
+  pointer-events: none;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 16px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.panel--wide .empty-state {
+  flex: 1;
+}
+
+.empty-state svg {
+  width: 34px;
+  height: 34px;
+  color: var(--border);
+}
+
+.empty-state p {
+  margin: 0;
+  line-height: 1.6;
+  font-size: 0.92rem;
+  white-space: pre-line;
+}
+
+.analyzing-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 48px 16px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.panel--wide .analyzing-state {
+  flex: 1;
+}
+
+.analyzing-state--error {
+  align-items: stretch;
+}
+
+.analyzing-state__spinner {
+  flex-shrink: 0; /* .flow-live-status처럼 좁은 가로 배치 안에서도 찌그러지지 않게 */
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent-text);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.rec-card__description {
+  margin: 0 0 12px;
+  font-size: 0.86rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.rec-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rec-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  background: var(--surface-sunken);
+  cursor: grab;
+}
+
+.rec-card:active {
+  cursor: grabbing;
+}
+
+.rec-card--dragging {
+  opacity: 0;
+}
+
+.rec-list-move {
+  transition: transform 0.2s ease;
+}
+
+.rec-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.rec-card__header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rec-card__header h3 {
+  margin: 0;
+  font-size: 0.96rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.rec-card__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.rec-card__field {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 0.86rem;
+}
+
+.rec-card__field-label {
+  flex: 0 0 84px;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.rec-card__field-value {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  text-align: left;
+  overflow-wrap: break-word;
+}
+
+.rec-card__field-value--accent {
+  color: var(--accent-text);
+}
+
+.rec-card__footer {
+  margin-top: 10px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.rec-card__action-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rec-card__action-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 6px 4px 12px;
+  font-size: 0.78rem;
+  background: var(--surface-sunken);
+}
+
+.rec-card__action-chip-label {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.rec-card__action-chip-package {
+  flex-shrink: 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+/* ---------- 추천 흐름도 상세 (분석 결과 패널) ---------- */
+
+.rec-detail__vars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+
+.rec-detail__var-group {
+  flex: 1;
+  min-width: 200px;
+}
+
+.rec-detail__var-group h4 {
+  margin: 0 0 6px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+
+.rec-detail__var-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.84rem;
+  color: var(--text);
+}
+
+.rec-detail__var-type {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+}
+
+.rec-detail__step {
+  margin-bottom: 18px;
+}
+
+.rec-detail__step-title {
+  margin: 0 0 4px;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: var(--accent-text);
+}
+
+.rec-detail__step-desc {
+  margin: 0 0 10px;
+  font-size: 0.84rem;
+  color: var(--text-muted);
+}
+
+.rec-detail__action {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  background: var(--surface-sunken);
+}
+
+.rec-detail__action-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rec-detail__action-label {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
+.rec-detail__params {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+}
+
+.rec-detail__param-name {
+  color: var(--text-muted);
+  font-weight: 700;
+  margin-right: 6px;
+  overflow-wrap: break-word;
+}
+
+.rec-detail__param-value {
+  color: var(--text);
+  overflow-wrap: break-word;
+}
+
+/* 상세 패널: 다이어그램 모달(중앙정렬·고정폭)과 달리 패널 전체 폭을 그대로 채운다 */
+.rec-detail .flow-node,
+.rec-detail .flow-box,
+.rec-detail .flow-node__params,
+.rec-detail .flow-branch {
+  max-width: none;
+}
+
+/* 상세 패널: 박스(+파라미터) 바로 아래에 다음 박스가 붙어 보이던 간격 보정 */
+.rec-detail .flow-node {
+  margin-bottom: 10px;
+}
+
+.rec-card--skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skeleton-line {
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #eef1f4 25%, #e2e7eb 37%, #eef1f4 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+.skeleton-line--title {
+  width: 60%;
+  height: 16px;
+}
+
+.skeleton-line--short {
+  width: 40%;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+/* ---------- Panel footer (흐름도 추천 + 내보내기, 같은 행) ---------- */
+
+.panel__footer {
+  display: flex;
+  gap: 24px;
+  border-top: 1px dashed var(--border);
+  padding: 18px 20px 20px;
+  flex-shrink: 0;
+}
+
+.panel__footer--errors {
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ---------- Transitions ---------- */
+
+.fade-up-enter-active,
+.fade-up-leave-active {
+  transition: all 0.28s ease;
+}
+
+.fade-up-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.fade-up-leave-to {
+  opacity: 0;
+}
+
+/* ---------- Flow modal ---------- */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(23, 32, 38, 0.45);
+  display: grid;
+  place-items: center;
+  z-index: 60;
+  padding: 20px;
+}
+
+.modal {
+  width: min(100%, 560px);
+  max-height: 85vh;
+  background: var(--surface);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.25);
+}
+
+.modal--flow {
+  width: min(100%, 960px);
+  max-height: 92vh;
+}
+
+.modal--flow:not(.modal--flow-maximized) .modal__header {
+  cursor: grab;
+}
+
+.modal--flow-dragging,
+.modal--flow-dragging .modal__header {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.modal--flow-maximized {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  border-radius: 0;
+}
+
+.modal--flow-maximized .modal__body--flow {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal--flow-maximized .flow-canvas {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
+.modal--signup {
+  width: min(100%, 480px);
+}
+
+.modal--signup .modal__body {
+  padding: 28px 32px 32px;
+}
+
+.modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, var(--brand-teal-dark), var(--brand-navy));
+}
+
+.modal__header h2 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 1rem;
+}
+
+.modal__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.modal__close {
+  background: transparent;
+  border: 0;
+  color: #ffffff;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.modal__maximize {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  color: #ffffff;
+  cursor: pointer;
+  padding: 0;
+}
+
+.modal__maximize svg {
+  width: 16px;
+  height: 16px;
+}
+
+.modal__body {
+  padding: 20px;
+  overflow: auto;
+}
+
+.modal__empty {
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ---------- 사용자 설정 ---------- */
+
+.modal--settings {
+  width: min(100%, 620px);
+}
+
+.modal--settings .modal__body {
+  padding: 32px 36px 36px;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-section + .settings-section {
+  margin-top: 32px;
+  padding-top: 32px;
+  border-top: 1px solid var(--border);
+}
+
+.settings-section__title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.settings-account {
+  display: flex;
   align-items: center;
   gap: 16px;
 }
 
-.logo {
-  width: 56px;
-  height: 56px;
+.settings-account__avatar {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--brand-teal-light);
+  color: var(--accent-text);
+  display: grid;
+  place-items: center;
 }
 
-.eyebrow {
+.settings-account__avatar svg {
+  width: 28px;
+  height: 28px;
+}
+
+.settings-section__email {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.settings-segment {
+  display: inline-flex;
+  gap: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 3px;
+  width: fit-content;
+}
+
+.settings-segment__btn {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settings-segment__btn--active {
+  background: var(--surface);
+  color: var(--accent-text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.settings-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  width: fit-content;
+}
+
+.settings-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.settings-switch__track {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--border);
+  transition: background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.settings-switch__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease;
+}
+
+.settings-switch input:checked + .settings-switch__track {
+  background: var(--brand-teal-dark);
+}
+
+.settings-switch input:checked + .settings-switch__track .settings-switch__thumb {
+  transform: translateX(18px);
+}
+
+.modal__body--flow {
+  padding: 20px 24px 24px;
+}
+
+.flow-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.flow-hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.flow-add-btn {
+  flex-shrink: 0;
+  border: 1px solid var(--accent-text);
+  background: var(--surface);
+  color: var(--accent-text);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.flow-add-btn:hover {
+  background: var(--brand-teal-light);
+}
+
+/* 업무 단계 편집 → 흐름도 새 버전 저장 바 (업로드 패널 단계 목록 하단) */
+.apply-flow-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.apply-flow-bar__hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.flow-diagram {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.flow-pill {
+  padding: 10px 32px;
+  border-radius: 999px;
+  background: var(--brand-navy);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.flow-arrow {
+  width: 2px;
+  height: 20px;
+  background: var(--accent-text);
+  position: relative;
+}
+
+.flow-arrow::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -1px;
+  transform: translateX(-50%);
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 7px solid var(--accent-text);
+}
+
+.flow-list {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.flow-card {
+  cursor: grab;
+}
+
+.flow-card:active {
+  cursor: grabbing;
+}
+
+.flow-card--dragging {
+  opacity: 0.5;
+}
+
+.flow-card__row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 150px 10px 12px;
+  background: var(--surface-sunken);
+}
+
+.flow-card__handle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  padding-top: 2px;
+  font-size: 1rem;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.flow-card__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.flow-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.flow-card__header h3 {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.flow-card__action {
   margin: 0 0 6px;
-  color: #63727a;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--accent-text);
+}
+
+.flow-card__meta {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px 16px;
+  margin: 0 0 6px;
+}
+
+.flow-card__meta div {
+  min-width: 0;
+}
+
+.flow-card__meta dt {
+  font-size: 0.66rem;
+  color: var(--text-muted);
+}
+
+.flow-card__meta dd {
+  margin: 1px 0 0;
+  font-size: 0.78rem;
+  color: var(--text);
+  overflow-wrap: break-word;
+}
+
+.flow-card__evidence {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.flow-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.flow-card__top-right {
+  position: absolute;
+  top: 6px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.flow-card__menu-wrap {
+  position: relative;
+}
+
+.flow-card__menu-btn {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.flow-card__menu-btn:hover {
+  background: var(--surface-sunken-hover);
+  color: var(--text);
+}
+
+.flow-card__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 110px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(23, 32, 38, 0.14);
+  padding: 6px;
+  z-index: 10;
+}
+
+.flow-card__menu button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.flow-card__menu button:hover {
+  background: var(--brand-teal-light);
+}
+
+.flow-card__menu-danger {
+  color: var(--danger) !important;
+}
+
+.flow-card__menu-danger:hover {
+  background: var(--danger-bg) !important;
+}
+
+.flow-card__edit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+  margin-bottom: 12px;
+}
+
+.flow-card__edit-wide {
+  grid-column: 1 / -1;
+}
+
+.flow-card__edit-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.flow-card__edit-grid input {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.flow-card__connector {
+  position: relative;
+  width: 2px;
+  height: 14px;
+  margin: 0 auto;
+  background: var(--accent-text);
+}
+
+.flow-card__connector::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -1px;
+  transform: translateX(-50%);
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 6px solid var(--accent-text);
+}
+
+/* ---------- Recommendation flow (RPA-61) ---------- */
+
+.modal--recommend-loading {
+  width: min(100%, 320px);
+}
+
+.modal__body--center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 32px 20px;
+  text-align: center;
+}
+
+.flow-version-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.flow-save-status {
+  margin: 0 0 12px;
+  margin-left: 10px;
+  font-size: 0.82rem;
+  color: var(--accent-text);
   font-weight: 700;
 }
 
-h1 {
-  margin: 0;
-  color: #172026;
-  font-size: clamp(2rem, 5vw, 3.25rem);
-  line-height: 1.05;
-  letter-spacing: 0;
-}
-
-.badge {
-  border: 1px solid #ccd6db;
-  border-radius: 999px;
-  color: #596970;
-  font-size: 0.86rem;
-  font-weight: 800;
-  padding: 8px 12px;
-  text-transform: capitalize;
-}
-
-.badge.online {
-  border-color: #b7dec7;
-  background: #edf9f1;
-  color: #17633b;
-}
-
-.summary {
-  display: grid;
-  gap: 6px;
-  margin: 28px 0 18px;
-  border: 1px solid #dbe3e6;
-  border-radius: 6px;
-  background: #f8fafb;
-  padding: 14px;
-}
-
-.summary span,
-label {
-  color: #4a5a63;
-  font-size: 0.9rem;
-  font-weight: 750;
-}
-
-.summary strong {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  color: #172026;
-  font-size: 0.98rem;
-}
-
-.server-message {
-  margin: 0 0 12px;
-  color: #34444c;
-  line-height: 1.6;
-}
-
-.error {
-  margin: 0 0 18px;
-  border-left: 4px solid #d84a3a;
-  color: #9b2f24;
-  padding-left: 10px;
-}
-
-.composer {
-  display: grid;
-  gap: 10px;
-  margin-top: 20px;
-}
-
-.input-row {
+.flow-box {
+  width: 100%;
+  max-width: 560px;
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: var(--surface-sunken);
+}
+
+.flow-step-divider {
+  width: 100%;
+  max-width: 560px;
+  margin: 4px 0;
+  padding-bottom: 4px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--accent-text);
+  border-bottom: 1px dashed var(--border);
+}
+
+/* ── 흐름도 트리(FlowNode/FlowDiagram) — 컨테이너 중첩·분기 표시 ── */
+.flow-node {
+  width: 100%;
+  max-width: 560px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.flow-box--container {
+  background: var(--brand-teal-light);
+  border-color: var(--brand-teal-dark);
+}
+
+.flow-box--violation {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+  box-shadow: inset 0 0 0 1px var(--danger);
+}
+
+/* 국소 수정 중인 단계의 액션 박스 — 붉은 테두리로 강조하고 깜빡여 "지금 여기를 고치는 중"을 알린다 */
+.flow-box--editing {
+  border-color: var(--danger);
+  animation: flow-edit-blink 1s ease-in-out infinite;
+}
+
+@keyframes flow-edit-blink {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px var(--danger), 0 0 0 0 rgba(var(--danger-rgb), 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 1px var(--danger), 0 0 9px 3px rgba(var(--danger-rgb), 0.55);
+  }
+}
+
+/* 수정 중인 단계 컨테이너에도 옅은 붉은 배경 — 스크롤로 이동했을 때 어느 단계인지 한눈에 */
+.rec-detail__step--editing {
+  border-radius: 10px;
+  background: rgba(var(--danger-rgb), 0.05);
+  box-shadow: inset 0 0 0 1px rgba(var(--danger-rgb), 0.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-box--editing {
+    animation: none;
+    box-shadow: 0 0 0 2px var(--danger);
+  }
+}
+
+/* 분석 스트리밍: 라이브로 채워지는 영역 + 아직 생성 중임을 좌측 강조선으로 표시하는 단계 카드 */
+.analysis-live {
+  display: flex;
+  flex-direction: column;
   gap: 10px;
 }
 
-input {
+.rec-card--live {
+  border-left: 3px solid var(--brand-teal-dark);
+}
+
+.flow-node__num {
+  display: inline-block;
+  min-width: 1.5em;
+  margin-right: 4px;
+  color: var(--text-muted);
+  font-weight: 800;
+}
+
+.flow-node__container-tag {
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: var(--accent-text);
+  background: var(--brand-teal-light);
+  vertical-align: middle;
+}
+
+.flow-box__violation-mark {
+  flex-shrink: 0;
+  color: var(--danger);
+  font-weight: 800;
+}
+
+/* 컨테이너 본문: 자식을 들여쓴 점선 레일 안에 세로로 나열 — 분기·중첩을 그대로 보여준다 */
+.flow-node__children {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 8px;
+  padding-left: 24px;
+  border-left: 2px dashed var(--brand-teal-dark);
+}
+
+/* 상세 모드(추천 흐름도 상세 패널)에서 노드 아래 파라미터 목록 — rec-detail__params 스타일 재사용 */
+.flow-node__params {
+  width: 100%;
+  max-width: 560px;
+  box-sizing: border-box;
+}
+
+/* ── 분기 컬럼(FlowSequence): Try/Catch/Finally · If/Else를 각각 "다른 열"로 (가변 N열) ── */
+.flow-branch {
+  width: 100%;
+  max-width: 720px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.flow-branch__label {
+  align-self: center;
+  margin: 4px 0 6px;
+  padding: 2px 12px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--text);
+  background: rgba(31, 47, 90, 0.08);
+}
+
+/* 컬럼들이 나란히 — 좁으면 가로 스크롤. 분기 개수만큼 열이 생긴다(최대 N, 항상 N 아님).
+   패널이 아주 좁아지면 컬럼들이 최소 폭(180px) 아래로는 안 줄고 대신 가로로 넘친다 — 스크롤
+   가능하다는 건 아래 flow-branch__cols-fade(좌우 페이드 힌트)로 알리고, 스크롤바 자체는
+   세로 스크롤바와 같은 전역 스타일(색·두께)을 그대로 쓴다(별도로 진하게 칠하지 않는다).
+   justify-content는 반드시 flex-start여야 한다 — center(또는 flex-end)를 쓰면 콘텐츠가
+   넘칠 때 그 초과분을 좌우로 "가운데 정렬"해서 절반이 스크롤 시작 위치(scrollLeft=0)보다도
+   왼쪽에 놓여버린다. scrollLeft는 음수로 갈 수 없어 그 부분은 왼쪽 끝까지 스크롤해도 영원히
+   보이지 않는다(실제로 Try 컬럼이 이렇게 잘렸었다) — 안 넘칠 때는 컬럼이 flex:1이라 어차피
+   폭을 꽉 채우므로 flex-start로 바꿔도 보기엔 차이가 없다. */
+.flow-branch__cols {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.flow-branch__cols-wrap {
+  position: relative;
+}
+
+/* 컬럼 카드 자체가 불투명해 배경 그라디언트만으로는 안 가려지므로, 별도 오버레이로 좌우 끝에
+   "더 있다"를 표시한다 — 실제로 그쪽으로 스크롤할 여지가 있을 때만 보인다(FlowSequence.vue의
+   스크롤/리사이즈 감지가 flow-branch__cols-wrap--can-left/right 클래스를 토글). */
+.flow-branch__cols-fade {
+  position: absolute;
+  top: 0;
+  bottom: 10px; /* 스크롤바 자리(padding-bottom)는 가리지 않는다 */
+  width: 28px;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.flow-branch__cols-fade--left {
+  left: 0;
+  background: linear-gradient(to right, var(--surface), transparent);
+}
+
+.flow-branch__cols-fade--right {
+  right: 0;
+  background: linear-gradient(to left, var(--surface), transparent);
+}
+
+.flow-branch__cols-wrap--can-left .flow-branch__cols-fade--left,
+.flow-branch__cols-wrap--can-right .flow-branch__cols-fade--right {
+  opacity: 1;
+}
+
+.flow-branch__col {
+  flex: 1 1 0;
+  min-width: 180px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-sunken);
+}
+
+/* 분기 컬럼은 좁아서(~200px) 라벨+메타(패키지 태그·신뢰도 뱃지)를 한 줄에 두면 한글 라벨이
+   min-content(=한 글자)로 찌부러져 세로로 깨진다 — 컬럼 안에서는 세로로 쌓아 라벨이 컬럼 폭을
+   온전히 쓰게 한다. flex 자식이 min-content 아래로 못 줄어드는 문제도 min-width:0로 함께 푼다. */
+.flow-branch__col .flow-box {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.flow-box__label {
+  min-width: 0;
+}
+
+/* 컨테이너 역할 뱃지 — 각 분기 컬럼이 Try/Catch/Finally(또는 If/Else)임을 색으로 구분해 명시 */
+.flow-branch__role {
+  align-self: flex-start;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #fff;
+  padding: 2px 10px;
+  border-radius: 6px;
+}
+
+.flow-branch__role--try { background: #1f6f8b; }
+.flow-branch__role--catch { background: #b7791f; }
+.flow-branch__role--finally { background: #1f9d55; }
+.flow-branch__role--throw { background: var(--danger); }
+.flow-branch__role--cond { background: #7c5cbf; }
+
+.flow-branch__body {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.flow-branch__empty {
+  margin: 0;
+  font-size: 0.76rem;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+/* 상세 패널 분기 컬럼 하단 표시 — 진행(↓ 화살표, Finally·If·Else) / 종료(✕, Try·Catch는 Finally로 합류).
+   margin-top:auto로 컬럼 맨 아래에 붙어 각 컬럼의 실제 바닥에 자동 정렬된다(컬럼 높이가 달라도 안 어긋남). */
+.flow-branch__drop {
+  margin-top: auto;
+  align-self: stretch;
+  position: relative;
+  height: 22px;
+}
+
+.flow-branch__drop--go::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  width: 2px;
+  height: 12px;
+  margin-left: -1px;
+  background: var(--brand-teal-dark);
+}
+
+.flow-branch__drop--go::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 13px;
+  margin-left: -5px;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 7px solid var(--brand-teal-dark);
+}
+
+.flow-branch__drop--stop::before {
+  content: "✕";
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  transform: translateX(-50%);
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text-muted);
+}
+
+/* 다이어그램 분기 병합 커넥터 — 출구 컬럼(Finally·If·Else)은 아래로 내려가 중앙에서 합류하고,
+   Try/Catch는 ✕로 종료(Finally로 합류). stub 아래의 기존 flow-arrow가 완료/다음으로 화살표를 잇는다. */
+.flow-branch__conv {
+  position: relative;
+  width: 100%;
+  height: 26px;
+  margin-top: 2px;
+}
+
+.flow-branch__conv-drop {
+  position: absolute;
+  top: 0;
+  height: 16px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--brand-teal-dark);
+}
+
+.flow-branch__conv-bar {
+  position: absolute;
+  top: 15px;
+  height: 2px;
+  background: var(--brand-teal-dark);
+}
+
+.flow-branch__conv-stub {
+  position: absolute;
+  top: 15px;
+  left: 50%;
+  margin-left: -1px;
+  width: 2px;
+  height: 11px;
+  background: var(--brand-teal-dark);
+}
+
+.flow-branch__conv-cap {
+  position: absolute;
+  top: 2px;
+  transform: translateX(-50%);
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text-muted);
+}
+
+.flow-step-label {
+  margin: 8px 0 2px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text);
+  background: rgba(31, 47, 90, 0.06);
+}
+
+.flow-step-empty {
+  margin: 2px 0;
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+/* ── 추천 흐름도 상세 패널: 실시간 생성/수정 상태 배너 ── */
+.flow-live-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--mid-bg);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--mid);
+}
+
+.flow-live-status__caption {
+  flex: 1 1 auto;
+}
+
+.flow-live-status__violations {
+  flex-shrink: 0;
+  color: var(--danger);
+  font-weight: 700;
+}
+
+/* ── v3 품질 루프 진행 스트립 (후보 카드 · 심판 · 검증 요약) ── */
+.flow-quality-strip {
+  margin: -6px 0 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border, #e3e8ef);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.82rem;
+}
+
+.flow-quality-strip__cands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quality-cand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e3e8ef);
+}
+
+.quality-cand em {
+  font-style: normal;
+  color: var(--text-muted, #6b7280);
+}
+
+.quality-cand--done {
+  border-color: var(--success, #16a34a);
+}
+
+.quality-cand--failed {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.quality-verdict,
+.quality-scorecard {
+  margin: 0;
+  color: var(--text, #1f2937);
+}
+
+/* ── 질문 카드 (needs_input, v3) ── */
+.question-cards {
+  margin-top: 18px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px dashed var(--border, #d8dee7);
+  background: var(--surface-sunken);
+}
+
+.question-cards__title {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+}
+
+.question-cards__count {
+  display: inline-block;
+  min-width: 20px;
+  text-align: center;
+  border-radius: 999px;
+  background: var(--brand-navy, #1f3a5f);
+  color: #fff;
+  font-size: 0.75rem;
+  padding: 1px 6px;
+}
+
+.question-card {
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e3e8ef);
+}
+
+.question-card--blocking {
+  border-left: 3px solid var(--danger, #dc2626);
+}
+
+.question-card__q {
+  margin: 0 0 4px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.question-card__badge {
+  margin-left: 6px;
+  font-size: 0.7rem;
+  color: var(--danger, #dc2626);
+  font-weight: 700;
+}
+
+.question-card__why {
+  margin: 0 0 8px;
+  font-size: 0.78rem;
+  color: var(--text-muted, #6b7280);
+}
+
+.question-card__input {
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #d8dee7);
+  background: var(--surface, #fff);
+  color: var(--text, #1f2937);
+  font-size: 0.83rem;
+}
+
+.question-card__confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.83rem;
+}
+
+.question-cards__submit {
+  margin-top: 4px;
+}
+
+/* ── 흐름도 수준 신뢰도 뱃지 (v3) ── */
+.flow-confidence {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.flow-confidence--high {
+  background: rgba(22, 163, 74, 0.12);
+  color: var(--success, #16a34a);
+}
+
+.flow-confidence--mid {
+  background: rgba(217, 119, 6, 0.12);
+  color: #d97706;
+}
+
+.flow-confidence--low {
+  background: rgba(220, 38, 38, 0.12);
+  color: var(--danger, #dc2626);
+}
+
+.flow-box__label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.flow-box__meta {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.flow-box__tag {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.flow-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--border);
+}
+
+.flow-legend__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.flow-legend__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.flow-action__sources {
+  margin: 6px 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  padding-left: 18px;
+}
+
+.flow-action__children {
+  margin-top: 10px;
+  padding-left: 20px;
+  border-left: 2px dashed var(--border);
+}
+
+.flow-notes {
+  margin: 16px 0 8px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.flow-toolbar__actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.flow-history-collapse {
+  overflow: hidden;
+}
+
+.flow-history {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  background: var(--surface-sunken);
+}
+
+.flow-history__title {
+  margin: 0 0 10px;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.flow-history__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.flow-history__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.flow-history__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.82rem;
+}
+
+.flow-history__current {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--accent-text);
+  background: var(--brand-teal-light);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.flow-history__desc {
+  color: var(--text);
+}
+
+.flow-history__date {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.flow-history__revert {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  font-size: 0.76rem;
+}
+
+.flow-history__empty,
+.flow-history__hint {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+/* ---------- Chat widget ---------- */
+
+.chat-fab {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, var(--brand-teal), var(--brand-teal-dark));
+  box-shadow: 0 12px 28px rgba(31, 111, 139, 0.4);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  z-index: 50;
+}
+
+.chat-fab svg {
+  width: 30px;
+  height: 30px;
+}
+
+.chat-fab:hover {
+  filter: brightness(1.05);
+}
+
+.chat-popup {
+  position: fixed;
+  width: 540px;
+  max-width: calc(100vw - 16px);
+  height: 780px;
+  max-height: calc(100vh - 16px);
+  background: var(--surface);
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  box-shadow: 0 26px 60px rgba(23, 32, 38, 0.28);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 70;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.chat-popup--drop-ready {
+  border-color: var(--brand-teal);
+  box-shadow: 0 26px 60px rgba(31, 111, 139, 0.4);
+}
+
+.chat-popup--docked {
+  position: static;
+  z-index: auto;
+  width: 100%;
+  height: calc(100vh - 150px);
+  max-width: none;
+  max-height: calc(100vh - 150px);
+  align-self: stretch;
+  min-height: 560px;
+  box-shadow: 0 18px 40px rgba(23, 32, 38, 0.06);
+}
+
+.chat-popup__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, var(--brand-teal-dark), var(--brand-navy));
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.chat-popup__header:active {
+  cursor: grabbing;
+}
+
+.chat-popup__header--static {
+  cursor: default;
+}
+
+.chat-popup__header--static:active {
+  cursor: default;
+}
+
+.chat-popup__title {
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 0.94rem;
+  flex: 1;
+}
+
+.chat-popup__close {
+  background: transparent;
+  border: 0;
+  color: #ffffff;
+  font-size: 0.95rem;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.chat-popup__footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px 10px;
+}
+
+/* ---------- 에이전트 버전 드롭다운 (RPA-167) ----------
+   패널 하단에 붙어 있어 메뉴는 위로 펼친다. 옵션은 GET /api/agent/versions 원본 그대로. */
+
+.agent-version-dd {
+  position: relative;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.agent-version-dd__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 4px 10px 4px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.agent-version-dd__btn:hover,
+.agent-version-dd__btn--open {
+  border-color: var(--accent-text);
+  color: var(--accent-text);
+}
+
+.agent-version-dd__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-version-dd__chevron {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  transition: transform 0.15s ease;
+}
+
+.agent-version-dd__btn--open .agent-version-dd__chevron {
+  transform: rotate(180deg);
+}
+
+.agent-version-dd__menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: max-content;
+  max-width: 300px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(23, 32, 38, 0.14);
+  padding: 6px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.agent-version-dd__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 7px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-version-dd__item:hover {
+  background: var(--brand-teal-light);
+}
+
+.agent-version-dd__item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.agent-version-dd__item-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.agent-version-dd__item--active .agent-version-dd__item-label {
+  color: var(--accent-text);
+}
+
+.agent-version-dd__check {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  color: var(--accent-text);
+}
+
+.agent-version-dd__item-desc {
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.chat-popup__compact {
+  flex-shrink: 0;
+  border: 1px solid var(--accent-text);
+  background: var(--surface);
+  color: var(--accent-text);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.chat-popup__compact:hover:not(:disabled) {
+  background: var(--brand-teal-light);
+}
+
+.chat-popup__compact:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* 게이지가 압축 권장/필요 상태면 버튼을 강조해 사용자가 누르도록 유도한다 (RPA-83) */
+.chat-popup__compact--recommended {
+  border-color: var(--warning);
+  color: var(--warning);
+  animation: compact-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes compact-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(var(--warning-rgb), 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(var(--warning-rgb), 0);
+  }
+}
+
+/* ---------- 대화 누적 링 게이지 (usage_gauge, RPA-83) ----------
+   원래 헤더(어두운 그라디언트) 배경용 흰색 계열 색이었으나, 하단 푸터(밝은 흰 배경)로
+   옮기며 팔레트를 반전했다 — 상태별 강조색은 대화 압축 버튼(chat-popup__compact--recommended)과
+   동일 톤으로 맞춘다. */
+
+.chat-gauge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  margin-left: auto; /* 푸터 왼쪽(버전 드롭다운·압축 버튼)과 분리해 오른쪽 끝에 고정 */
+}
+
+.chat-gauge svg {
+  width: 18px;
+  height: 18px;
+  transform: rotate(-90deg); /* 12시 방향부터 채운다 */
+}
+
+.chat-gauge__track,
+.chat-gauge__fill {
+  fill: none;
+  stroke-width: 3;
+}
+
+.chat-gauge__track {
+  stroke: var(--border);
+}
+
+.chat-gauge__fill {
+  stroke: var(--success);
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.4s ease;
+}
+
+.chat-gauge--warn .chat-gauge__fill {
+  stroke: var(--warning);
+}
+
+.chat-gauge--critical .chat-gauge__fill {
+  stroke: var(--danger);
+}
+
+.chat-gauge__label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.chat-gauge--warn .chat-gauge__label {
+  color: var(--warning);
+}
+
+.chat-gauge--critical .chat-gauge__label {
+  color: var(--danger);
+}
+
+/* ---------- 답변 출처(sources) 접기 영역 ---------- */
+
+.chat-message__sources {
+  margin-top: 2px;
+  max-width: 100%;
+}
+
+.chat-message__sources-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  padding: 2px 0;
+  cursor: pointer;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-align: left;
+}
+
+.chat-message__sources-list {
+  list-style: none;
+  margin: 4px 0 6px;
+  padding-left: 14px;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.chat-message__sources-list a {
+  color: var(--accent-text);
+  text-decoration: underline;
+}
+
+.chat-message__sources-score {
+  margin-left: 6px;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+.chat-popup__minimize {
+  background: transparent;
+  border: 0;
+  color: #ffffff;
+  font-size: 1.3rem;
+  line-height: 1;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 2px 10px;
+}
+
+.chat-popup__messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* 스크롤바가 나타나고 사라질 때 콘텐츠 폭이 바뀌어(chat-message의 max-width:84%가
+     그만큼 다시 계산됨) 말풍선 너비가 미세하게 들쭉날쭉해지는 걸 막는다 — 스크롤 유무와
+     무관하게 항상 스크롤바 자리를 남겨 둔다. */
+  scrollbar-gutter: stable;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--surface-sunken);
+}
+
+.chat-history-loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 48px 16px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.chat-message {
+  display: flex;
+  flex-direction: column;
+  max-width: 84%;
+}
+
+.chat-message--assistant {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.chat-message--user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.chat-message__bubble {
+  padding: 10px 13px;
+  border-radius: 12px;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+.chat-message__bubble strong {
+  font-weight: 800;
+}
+
+.chat-message__bubble p {
+  margin: 0 0 8px;
+}
+
+.chat-message__bubble p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-message__bubble ul,
+.chat-message__bubble ol {
+  margin: 4px 0 8px;
+  padding-left: 20px;
+}
+
+.chat-message__bubble li {
+  margin: 2px 0;
+}
+
+.chat-message__bubble h1,
+.chat-message__bubble h2,
+.chat-message__bubble h3 {
+  margin: 8px 0 4px;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.chat-message__bubble a {
+  color: var(--accent-text);
+  text-decoration: underline;
+}
+
+.chat-message__bubble code {
+  background: var(--code-bg-subtle);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.82em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.chat-message__bubble pre {
+  background: #1e1e2e;
+  color: #eaeaea;
+  padding: 10px 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 6px 0;
+  white-space: pre;
+}
+
+.chat-message__bubble pre code {
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+
+.chat-message__bubble table {
+  border-collapse: collapse;
+  margin: 6px 0;
+  font-size: 0.8rem;
+}
+
+.chat-message__bubble th,
+.chat-message__bubble td {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+}
+
+.chat-message__bubble blockquote {
+  margin: 6px 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--border);
+  color: var(--text-muted);
+}
+
+.chat-message--assistant .chat-message__bubble {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top-left-radius: 4px;
+  color: var(--text);
+}
+
+.chat-message--user .chat-message__bubble {
+  background: var(--brand-teal-dark);
+  color: #ffffff;
+  border-top-right-radius: 4px;
+}
+
+.chat-message--user .chat-message__bubble code {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.chat-message--user .chat-message__bubble a {
+  color: #ffffff;
+}
+
+.chat-message__bubble--pending {
+  color: var(--text-muted);
+  font-style: italic;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.chat-message__time {
+  margin-top: 3px;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.chat-message__stages {
+  margin-bottom: 4px;
+  max-width: 100%;
+}
+
+.chat-message__stages-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  padding: 2px 0;
+  cursor: pointer;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-align: left;
+}
+
+.chat-message__stages-toggle:hover {
+  color: var(--accent-text);
+}
+
+.chat-message__stages-chevron {
+  flex-shrink: 0;
+  display: inline-block;
+  font-size: 0.6rem;
+  transition: transform 0.15s ease;
+}
+
+.chat-message__stages-chevron--open {
+  transform: rotate(90deg);
+}
+
+.chat-message__stages-list {
+  list-style: none;
+  margin: 4px 0 6px;
+  padding-left: 0;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.chat-message__stages-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.chat-popup__composer {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.chat-popup__composer textarea {
+  flex: 1;
+  min-width: 0;
+  max-height: 120px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 0.86rem;
+  line-height: 1.4;
+  resize: none;
+  overflow-y: auto;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.chat-popup__composer textarea:focus {
+  outline: none;
+  border-color: var(--brand-teal);
+  box-shadow: 0 0 0 3px var(--brand-teal-light);
+}
+
+.chat-popup__composer textarea:disabled {
+  background: var(--bg);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.chat-popup__composer button:disabled {
+  background: var(--border);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.chat-popup__composer button {
+  border: 0;
+  border-radius: 8px;
+  padding: 0 16px;
+  background: var(--brand-teal-dark);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+
+/* ---------- Login page ---------- */
+
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 6fr 5fr;
+}
+
+@media (max-width: 760px) {
+  .login-page {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-card__brand {
+    padding: 28px 32px;
+  }
+
+  .auth-slider {
+    min-height: 200px;
+  }
+
+  .auth-slide svg {
+    max-width: min(75%, 300px);
+  }
+}
+
+/* ---------- Brand panel ---------- */
+
+.auth-card__brand {
+  position: relative;
+  z-index: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 44px 48px;
+  background: linear-gradient(160deg, var(--brand-teal-dark) 0%, var(--brand-navy) 100%);
+  color: #ffffff;
+}
+
+.auth-brand__blob {
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  filter: blur(80px);
+  will-change: transform;
+}
+
+.auth-brand__blob--1 {
+  width: 60%;
+  padding-bottom: 60%;
+  top: -18%;
+  left: -20%;
+  background: radial-gradient(circle at 35% 35%, var(--brand-teal) 0%, transparent 70%);
+  opacity: 0.55;
+  animation: authBlobFloat1 24s ease-in-out infinite;
+}
+
+.auth-brand__blob--2 {
+  width: 55%;
+  padding-bottom: 55%;
+  bottom: -18%;
+  right: -18%;
+  background: radial-gradient(circle at 60% 60%, #8fe0c8 0%, transparent 70%);
+  opacity: 0.4;
+  animation: authBlobFloat2 28s ease-in-out infinite;
+}
+
+.auth-brand__blob--3 {
+  width: 42%;
+  padding-bottom: 42%;
+  top: 38%;
+  left: 30%;
+  background: radial-gradient(circle, #ffffff 0%, transparent 70%);
+  opacity: 0.12;
+  animation: authBlobFloat3 19s ease-in-out infinite;
+}
+
+.auth-brand__blob--4 {
+  width: 32%;
+  padding-bottom: 32%;
+  top: 4%;
+  right: 4%;
+  background: radial-gradient(circle, #ffe08a 0%, transparent 70%);
+  opacity: 0.45;
+  animation: authBlobFloat4 21s ease-in-out infinite;
+}
+
+.auth-brand__blob--5 {
+  width: 38%;
+  padding-bottom: 38%;
+  bottom: 4%;
+  left: 0%;
+  background: radial-gradient(circle, #7fb9e8 0%, transparent 70%);
+  opacity: 0.4;
+  animation: authBlobFloat2 32s ease-in-out infinite reverse;
+}
+
+@keyframes authBlobFloat1 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(5%, 6%) scale(1.15);
+  }
+}
+
+@keyframes authBlobFloat2 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-6%, -5%) scale(1.1);
+  }
+}
+
+@keyframes authBlobFloat3 {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+  50% {
+    transform: translate(-4%, 5%) rotate(20deg) scale(1.25);
+  }
+}
+
+@keyframes authBlobFloat4 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-8%, 8%) scale(1.2);
+  }
+}
+
+.auth-brand__sheen {
+  position: absolute;
+  inset: -60%;
+  z-index: -1;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(255, 255, 255, 0.32) 60deg,
+    transparent 140deg,
+    transparent 360deg
+  );
+  animation: authSheenRotate 40s linear infinite;
+  mix-blend-mode: overlay;
+}
+
+@keyframes authSheenRotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.auth-brand__grid {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.14) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(circle at center, black, transparent 92%);
+  -webkit-mask-image: radial-gradient(circle at center, black, transparent 92%);
+}
+
+.auth-brand__sparkles {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+
+.auth-brand__sparkle {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 12px 3px rgba(255, 255, 255, 0.8);
+  animation: authSparkleTwinkle 3.6s ease-in-out infinite;
+}
+
+.auth-brand__sparkle--1 {
+  top: 14%;
+  left: 62%;
+  animation-delay: 0s;
+}
+
+.auth-brand__sparkle--2 {
+  top: 24%;
+  left: 20%;
+  animation-delay: 0.5s;
+}
+
+.auth-brand__sparkle--3 {
+  top: 48%;
+  left: 82%;
+  animation-delay: 1s;
+}
+
+.auth-brand__sparkle--4 {
+  top: 62%;
+  left: 12%;
+  animation-delay: 1.5s;
+}
+
+.auth-brand__sparkle--5 {
+  top: 74%;
+  left: 68%;
+  animation-delay: 2s;
+}
+
+.auth-brand__sparkle--6 {
+  top: 8%;
+  left: 40%;
+  animation-delay: 2.5s;
+}
+
+.auth-brand__sparkle--7 {
+  top: 40%;
+  left: 46%;
+  animation-delay: 3s;
+}
+
+@keyframes authSparkleTwinkle {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-brand__blob,
+  .auth-brand__sheen,
+  .auth-brand__sparkle {
+    animation: none;
+  }
+}
+
+.auth-brand__logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.auth-brand__logo-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+
+.auth-brand__logo-text {
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.auth-slider {
+  position: relative;
+  flex: 1;
+  min-height: 340px;
+  margin: 20px 0;
+  overflow: hidden;
+}
+
+.auth-slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    transform 0.7s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.7s ease;
+}
+
+.auth-slide svg {
+  width: 100%;
+  max-width: min(80%, 460px);
+  height: auto;
+}
+
+.auth-slide-photo {
+  width: 100%;
+  max-width: min(100%, 750px);
+}
+
+.auth-slide-photo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  mask-image: radial-gradient(ellipse 58% 58% at center, black 45%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 58% 58% at center, black 45%, transparent 78%);
+}
+
+.auth-slide--active {
+  transform: translateX(0);
+  opacity: 1;
+  z-index: 2;
+}
+
+.auth-slide--prev {
+  transform: translateX(-100%);
+  opacity: 0;
+  z-index: 1;
+}
+
+.auth-slide--next {
+  transform: translateX(100%);
+  opacity: 0;
+  z-index: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-slide {
+    transition: opacity 0.4s ease;
+  }
+
+  .auth-slide--prev,
+  .auth-slide--next {
+    transform: none;
+  }
+}
+
+.auth-brand__copy {
+  margin-bottom: 20px;
+}
+
+.auth-brand__title {
+  margin: 0 0 8px;
+  font-size: 1.6rem;
+  font-weight: 800;
+}
+
+.auth-brand__desc {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  opacity: 0.85;
+  white-space: pre-line;
+}
+
+.auth-dots {
+  display: flex;
+  gap: 8px;
+}
+
+.auth-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.auth-dot--active {
+  background: #ffffff;
+  transform: scale(1.15);
+}
+
+/* ---------- Auth form panel ---------- */
+
+.auth-card__form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 56px;
+  overflow-y: auto;
+  background: var(--surface);
+}
+
+@media (max-width: 520px) {
+  .auth-card__form {
+    padding: 40px 28px;
+  }
+}
+
+.login-card {
+  width: 100%;
+  max-width: 400px;
+}
+
+.login-card--modal {
+  max-width: none;
+}
+
+.login-card__title {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.login-card__inline-link {
+  margin: 8px 0 28px;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.login-card__link-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--accent-text);
+  font-weight: 800;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.login-card__link-btn:hover {
+  text-decoration: underline;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.login-field__label {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.login-field__hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.login-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.login-input__icon {
+  position: absolute;
+  left: 14px;
+  width: 20px;
+  height: 20px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.login-input input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 13px 16px 13px 44px;
+  font-size: 0.92rem;
+  background: var(--surface);
+}
+
+.login-input input:focus {
+  outline: none;
+  border-color: var(--brand-teal);
+  box-shadow: 0 0 0 3px var(--brand-teal-light);
+}
+
+.login-input__toggle {
+  position: absolute;
+  right: 12px;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.login-input__toggle svg {
+  width: 20px;
+  height: 20px;
+}
+
+.login-input__toggle:hover {
+  color: var(--accent-text);
+}
+
+.login-submit {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 0.94rem;
+}
+
+.login-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.login-submit--compact {
+  padding: 12px 28px;
+  font-size: 0.92rem;
+}
+
+.login-remember {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.login-remember input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent-text);
+  cursor: pointer;
+}
+
+/* ---------- 사이드바 세션 이력 (구 아카이브 화면에서 이동, RPA-100) ---------- */
+
+.archive-chat__search {
+  position: relative;
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.archive-chat__search svg {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: #7d8f9b;
+  pointer-events: none;
+}
+
+.archive-chat__search input {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  padding: 8px 10px 8px 32px;
+  font-size: 0.82rem;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e3edf2;
+}
+
+.archive-chat__search input::placeholder {
+  color: #7d8f9b;
+}
+
+.archive-chat__search input:focus {
+  outline: none;
+  border-color: var(--brand-teal);
+  box-shadow: 0 0 0 3px rgba(47, 154, 178, 0.25);
+}
+
+.archive-chat__list {
+  list-style: none;
+  margin: 0;
+  padding: 0 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.archive-chat__list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.archive-chat__list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.archive-chat__list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.archive-chat__list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.34);
+}
+
+.archive-chat__show-more {
+  padding: 2px 0 4px;
+}
+
+.archive-chat__show-more button {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: #93a5b1;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.archive-chat__show-more button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e3edf2;
+}
+
+.archive-chat__item {
+  position: relative;
+  border-radius: 10px;
+}
+
+.archive-chat__item--active {
+  background: rgba(47, 154, 178, 0.18);
+}
+
+.archive-chat__item-menu-wrap {
+  position: absolute;
+  top: 4px;
+  right: 2px;
+}
+
+.archive-chat__item-menu-btn {
+  border: 0;
+  background: transparent;
+  color: #93a5b1;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.archive-chat__item-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e3edf2;
+}
+
+.archive-chat__item-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 120px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(23, 32, 38, 0.24);
+  padding: 6px;
+  z-index: 10;
+}
+
+.archive-chat__item-menu button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.archive-chat__item-menu button:hover {
+  background: var(--brand-teal-light);
+}
+
+.archive-chat__item-menu-danger {
+  color: var(--danger) !important;
+}
+
+.archive-chat__item-menu-danger:hover {
+  background: var(--danger-bg) !important;
+}
+
+.archive-chat__empty {
+  padding: 20px 8px;
+  text-align: center;
+  color: #7d8f9b;
+  font-size: 0.8rem;
+}
+
+.archive-results__item-main {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 8px 30px 8px 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border-radius: 10px;
+}
+
+.archive-chat__item:not(.archive-chat__item--active) .archive-results__item-main:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.archive-results__item-icon {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  font-size: 0.6rem;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+
+/* 세션 아이콘 — 파일 확장자 대신 세션의 솔루션 키(A360 등)를 표시한다 (P0-2 실연동) */
+.archive-results__item-icon--session {
+  background: rgba(47, 154, 178, 0.22);
+  color: #8fd8e8;
+  font-size: 0.56rem;
+}
+
+/* 사이드바에서 이 세션의 분석·흐름도·채팅 이력을 불러오는 동안 아이콘 자리를 대신한다 */
+.archive-chat__item-spinner {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+}
+
+.archive-chat__item-spinner::after {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(143, 216, 232, 0.35);
+  border-top-color: #8fd8e8;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.archive-results__item-body {
   min-width: 0;
   flex: 1;
-  border: 1px solid #c6d1d6;
-  border-radius: 6px;
-  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-input:focus {
-  border-color: #26768a;
-  outline: 3px solid rgba(38, 118, 138, 0.16);
+.archive-results__item-title {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #e3edf2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-button {
-  min-height: 46px;
-  border: 0;
-  border-radius: 6px;
-  background: #1f6f8b;
-  color: #ffffff;
-  cursor: pointer;
+.archive-results__item-date {
+  font-size: 0.68rem;
+  color: #7d8f9b;
+  margin-top: 1px;
+}
+
+/* ---------- Tutorial (기능 소개 투어) ---------- */
+
+.tour-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+}
+
+.tour-overlay__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(16, 24, 30, 0.62);
+}
+
+.tour-overlay__spotlight {
+  position: fixed;
+  border-radius: 16px;
+  border: 2px solid var(--brand-teal);
+  box-shadow:
+    0 0 0 9999px rgba(16, 24, 30, 0.62),
+    0 0 24px rgba(47, 154, 178, 0.55);
+  transition:
+    top 0.3s ease,
+    left 0.3s ease,
+    width 0.3s ease,
+    height 0.3s ease;
+  pointer-events: none;
+}
+
+.tour-card {
+  position: fixed;
+  width: 340px;
+  max-width: calc(100vw - 24px);
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 20px 22px 16px;
+  box-shadow: 0 24px 60px rgba(16, 24, 30, 0.35);
+  transition:
+    top 0.3s ease,
+    left 0.3s ease;
+}
+
+.tour-card--centered {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  transition: none;
+}
+
+.tour-card__badge {
+  display: inline-block;
+  font-size: 0.72rem;
   font-weight: 800;
-  padding: 0 18px;
+  color: var(--accent-text);
+  background: var(--brand-teal-light);
+  border-radius: 999px;
+  padding: 3px 10px;
+  margin-bottom: 10px;
 }
 
-button:hover {
-  background: #18566d;
+.tour-card__title {
+  margin: 0 0 8px;
+  font-size: 1.02rem;
+  font-weight: 800;
+  color: var(--text);
 }
 
-.secondary {
+.tour-card__body {
+  margin: 0 0 16px;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.tour-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tour-card__skip {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 6px 4px;
+}
+
+.tour-card__skip:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.tour-card__dots {
+  display: flex;
+  gap: 5px;
+}
+
+.tour-card__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.tour-card__dot--active {
+  background: var(--brand-teal);
+}
+
+.tour-card__nav {
+  display: flex;
+  gap: 6px;
+}
+
+.tour-card__prev {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tour-card__prev:hover {
+  background: var(--brand-teal-light);
+  border-color: var(--brand-teal);
+}
+
+.tour-card__next {
+  border: 0;
+  background: var(--brand-teal-dark);
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tour-card__next:hover {
+  background: var(--brand-navy);
+}
+
+/* ---------- Vue Flow 편집 캔버스(FlowCanvas) — 추천 작업 흐름도 모달 ---------- */
+
+.flow-canvas {
+  position: relative;
   width: 100%;
-  margin-top: 12px;
-  border: 1px solid #c6d1d6;
-  background: #ffffff;
-  color: #21333b;
+  height: min(70vh, 640px);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface-sunken);
 }
 
-.secondary:hover {
-  background: #eef4f6;
+.flow-canvas .vue-flow__pane {
+  cursor: grab;
 }
 
-pre {
-  min-height: 150px;
-  margin: 22px 0 0;
-  overflow: auto;
+.flow-canvas .vue-flow__pane.dragging {
+  cursor: grabbing;
+}
+
+.flow-canvas .vue-flow__edge-path {
+  stroke: var(--accent-text);
+  stroke-width: 1.6;
+}
+
+.flow-canvas .vue-flow__arrowhead polyline,
+.flow-canvas .vue-flow__arrowhead path {
+  stroke: var(--accent-text);
+  fill: var(--accent-text);
+}
+
+.flow-canvas .vue-flow__background circle {
+  fill: var(--border);
+}
+
+.flow-canvas .vue-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.flow-canvas .vue-flow__controls-button {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  fill: var(--text);
+}
+
+.flow-canvas .vue-flow__controls-button:hover {
+  background: var(--surface-sunken-hover);
+}
+
+.flow-canvas .vue-flow__handle {
+  width: 8px;
+  height: 8px;
+  background: var(--brand-teal-dark);
+  border: 1px solid var(--surface);
+}
+
+/* 노드 컴포넌트 루트(ActionNode/ContainerNode/BranchSetNode/BranchColumnNode) — Vue Flow가
+   width/height를 인라인 스타일로 주는 바깥 래퍼를 그대로 채운다. */
+.flow-canvas-node {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.flow-canvas-box {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  max-width: none;
+  cursor: grab;
+}
+
+/* 번호-액션-패키지가 한 줄에 나란히, 남는 공간은 액션 텍스트가 차지하고 넘치면 말줄임(1줄) */
+.flow-canvas-box__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.flow-canvas-box__row .flow-node__num,
+.flow-canvas-box__row .flow-node__container-tag {
+  flex-shrink: 0;
+}
+
+.flow-canvas-box__text {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flow-canvas-box__edit-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
   border-radius: 6px;
-  background: #101820;
-  color: #d5f3e5;
-  font-size: 0.92rem;
-  line-height: 1.5;
-  padding: 16px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  line-height: 1;
+  cursor: pointer;
 }
 
-@media (max-width: 640px) {
-  .page {
-    padding: 14px;
-  }
+.flow-canvas-box__edit-btn:hover {
+  background: var(--surface-sunken-hover);
+  color: var(--text);
+}
 
-  .panel {
-    padding: 20px;
-  }
+.flow-canvas-box__input {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  resize: none;
+  border: 1px solid var(--brand-teal-dark);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+}
 
-  .masthead {
-    grid-template-columns: 48px 1fr;
-  }
+/* 컨테이너/분기세트/분기컬럼 프레임 — 헤더(ActionBox)는 위쪽에 두고 자식들은 FlowCanvas가
+   별도 절대좌표 노드로 얹으므로, 프레임 자신은 배경·테두리만 그린다. */
+.flow-canvas-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border-radius: 12px;
+  border: 1px dashed var(--brand-teal-dark);
+  background: var(--brand-teal-light);
+}
 
-  .logo {
-    width: 48px;
-    height: 48px;
-  }
+.flow-canvas-frame__header {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 0 8px;
+}
 
-  .badge {
-    grid-column: 1 / -1;
-    justify-self: start;
-  }
+.flow-canvas-frame__header .flow-canvas-box {
+  width: 100%;
+}
 
-  .input-row {
-    flex-direction: column;
-  }
+.flow-canvas-frame--branch-set {
+  background: rgba(31, 47, 90, 0.03);
+  border: 1px solid var(--border);
+  border-style: solid;
+  padding-top: 6px;
+  box-sizing: border-box;
+}
+
+.flow-canvas-frame__label {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.flow-canvas-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.flow-canvas-col--terminal {
+  position: relative;
+}
+
+.flow-canvas-col__terminal {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  color: var(--danger);
+  font-weight: 800;
+  font-size: 0.8rem;
+}
+
+.flow-canvas-pill {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flow-canvas-step-title {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  margin: 0;
+}
+
+/* 드래그 중 드롭 대상 하이라이트 — FlowCanvas가 대상 노드에 이 클래스를 얹는다. */
+.flow-canvas-drop--before {
+  box-shadow: 0 -3px 0 0 var(--brand-teal-dark);
+}
+
+.flow-canvas-drop--after {
+  box-shadow: 0 3px 0 0 var(--brand-teal-dark);
+}
+
+.flow-canvas-drop--inside {
+  box-shadow: inset 0 0 0 2px var(--brand-teal-dark);
 }

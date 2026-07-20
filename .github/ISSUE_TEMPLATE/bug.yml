@@ -1,0 +1,35 @@
+name: "🐛 버그 리포트"
+description: "동작하지 않거나 예상과 다른 동작"
+title: "[bug] "
+labels: ["type:bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: 어떤 문제인가요?
+      placeholder: "채팅 응답 대기 중 새로고침하면 대화 내역이 사라짐"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 재현 방법
+      placeholder: |
+        1. 채팅 화면에서 질문 입력
+        2. 응답 스트리밍 중 F5
+        3. 대화 목록이 비어 있음
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대 동작
+    validations:
+      required: false
+  - type: textarea
+    id: env
+    attributes:
+      label: 환경 / 콘솔 로그
+      placeholder: "브라우저/OS, 개발자 도구 콘솔 에러 붙여넣기"
+    validations:
+      required: false
