@@ -1,9 +1,9 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import slide1Photo from "../assets/login1.png";
-import slide2Photo from "../assets/login2.png";
-import slide3Photo from "../assets/login3.png";
+import slide1Photo from "../assets/login1.webp";
+import slide2Photo from "../assets/login2.webp";
+import slide3Photo from "../assets/login3.webp";
 
 const { t } = useI18n();
 
@@ -60,19 +60,19 @@ onUnmounted(() => {
     <div class="auth-slider" aria-hidden="true">
       <div class="auth-slide" :class="slideClass(0)">
         <div class="auth-slide-photo">
-          <img :src="slide1Photo" alt="" />
+          <img :src="slide1Photo" alt="" width="1200" height="800" fetchpriority="high" />
         </div>
       </div>
 
       <div class="auth-slide" :class="slideClass(1)">
         <div class="auth-slide-photo">
-          <img :src="slide2Photo" alt="" />
+          <img :src="slide2Photo" alt="" width="1200" height="800" loading="lazy" decoding="async" />
         </div>
       </div>
 
       <div class="auth-slide" :class="slideClass(2)">
         <div class="auth-slide-photo">
-          <img :src="slide3Photo" alt="" />
+          <img :src="slide3Photo" alt="" width="1200" height="800" loading="lazy" decoding="async" />
         </div>
       </div>
     </div>

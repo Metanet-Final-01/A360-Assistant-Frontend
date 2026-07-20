@@ -13,7 +13,10 @@ export default defineConfig(({ mode }) => {
     plugins: [vue()],
     define: {
       "import.meta.env.VITE_API_BASE_URL": JSON.stringify(apiBaseUrl),
-      __VUE_I18N_FULL_INSTALL__: true,
+      // <i18n-t>/<i18n-d>/<i18n-n> 컴포넌트·v-t 디렉티브 어디서도 안 쓴다(전부 useI18n()의 t()
+      // 호출) — full install을 켜두면 안 쓰는 그 등록 코드가 트리셰이킹되지 않고 그대로 번들에
+      // 남는다.
+      __VUE_I18N_FULL_INSTALL__: false,
       __VUE_I18N_LEGACY_API__: false,
       __INTLIFY_JIT_COMPILATION__: true,
       __INTLIFY_PROD_DEVTOOLS__: false,
