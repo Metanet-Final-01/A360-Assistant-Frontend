@@ -1,5 +1,5 @@
 <script setup>
-import { computed, defineAsyncComponent, onMounted, ref, watch } from "vue";
+import { computed, defineAsyncComponent, h, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "./stores/auth";
 import { useChatStore } from "./stores/chat";
@@ -16,10 +16,44 @@ import { ANALYSIS_PANEL_ORDER_KEY, usePanelReorder } from "./composables/usePane
 const SignupPage = defineAsyncComponent(() => import("./components/SignupPage.vue"));
 const TutorialOverlay = defineAsyncComponent(() => import("./components/TutorialOverlay.vue"));
 const SettingsOverlay = defineAsyncComponent(() => import("./components/SettingsOverlay.vue"));
-const AppSidebar = defineAsyncComponent(() => import("./components/AppSidebar.vue"));
-const UploadPanel = defineAsyncComponent(() => import("./components/UploadPanel.vue"));
-const AnalysisPanel = defineAsyncComponent(() => import("./components/AnalysisPanel.vue"));
-const ChatWidget = defineAsyncComponent(() => import("./components/ChatWidget.vue"));
+
+// 청크 로딩 중·실패 시 자체 폴백 UI를 렌더한다 — 없으면 그 자리가 그냥 빈 채로 남는데,
+// 이 넷(사이드바/업로드/분석/챗)은 로그인 후 화면의 본체라 그러면 앱이 통째로 먹통처럼
+// 보인다. 배포 직후 브라우저가 옛 index.html로 새 해시의 청크를 찾는 경우처럼 재요청으로
+// 해결되는 실패도 있어 몇 번은 자동 재시도하고, 그래도 안 되면 새로고침을 안내한다.
+function ChunkLoadingFallback() {
+  return h("div", { class: "chunk-fallback" }, [h("div", { class: "analyzing-state__spinner" })]);
+}
+
+function ChunkErrorFallback() {
+  return h("div", { class: "chunk-fallback chunk-fallback--error" }, [
+    h("p", t("app.chunkLoadError")),
+    h(
+      "button",
+      { type: "button", class: "btn btn--outline", onClick: () => window.location.reload() },
+      t("app.chunkLoadRetry"),
+    ),
+  ]);
+}
+
+function lazyPanel(loader) {
+  return defineAsyncComponent({
+    loader,
+    loadingComponent: ChunkLoadingFallback,
+    errorComponent: ChunkErrorFallback,
+    delay: 200,
+    timeout: 15000,
+    onError(error, retry, fail, attempts) {
+      if (attempts <= 2) retry();
+      else fail();
+    },
+  });
+}
+
+const AppSidebar = lazyPanel(() => import("./components/AppSidebar.vue"));
+const UploadPanel = lazyPanel(() => import("./components/UploadPanel.vue"));
+const AnalysisPanel = lazyPanel(() => import("./components/AnalysisPanel.vue"));
+const ChatWidget = lazyPanel(() => import("./components/ChatWidget.vue"));
 
 const auth = useAuthStore();
 const chat = useChatStore();
