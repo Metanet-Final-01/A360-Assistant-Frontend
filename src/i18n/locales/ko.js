@@ -17,6 +17,9 @@ export default {
 
   app: {
     authChecking: "로그인 확인 중…",
+    chunkLoading: "불러오는 중…",
+    chunkLoadError: "이 화면을 불러오지 못했습니다. 새로고침해 주세요.",
+    chunkLoadRetry: "새로고침",
   },
 
   sidebar: {

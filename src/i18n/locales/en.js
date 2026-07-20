@@ -17,6 +17,9 @@ export default {
 
   app: {
     authChecking: "Checking login…",
+    chunkLoading: "Loading…",
+    chunkLoadError: "Couldn't load this screen. Please refresh.",
+    chunkLoadRetry: "Refresh",
   },
 
   sidebar: {
