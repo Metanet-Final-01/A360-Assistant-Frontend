@@ -34,6 +34,9 @@ const outTop = computed(() => LAYOUT.ROLE_BADGE_H + LAYOUT.NODE_H);
         :color="data.color"
         :is-container="data.isContainer"
         :editable="!!data.editable"
+        :confidence="data.confidence"
+        :rationale="data.rationale"
+        :sources="data.sources"
         @commit="data.onCommit?.($event)"
       />
     </div>

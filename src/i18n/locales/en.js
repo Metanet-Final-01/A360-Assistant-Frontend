@@ -152,6 +152,11 @@ export default {
     exportTitle: "Export",
     exportDisabledHint: "Generate a flow (recommendation) first to export it",
     exportJson: "Export JSON",
+    exportMarkdown: "Export Markdown",
+    exportDocx: "Export DOCX",
+    rationaleLabel: "Rationale",
+    confidenceLabel: "Confidence",
+    sourcesLabel: "Sources",
     generatingModal: "Generating the recommendation… you can check progress in the chatbot.",
     errors: {
       exportFailed: "Export failed.",
@@ -214,6 +219,9 @@ export default {
     unsavedHint: "You have unsaved changes.",
     maximize: "Maximize",
     restore: "Restore",
+    exportImage: "Save as image",
+    exportingImage: "Saving…",
+    exportImageFailed: "Failed to save the image.",
     changeSummary: {
       editLabel: "Edited action text",
       reorder: "Reordered actions",
@@ -290,6 +298,13 @@ export default {
       edit: "Edited step details",
       remove: "Removed a step",
       add: "Added a step",
+    },
+    vision: {
+      button: "Enrich images/scans",
+      enriching: "Enriching images…",
+      done: "Enriched {count} page with vision | Enriched {count} pages with vision",
+      noneNeeded: "No pages needed enrichment.",
+      failed: "Failed to enrich images.",
     },
   },
 

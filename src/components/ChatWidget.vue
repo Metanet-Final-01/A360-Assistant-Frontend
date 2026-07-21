@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { formatMessage } from "../utils/chatFormat";
+import { safeExternalHref } from "../utils/url";
 
 const { t } = useI18n();
 
@@ -483,7 +484,7 @@ onBeforeUnmount(() => {
             </button>
             <ul v-if="message.sourcesOpen" class="chat-message__sources-list">
               <li v-for="(source, sourceIdx) in message.sources" :key="sourceIdx">
-                <a v-if="source.url" :href="source.url" target="_blank" rel="noopener noreferrer">
+                <a v-if="safeExternalHref(source.url)" :href="safeExternalHref(source.url)" target="_blank" rel="noopener noreferrer">
                   {{ source.title || source.url }}
                 </a>
                 <span v-else>{{ source.title || t("chat.untitledSource") }}</span>

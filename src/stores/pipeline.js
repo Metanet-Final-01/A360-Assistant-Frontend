@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
-import { computed, reactive, ref } from "vue";
-import { uploadDocument, parseDocument, createDocumentFromText } from "../api/documents";
+import { computed, reactive, ref, watch } from "vue";
+import { uploadDocument, parseDocument, createDocumentFromText, enrichVision } from "../api/documents";
 import { turnStream } from "../api/agent";
 import { listRecommendations, saveRecommendation, getLatestRecommendation } from "../api/recommend";
 import { getLatestAnalysis } from "../api/sessions";
@@ -8,6 +8,7 @@ import { ApiError } from "../api/http";
 import { useChatStore } from "./chat";
 import { useArchiveStore } from "./archive";
 import { useSettingsStore } from "./settings";
+import { useAuthStore } from "./auth";
 import { formatTime } from "../utils/dateFormat";
 import { createTypewriter } from "../utils/typewriter";
 import { t } from "../i18n";
@@ -26,6 +27,23 @@ import { t } from "../i18n";
 
 const ALLOWED_EXT = ["pdf", "pptx", "ppt", "docx"];
 
+// FR-15 — 새로고침(F5) 시에도 마지막으로 보던 세션을 이어보게, sessionId를 localStorage에
+// 미러링한다. 로그아웃/새 채팅(resetUpload)에서 sessionId가 null이 되면 watcher가 자동으로
+// 지운다. 값에 당시 로그인 계정(email)을 함께 저장해 복원 시점에 현재 계정과 대조한다 —
+// 로그아웃 없이 토큰만 바뀌는 경우(예: 다른 계정 재로그인) 남의 세션을 복원하지 않기 위함.
+const SESSION_STORAGE_KEY = "a360.lastSessionId";
+
+function readStoredSession() {
+  const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed?.id ? parsed : null;
+  } catch {
+    return null; // 이전 포맷(순수 문자열 sessionId) — 계정 정보가 없어 복원하지 않는다
+  }
+}
+
 export const usePipelineStore = defineStore("pipeline", () => {
   // 업로드 상태
   const file = ref(null); // { name, size, ext }
@@ -33,6 +51,24 @@ export const usePipelineStore = defineStore("pipeline", () => {
   const uploadError = ref("");
   const sessionId = ref(null); // 이후 분석/추천/챗봇 API의 키
   const document = ref(null); // POST /api/documents 응답 원본 (id, status, page_count, warnings, error 등)
+
+  // 비전 LLM 보강 상태 (FR-03, POST /api/documents/{id}/enrich-vision). 파싱 완료 후 사용자가
+  // 직접 트리거하는 선택 단계 — 텍스트가 부족한 페이지(스캔본 등)를 vision LLM으로 다시 읽는다.
+  const visionStatus = ref("idle"); // idle | enriching | done | error
+  const visionStage = ref("");
+  const visionError = ref("");
+  const enrichedPages = ref(null); // 보강 완료 후 보강된 페이지 번호 목록(빈 배열이면 대상 없음)
+
+  watch(sessionId, (id) => {
+    if (id) {
+      localStorage.setItem(
+        SESSION_STORAGE_KEY,
+        JSON.stringify({ id, email: useAuthStore().userEmail }),
+      );
+    } else {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+    }
+  });
 
   // 분석 상태 (POST /api/sessions/{id}/turn, done.data.analysis_result)
   const analysisStatus = ref("idle"); // idle | analyzing | done | error
@@ -196,6 +232,10 @@ export const usePipelineStore = defineStore("pipeline", () => {
   // 새 문서/텍스트 요청을 시작할 때 이전 분석·추천 결과를 전부 지운다 (새 세션 기준으로 다시 쌓임)
   function resetPipelineState() {
     document.value = null;
+    visionStatus.value = "idle";
+    visionStage.value = "";
+    visionError.value = "";
+    enrichedPages.value = null;
     analysisStatus.value = "idle";
     analysisStage.value = "";
     analysisError.value = "";
@@ -272,6 +312,43 @@ export const usePipelineStore = defineStore("pipeline", () => {
       uploadError.value =
         err instanceof ApiError ? err.message : t("pipeline.errors.uploadUnknown");
     }
+  }
+
+  // 텍스트가 부족한 페이지(스캔본 등)를 비전 LLM으로 다시 읽는다 (FR-03). 페이지당 LLM 호출로
+  // 수십 초 걸릴 수 있어 분석 시작 전 사용자가 직접 트리거하는 선택 단계로 둔다. 업로드/초기화와
+  // 같은 uploadGeneration 세대 가드를 공유해, 응답이 오기 전에 새 파일을 고르거나 초기화하면
+  // 늦게 온 결과가 지금 문서를 덮어쓰지 않는다.
+  async function enrichVisionForDocument() {
+    if (
+      !document.value ||
+      document.value.status !== "parsed" ||
+      visionStatus.value === "enriching" ||
+      analysisStatus.value !== "idle"
+    ) {
+      return;
+    }
+    const myGeneration = uploadGeneration;
+    visionStatus.value = "enriching";
+    visionStage.value = "";
+    visionError.value = "";
+
+    await enrichVision(document.value.id, {
+      onStage: (message) => {
+        if (myGeneration !== uploadGeneration) return;
+        visionStage.value = message;
+      },
+      onDone: (data) => {
+        if (myGeneration !== uploadGeneration) return;
+        document.value = data;
+        enrichedPages.value = data.enriched_pages ?? [];
+        visionStatus.value = "done";
+      },
+      onError: (message) => {
+        if (myGeneration !== uploadGeneration) return;
+        visionStatus.value = "error";
+        visionError.value = message;
+      },
+    });
   }
 
   // 파일 없이 자연어로 업무를 설명해 곧장 분석 단계로 들어간다 (RPA-43). 파싱이 필요 없어
@@ -380,7 +457,12 @@ export const usePipelineStore = defineStore("pipeline", () => {
   }
 
   async function startAnalysis() {
-    if (document.value?.status !== "parsed" || !sessionId.value || analysisStatus.value === "analyzing") {
+    if (
+      document.value?.status !== "parsed" ||
+      !sessionId.value ||
+      analysisStatus.value === "analyzing" ||
+      visionStatus.value === "enriching"
+    ) {
       return;
     }
     // 챗 턴 진행 중엔 취소하지 않고 거부한다 — selectFile()과 동일한 이유(RPA-107)
@@ -765,6 +847,12 @@ export const usePipelineStore = defineStore("pipeline", () => {
       sessionLoadStatus.value = "error";
       uploadStatus.value = "error";
       uploadError.value = err instanceof ApiError ? err.message : t("pipeline.errors.sessionLoadFailed");
+      // 세션이 없어졌거나(404) 이 계정 소유가 아니면(403) 재시도해도 같은 결과라 자동 복원
+      // 키를 지운다 — 그렇지 않으면 새로고침마다 같은 실패를 반복한다. 네트워크 오류 등
+      // 일시적 실패까지 지우면, 다음 새로고침에서 되살릴 수 있었던 세션을 영영 복원 못 한다.
+      if (err instanceof ApiError && (err.status === 404 || err.status === 403)) {
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+      }
       return;
     }
     // 응답이 오기 전에 세션이 바뀌었거나 같은 세션을 다시 불러왔으면 버린다
@@ -785,6 +873,20 @@ export const usePipelineStore = defineStore("pipeline", () => {
     loadRecommendationHistory();
   }
 
+  // 앱 부팅(새로고침 포함) 시 1회 호출 — localStorage에 마지막 세션 id가 있으면 그대로
+  // loadSession()에 위임한다(FR-15). 없으면 아무 것도 하지 않고 빈 화면으로 시작한다.
+  function restoreLastSession() {
+    const stored = readStoredSession();
+    if (!stored) return;
+    // 로그아웃을 거치지 않고 다른 계정으로 로그인된 경우(예: 만료 후 재로그인) 저장된
+    // email과 현재 로그인 계정이 다르면 남의 세션을 복원하지 않고 키만 버린다.
+    if (stored.email !== useAuthStore().userEmail) {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+      return;
+    }
+    loadSession(stored.id);
+  }
+
   return {
     file,
     uploadStatus,
@@ -792,6 +894,11 @@ export const usePipelineStore = defineStore("pipeline", () => {
     sessionId,
     sessionGeneration,
     document,
+    visionStatus,
+    visionStage,
+    visionError,
+    enrichedPages,
+    enrichVisionForDocument,
     analysisStatus,
     analysisStage,
     analysisError,
@@ -827,6 +934,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     fillCards,
     startTurnController,
     loadSession,
+    restoreLastSession,
     loadRecommendationHistory,
     saveRecommendationEdit,
     undoRecommendationEdit,

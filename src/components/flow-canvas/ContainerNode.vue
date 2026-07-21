@@ -22,6 +22,9 @@ defineProps({
         :color="data.color"
         :is-container="true"
         :editable="!!data.editable"
+        :confidence="data.confidence"
+        :rationale="data.rationale"
+        :sources="data.sources"
         @commit="data.onCommit?.($event)"
       />
     </div>

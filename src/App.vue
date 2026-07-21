@@ -162,8 +162,12 @@ function closeTutorial() {
   localStorage.setItem(tutorialKey(), "1");
 }
 
-onMounted(() => {
-  auth.bootstrapAuth();
+// F5 새로고침 시에도 마지막 세션이 이어지도록(FR-15) — 로그인 확인 후에만 복원한다. 로그인
+// 화면에서 직접 로그인하는 흐름(loginWithPassword)은 건드리지 않는다 — 그건 항상 빈 화면에서
+// 시작하는 게 맞고, 여기는 새로고침으로 이미 로그인된 세션을 이어받는 경우만 다룬다.
+onMounted(async () => {
+  await auth.bootstrapAuth();
+  if (auth.isLoggedIn) pipeline.restoreLastSession();
 });
 
 function handleSignupComplete(email) {

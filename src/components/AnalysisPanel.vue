@@ -4,6 +4,8 @@ import { useI18n } from "vue-i18n";
 import { usePipelineStore } from "../stores/pipeline";
 import { downloadRecommendationExport } from "../api/recommend";
 import { buildPackageColorMap, numberFlowSteps, violationSetByStep } from "../utils/recommendation";
+import { recommendationToMarkdown, recommendationToDocxBlob } from "../utils/exportFlow";
+import { triggerBlobDownload } from "../utils/download";
 import FlowSequence from "./FlowSequence.vue";
 
 // "흐름도 보기" 버튼을 눌러야만 열리는 요약 다이어그램 모달 — 실제로 열 때만 내려받는다.
@@ -118,6 +120,39 @@ async function downloadJson() {
   }
 }
 
+// Markdown/DOCX는 백엔드 export API가 안 주는 문서 형식이라 클라이언트에서 직접 조립한다
+// (JSON은 위처럼 채점 포맷 그대로 저장해야 하지만, 문서는 그럴 필요가 없다).
+const exportFilenameBase = computed(() => {
+  const version = pipeline.recommendation?.version;
+  return `recommendation-${pipeline.sessionId}${version != null ? `-v${version}` : ""}`;
+});
+
+function downloadMarkdown() {
+  if (!canExport.value) return;
+  exportError.value = "";
+  try {
+    const md = recommendationToMarkdown(pipeline.recommendation.recommendation, {
+      documentTitle: pipeline.analysis?.document_title,
+    });
+    triggerBlobDownload(new Blob([md], { type: "text/markdown;charset=utf-8" }), `${exportFilenameBase.value}.md`);
+  } catch {
+    exportError.value = t("recommendDetail.errors.exportFailed");
+  }
+}
+
+async function downloadDocx() {
+  if (!canExport.value) return;
+  exportError.value = "";
+  try {
+    const blob = await recommendationToDocxBlob(pipeline.recommendation.recommendation, {
+      documentTitle: pipeline.analysis?.document_title,
+    });
+    triggerBlobDownload(blob, `${exportFilenameBase.value}.docx`);
+  } catch {
+    exportError.value = t("recommendDetail.errors.exportFailed");
+  }
+}
+
 // ── v3 품질 루프 진행 카드 (spec/candidates/verdict/scorecard 프레임) ──
 // v2 백엔드에선 이 값들이 항상 null이라 스트립 자체가 렌더되지 않는다(하위호환).
 const liveCandidates = computed(() => pipeline.liveCandidates);
@@ -201,15 +236,35 @@ async function submitCards() {
         >
           {{ pipeline.recommendStatus === "generating" || liveMode ? t("recommendDetail.generating") : t("recommendDetail.viewFlow") }}
         </button>
-        <button
-          type="button"
-          class="btn btn--outline panel__header-btn"
-          :disabled="!canExport"
-          :title="canExport ? '' : t('recommendDetail.exportDisabledHint')"
-          @click="downloadJson"
-        >
-          {{ t("recommendDetail.exportJson") }}
-        </button>
+        <div class="export-btn-group" role="group" :aria-label="t('recommendDetail.exportTitle')">
+          <button
+            type="button"
+            class="btn btn--outline panel__header-btn"
+            :disabled="!canExport"
+            :title="canExport ? '' : t('recommendDetail.exportDisabledHint')"
+            @click="downloadJson"
+          >
+            {{ t("recommendDetail.exportJson") }}
+          </button>
+          <button
+            type="button"
+            class="btn btn--outline panel__header-btn"
+            :disabled="!canExport"
+            :title="canExport ? '' : t('recommendDetail.exportDisabledHint')"
+            @click="downloadMarkdown"
+          >
+            {{ t("recommendDetail.exportMarkdown") }}
+          </button>
+          <button
+            type="button"
+            class="btn btn--outline panel__header-btn"
+            :disabled="!canExport"
+            :title="canExport ? '' : t('recommendDetail.exportDisabledHint')"
+            @click="downloadDocx"
+          >
+            {{ t("recommendDetail.exportDocx") }}
+          </button>
+        </div>
       </div>
     </header>
 

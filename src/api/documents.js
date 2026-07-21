@@ -94,7 +94,77 @@ export function getDocumentContent(documentId) {
   return apiRequest(`/api/documents/${documentId}/content`);
 }
 
-// POST /api/documents/{id}/enrich-vision — 비전 LLM 보강 (2-1, 병합 후 사용 가능)
-export function enrichVision(documentId) {
-  return apiRequest(`/api/documents/${documentId}/enrich-vision`, { method: "POST" });
+// POST /api/documents/{id}/enrich-vision — 텍스트가 부족한 페이지를 비전 LLM으로 보강 (FR-03).
+// parseDocument()와 동일하게 SSE(fetch 스트리밍): stage → done(data = 문서 요약 + enriched_pages)
+// /error. REST apiRequest로는 소비할 수 없다(백엔드가 text/event-stream을 반환).
+export async function enrichVision(documentId, { onStage, onDone, onError, signal }) {
+  let response;
+  try {
+    response = await fetchWithAuth(`/api/documents/${documentId}/enrich-vision`, {
+      method: "POST",
+      signal,
+    });
+  } catch (err) {
+    if (err?.name === "AbortError") return;
+    onError(t("api.errors.networkUnreachable"));
+    return;
+  }
+
+  if (response.status === 401) {
+    try {
+      onError(t("api.errors.sessionExpired"));
+    } finally {
+      notifyUnauthorized();
+    }
+    return;
+  }
+  if (!response.ok || !response.body) {
+    onError(t("api.errors.parseRequestFailed"));
+    return;
+  }
+
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  // 백엔드가 항상 done/error로 끝나야 하지만, 프록시 타임아웃이나 서버 크래시로 스트림이
+  // 중간에 끊기면(done/error 없이 EOF) sawTerminal이 false로 남아 아래에서 잡아낸다 —
+  // 그렇지 않으면 visionStatus가 'enriching'에 멈춰 스피너가 영원히 돈다.
+  let sawTerminal = false;
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += value;
+
+      let boundary;
+      while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+        const frame = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const dataLine = frame.split("\n").find((line) => line.startsWith("data:"));
+        if (!dataLine) continue;
+
+        let event;
+        try {
+          event = JSON.parse(dataLine.slice(5).trim());
+        } catch {
+          continue;
+        }
+
+        if (event.event === "stage") onStage?.(event.message ?? "");
+        else if (event.event === "done") {
+          sawTerminal = true;
+          onDone(event.data);
+        } else if (event.event === "error") {
+          sawTerminal = true;
+          onError(event.message ?? t("api.errors.parseFailed"));
+        }
+      }
+    }
+  } catch (err) {
+    if (err?.name === "AbortError") return;
+    onError(t("api.errors.parseStreamDisconnected"));
+    return;
+  }
+
+  if (!sawTerminal) onError(t("api.errors.parseStreamDisconnected"));
 }
