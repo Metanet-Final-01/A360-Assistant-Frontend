@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { computed, reactive, ref } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { uploadDocument, parseDocument, createDocumentFromText, enrichVision } from "../api/documents";
 import { turnStream } from "../api/agent";
 import { listRecommendations, saveRecommendation, getLatestRecommendation } from "../api/recommend";
@@ -26,6 +26,11 @@ import { t } from "../i18n";
 
 const ALLOWED_EXT = ["pdf", "pptx", "ppt", "docx"];
 
+// FR-15 — 새로고침(F5) 시에도 마지막으로 보던 세션을 이어보게, sessionId를 localStorage에
+// 미러링한다. 로그아웃/새 채팅(resetUpload)에서 sessionId가 null이 되면 watcher가 자동으로
+// 지운다 — 계정을 바꿔도 남의 세션이 복원되지 않는다.
+const SESSION_STORAGE_KEY = "a360.lastSessionId";
+
 export const usePipelineStore = defineStore("pipeline", () => {
   // 업로드 상태
   const file = ref(null); // { name, size, ext }
@@ -40,6 +45,11 @@ export const usePipelineStore = defineStore("pipeline", () => {
   const visionStage = ref("");
   const visionError = ref("");
   const enrichedPages = ref(null); // 보강 완료 후 보강된 페이지 번호 목록(빈 배열이면 대상 없음)
+
+  watch(sessionId, (id) => {
+    if (id) localStorage.setItem(SESSION_STORAGE_KEY, id);
+    else localStorage.removeItem(SESSION_STORAGE_KEY);
+  });
 
   // 분석 상태 (POST /api/sessions/{id}/turn, done.data.analysis_result)
   const analysisStatus = ref("idle"); // idle | analyzing | done | error
@@ -806,6 +816,10 @@ export const usePipelineStore = defineStore("pipeline", () => {
       sessionLoadStatus.value = "error";
       uploadStatus.value = "error";
       uploadError.value = err instanceof ApiError ? err.message : t("pipeline.errors.sessionLoadFailed");
+      // 저장된 세션 id로 자동 복원을 시도한 경우일 수 있다 — 매 새로고침마다 같은 실패를
+      // 반복하지 않도록 잘못된 항목을 지운다. 사용자가 사이드바에서 다시 클릭하면 성공 시
+      // watcher가 다시 채운다.
+      localStorage.removeItem(SESSION_STORAGE_KEY);
       return;
     }
     // 응답이 오기 전에 세션이 바뀌었거나 같은 세션을 다시 불러왔으면 버린다
@@ -824,6 +838,13 @@ export const usePipelineStore = defineStore("pipeline", () => {
     }
     sessionLoadStatus.value = "idle";
     loadRecommendationHistory();
+  }
+
+  // 앱 부팅(새로고침 포함) 시 1회 호출 — localStorage에 마지막 세션 id가 있으면 그대로
+  // loadSession()에 위임한다(FR-15). 없으면 아무 것도 하지 않고 빈 화면으로 시작한다.
+  function restoreLastSession() {
+    const id = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (id) loadSession(id);
   }
 
   return {
@@ -873,6 +894,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     fillCards,
     startTurnController,
     loadSession,
+    restoreLastSession,
     loadRecommendationHistory,
     saveRecommendationEdit,
     undoRecommendationEdit,
