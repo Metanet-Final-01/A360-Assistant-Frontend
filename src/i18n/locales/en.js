@@ -299,6 +299,13 @@ export default {
       remove: "Removed a step",
       add: "Added a step",
     },
+    vision: {
+      button: "Enrich images/scans",
+      enriching: "Enriching images…",
+      done: "Enriched {count} page with vision | Enriched {count} pages with vision",
+      noneNeeded: "No pages needed enrichment.",
+      failed: "Failed to enrich images.",
+    },
   },
 
   pipeline: {

@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { computed, reactive, ref } from "vue";
-import { uploadDocument, parseDocument, createDocumentFromText } from "../api/documents";
+import { uploadDocument, parseDocument, createDocumentFromText, enrichVision } from "../api/documents";
 import { turnStream } from "../api/agent";
 import { listRecommendations, saveRecommendation, getLatestRecommendation } from "../api/recommend";
 import { getLatestAnalysis } from "../api/sessions";
@@ -33,6 +33,13 @@ export const usePipelineStore = defineStore("pipeline", () => {
   const uploadError = ref("");
   const sessionId = ref(null); // 이후 분석/추천/챗봇 API의 키
   const document = ref(null); // POST /api/documents 응답 원본 (id, status, page_count, warnings, error 등)
+
+  // 비전 LLM 보강 상태 (FR-03, POST /api/documents/{id}/enrich-vision). 파싱 완료 후 사용자가
+  // 직접 트리거하는 선택 단계 — 텍스트가 부족한 페이지(스캔본 등)를 vision LLM으로 다시 읽는다.
+  const visionStatus = ref("idle"); // idle | enriching | done | error
+  const visionStage = ref("");
+  const visionError = ref("");
+  const enrichedPages = ref(null); // 보강 완료 후 보강된 페이지 번호 목록(빈 배열이면 대상 없음)
 
   // 분석 상태 (POST /api/sessions/{id}/turn, done.data.analysis_result)
   const analysisStatus = ref("idle"); // idle | analyzing | done | error
@@ -196,6 +203,10 @@ export const usePipelineStore = defineStore("pipeline", () => {
   // 새 문서/텍스트 요청을 시작할 때 이전 분석·추천 결과를 전부 지운다 (새 세션 기준으로 다시 쌓임)
   function resetPipelineState() {
     document.value = null;
+    visionStatus.value = "idle";
+    visionStage.value = "";
+    visionError.value = "";
+    enrichedPages.value = null;
     analysisStatus.value = "idle";
     analysisStage.value = "";
     analysisError.value = "";
@@ -272,6 +283,36 @@ export const usePipelineStore = defineStore("pipeline", () => {
       uploadError.value =
         err instanceof ApiError ? err.message : t("pipeline.errors.uploadUnknown");
     }
+  }
+
+  // 텍스트가 부족한 페이지(스캔본 등)를 비전 LLM으로 다시 읽는다 (FR-03). 페이지당 LLM 호출로
+  // 수십 초 걸릴 수 있어 분석 시작 전 사용자가 직접 트리거하는 선택 단계로 둔다. 업로드/초기화와
+  // 같은 uploadGeneration 세대 가드를 공유해, 응답이 오기 전에 새 파일을 고르거나 초기화하면
+  // 늦게 온 결과가 지금 문서를 덮어쓰지 않는다.
+  async function enrichVisionForDocument() {
+    if (!document.value || document.value.status !== "parsed" || visionStatus.value === "enriching") return;
+    const myGeneration = uploadGeneration;
+    visionStatus.value = "enriching";
+    visionStage.value = "";
+    visionError.value = "";
+
+    await enrichVision(document.value.id, {
+      onStage: (message) => {
+        if (myGeneration !== uploadGeneration) return;
+        visionStage.value = message;
+      },
+      onDone: (data) => {
+        if (myGeneration !== uploadGeneration) return;
+        document.value = data;
+        enrichedPages.value = data.enriched_pages ?? [];
+        visionStatus.value = "done";
+      },
+      onError: (message) => {
+        if (myGeneration !== uploadGeneration) return;
+        visionStatus.value = "error";
+        visionError.value = message;
+      },
+    });
   }
 
   // 파일 없이 자연어로 업무를 설명해 곧장 분석 단계로 들어간다 (RPA-43). 파싱이 필요 없어
@@ -792,6 +833,11 @@ export const usePipelineStore = defineStore("pipeline", () => {
     sessionId,
     sessionGeneration,
     document,
+    visionStatus,
+    visionStage,
+    visionError,
+    enrichedPages,
+    enrichVisionForDocument,
     analysisStatus,
     analysisStage,
     analysisError,

@@ -1217,6 +1217,41 @@ input {
   animation: spin 0.8s linear infinite;
 }
 
+/* ── 비전 보강(FR-03) 버튼/상태 — 업로드 패널, 파싱 완료 메타 바로 아래 ── */
+.vision-enrich {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.vision-enrich__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.vision-enrich__status--done {
+  color: var(--success, #16a34a);
+}
+
+.vision-enrich__status--error {
+  color: var(--danger);
+}
+
+.vision-enrich__spinner {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent-text);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
 .rec-card__description {
   margin: 0 0 12px;
   font-size: 0.86rem;
