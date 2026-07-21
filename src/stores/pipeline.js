@@ -816,10 +816,12 @@ export const usePipelineStore = defineStore("pipeline", () => {
       sessionLoadStatus.value = "error";
       uploadStatus.value = "error";
       uploadError.value = err instanceof ApiError ? err.message : t("pipeline.errors.sessionLoadFailed");
-      // 저장된 세션 id로 자동 복원을 시도한 경우일 수 있다 — 매 새로고침마다 같은 실패를
-      // 반복하지 않도록 잘못된 항목을 지운다. 사용자가 사이드바에서 다시 클릭하면 성공 시
-      // watcher가 다시 채운다.
-      localStorage.removeItem(SESSION_STORAGE_KEY);
+      // 세션이 실제로 없어진 경우(404)에만 자동 복원 키를 지운다 — 재시도해도 같은 결과라
+      // 매번 실패를 반복하지 않게 한다. 네트워크 오류 등 일시적 실패까지 지우면, 다음
+      // 새로고침에서 되살릴 수 있었던 세션을 영영 복원 못 하게 된다.
+      if (err instanceof ApiError && err.status === 404) {
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+      }
       return;
     }
     // 응답이 오기 전에 세션이 바뀌었거나 같은 세션을 다시 불러왔으면 버린다
