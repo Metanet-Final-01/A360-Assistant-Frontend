@@ -768,6 +768,13 @@ input {
   flex-wrap: wrap;
 }
 
+.export-btn-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 /* .btn 기본 규칙(패딩 12px/폰트 0.9rem)이 소스 순서상 뒤에 나와 동률 우선순위에서 이겨버리므로,
    클래스 두 개를 겹친 선택자로 우선순위를 올려 확실히 덮어쓴다. */
 .btn.panel__header-btn {

@@ -152,6 +152,8 @@ export default {
     exportTitle: "Export",
     exportDisabledHint: "Generate a flow (recommendation) first to export it",
     exportJson: "Export JSON",
+    exportMarkdown: "Export Markdown",
+    exportDocx: "Export DOCX",
     rationaleLabel: "Rationale",
     confidenceLabel: "Confidence",
     sourcesLabel: "Sources",
@@ -217,6 +219,9 @@ export default {
     unsavedHint: "You have unsaved changes.",
     maximize: "Maximize",
     restore: "Restore",
+    exportImage: "Save as image",
+    exportingImage: "Saving…",
+    exportImageFailed: "Failed to save the image.",
     changeSummary: {
       editLabel: "Edited action text",
       reorder: "Reordered actions",

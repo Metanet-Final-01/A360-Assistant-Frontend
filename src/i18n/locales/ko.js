@@ -152,6 +152,8 @@ export default {
     exportTitle: "내보내기",
     exportDisabledHint: "흐름도(추천안)를 먼저 생성해야 내보낼 수 있습니다",
     exportJson: "JSON 내보내기",
+    exportMarkdown: "Markdown 내보내기",
+    exportDocx: "DOCX 내보내기",
     rationaleLabel: "근거",
     confidenceLabel: "신뢰도",
     sourcesLabel: "출처",
@@ -217,6 +219,9 @@ export default {
     unsavedHint: "저장하지 않은 변경사항이 있습니다.",
     maximize: "최대화",
     restore: "축소",
+    exportImage: "이미지로 저장",
+    exportingImage: "저장 중…",
+    exportImageFailed: "이미지 저장에 실패했습니다.",
     changeSummary: {
       editLabel: "액션 텍스트 수정",
       reorder: "액션 순서 변경",
