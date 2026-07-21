@@ -19,6 +19,9 @@ defineProps({
       :color="data.color"
       :is-container="false"
       :editable="!!data.editable"
+      :confidence="data.confidence"
+      :rationale="data.rationale"
+      :sources="data.sources"
       @commit="data.onCommit?.($event)"
     />
     <Handle type="source" :position="Position.Bottom" id="out" />

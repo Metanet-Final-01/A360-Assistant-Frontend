@@ -100,6 +100,9 @@ function layoutNodeSegment(item, centerX, y, ctx) {
     isContainer: hasChildren,
     nodePath: item.nodePath,
     segment: { listPath: nodePathToListPath(item.nodePath), startIndex: item.nodePath[item.nodePath.length - 1], count: 1 },
+    rationale: node.rationale ?? null,
+    sources: node.sources ?? [],
+    confidence: node.confidence ?? null,
   };
 
   if (!hasChildren) {
@@ -185,6 +188,9 @@ function layoutColumn(col, colCenterX, y, size, exits, ctx) {
     role: branchRole(node),
     terminal: !exits,
     nodePath: col.nodePath,
+    rationale: node.rationale ?? null,
+    sources: node.sources ?? [],
+    confidence: node.confidence ?? null,
   };
   const nodes = [{ id: uid, type: "branchColumn", position: { x: frameX, y }, width: size.width, height: size.height, data, draggable: false, zIndex: 1 }];
   const edges = [];

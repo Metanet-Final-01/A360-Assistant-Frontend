@@ -152,6 +152,9 @@ export default {
     exportTitle: "Export",
     exportDisabledHint: "Generate a flow (recommendation) first to export it",
     exportJson: "Export JSON",
+    rationaleLabel: "Rationale",
+    confidenceLabel: "Confidence",
+    sourcesLabel: "Sources",
     generatingModal: "Generating the recommendation… you can check progress in the chatbot.",
     errors: {
       exportFailed: "Export failed.",
