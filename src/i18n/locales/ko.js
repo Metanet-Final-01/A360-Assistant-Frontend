@@ -152,6 +152,11 @@ export default {
     exportTitle: "내보내기",
     exportDisabledHint: "흐름도(추천안)를 먼저 생성해야 내보낼 수 있습니다",
     exportJson: "JSON 내보내기",
+    exportMarkdown: "Markdown 내보내기",
+    exportDocx: "DOCX 내보내기",
+    rationaleLabel: "근거",
+    confidenceLabel: "신뢰도",
+    sourcesLabel: "출처",
     generatingModal: "추천안을 생성하는 중… 진행 상태는 챗봇에서 확인할 수 있습니다.",
     errors: {
       exportFailed: "내보내기에 실패했습니다.",
@@ -214,6 +219,9 @@ export default {
     unsavedHint: "저장하지 않은 변경사항이 있습니다.",
     maximize: "최대화",
     restore: "축소",
+    exportImage: "이미지로 저장",
+    exportingImage: "저장 중…",
+    exportImageFailed: "이미지 저장에 실패했습니다.",
     changeSummary: {
       editLabel: "액션 텍스트 수정",
       reorder: "액션 순서 변경",
@@ -290,6 +298,13 @@ export default {
       edit: "단계 내용 수정",
       remove: "단계 삭제",
       add: "단계 추가",
+    },
+    vision: {
+      button: "이미지·스캔 보강",
+      enriching: "이미지 보강 중…",
+      done: "{count}페이지를 이미지로 보강했습니다.",
+      noneNeeded: "보강할 페이지가 없었습니다.",
+      failed: "이미지 보강에 실패했습니다.",
     },
   },
 

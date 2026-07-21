@@ -2,8 +2,11 @@
 // A360 흐름도 액션 하나의 "박스"만 그린다 — 번호·라벨·패키지 색·검수 위반 표시,
 // 상세 모드면 파라미터 목록까지. 자식(본문) 렌더와 분기 컬럼 배치는 FlowSequence가 맡는다
 // (트리 재귀·분기 그룹핑을 한 곳에 모으기 위함).
-import { computed } from "vue";
+import { computed, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { formatParamValue } from "../utils/recommendation";
+
+const { t } = useI18n();
 
 const props = defineProps({
   // { node, prefix, path } — numberFlowSteps/childItems가 만든 렌더 항목
@@ -23,6 +26,18 @@ const pkg = computed(() => node.value.package || "미지정");
 const label = computed(() => node.value.label || node.value.action || "액션");
 const parameters = computed(() => node.value.parameters ?? []);
 const hasViolation = computed(() => !!props.violationPaths && props.violationPaths.has(props.item.path));
+
+// FR-11/FR-12 — 액션별 근거(rationale)·RAG 출처(sources)·신뢰도(confidence). 상세 패널(detailed)
+// 에서만 접이식으로 펼쳐 보여준다(모달 요약 보기는 캔버스 쪽 ActionBox 팝오버가 담당).
+const confidence = computed(() => node.value.confidence);
+const confidenceTier = computed(() => {
+  if (confidence.value == null) return null;
+  return confidence.value >= 0.7 ? "high" : confidence.value >= 0.4 ? "mid" : "low";
+});
+const rationale = computed(() => node.value.rationale);
+const sources = computed(() => node.value.sources ?? []);
+const hasEvidence = computed(() => !!rationale.value || sources.value.length > 0);
+const evidenceOpen = ref(false);
 </script>
 
 <template>
@@ -38,6 +53,14 @@ const hasViolation = computed(() => !!props.violationPaths && props.violationPat
       </span>
       <span class="flow-box__meta">
         <span class="flow-box__tag" :style="{ background: colorFor(pkg) }">{{ pkg }}</span>
+        <span
+          v-if="confidenceTier"
+          class="flow-box__confidence"
+          :class="`flow-box__confidence--${confidenceTier}`"
+          :title="t('recommendDetail.confidenceLabel') + ` ${Math.round(confidence * 100)}%`"
+        >
+          {{ Math.round(confidence * 100) }}%
+        </span>
         <span v-if="hasViolation" class="flow-box__violation-mark" title="검수 위반">⚠</span>
       </span>
     </div>
@@ -49,5 +72,30 @@ const hasViolation = computed(() => !!props.violationPaths && props.violationPat
         <span class="rec-detail__param-value">{{ formatParamValue(p.value) }}</span>
       </li>
     </ul>
+
+    <!-- 상세 모드: FR-11/FR-12 근거·출처 접이식 -->
+    <div v-if="detailed && hasEvidence" class="flow-node__evidence">
+      <button
+        type="button"
+        class="flow-node__evidence-toggle"
+        :aria-expanded="evidenceOpen"
+        @click="evidenceOpen = !evidenceOpen"
+      >
+        <span class="flow-node__evidence-chevron" :class="{ 'flow-node__evidence-chevron--open': evidenceOpen }" aria-hidden="true">▸</span>
+        {{ t("recommendDetail.rationaleLabel") }}
+      </button>
+      <div v-if="evidenceOpen" class="flow-node__evidence-body">
+        <p v-if="rationale" class="flow-node__evidence-rationale">{{ rationale }}</p>
+        <ul v-if="sources.length" class="flow-node__evidence-sources">
+          <li v-for="(source, idx) in sources" :key="idx">
+            <a v-if="source.url" :href="source.url" target="_blank" rel="noopener noreferrer">
+              {{ source.title || source.url }}
+            </a>
+            <span v-else>{{ source.title || t("chat.untitledSource") }}</span>
+            <span v-if="source.score != null" class="flow-node__evidence-score">{{ Number(source.score).toFixed(2) }}</span>
+          </li>
+        </ul>
+      </div>
+    </div>
   </div>
 </template>

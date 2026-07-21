@@ -768,6 +768,13 @@ input {
   flex-wrap: wrap;
 }
 
+.export-btn-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 /* .btn 기본 규칙(패딩 12px/폰트 0.9rem)이 소스 순서상 뒤에 나와 동률 우선순위에서 이겨버리므로,
    클래스 두 개를 겹친 선택자로 우선순위를 올려 확실히 덮어쓴다. */
 .btn.panel__header-btn {
@@ -1205,6 +1212,41 @@ input {
   width: 28px;
   height: 28px;
   border: 3px solid var(--border);
+  border-top-color: var(--accent-text);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* ── 비전 보강(FR-03) 버튼/상태 — 업로드 패널, 파싱 완료 메타 바로 아래 ── */
+.vision-enrich {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.vision-enrich__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.vision-enrich__status--done {
+  color: var(--success, #16a34a);
+}
+
+.vision-enrich__status--error {
+  color: var(--danger);
+}
+
+.vision-enrich__spinner {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
   border-top-color: var(--accent-text);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -2102,6 +2144,7 @@ input {
 }
 
 .flow-box {
+  position: relative;
   width: 100%;
   max-width: 560px;
   display: flex;
@@ -2661,6 +2704,147 @@ input {
   font-weight: 700;
   color: #ffffff;
   white-space: nowrap;
+}
+
+/* ── 액션별 신뢰도 뱃지·근거/출처(FR-11/FR-12) — 캔버스(ActionBox)·상세 패널(FlowNode) 공용 ── */
+.flow-box__confidence {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.flow-box__confidence--high {
+  background: rgba(22, 163, 74, 0.12);
+  color: var(--success, #16a34a);
+}
+
+.flow-box__confidence--mid {
+  background: rgba(217, 119, 6, 0.12);
+  color: #d97706;
+}
+
+.flow-box__confidence--low {
+  background: rgba(220, 38, 38, 0.12);
+  color: var(--danger, #dc2626);
+}
+
+/* 캔버스 노드 헤더의 "근거" 토글 버튼(ⓘ) — 편집 연필 버튼과 같은 크기 규칙 */
+.flow-canvas-box__evidence-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.flow-canvas-box__evidence-btn:hover,
+.flow-canvas-box__evidence-btn--open {
+  background: var(--surface-sunken-hover);
+  color: var(--accent-text);
+}
+
+/* 캔버스 노드 위에 뜨는 근거 팝오버 — 고정 크기 박스 바로 아래, 다른 노드 위로 오버레이 */
+.flow-box__evidence {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
+  font-size: 0.78rem;
+  color: var(--text);
+}
+
+.flow-box__evidence-rationale {
+  margin: 0 0 6px;
+  line-height: 1.4;
+}
+
+.flow-box__evidence-sources,
+.flow-node__evidence-sources {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.flow-box__evidence-sources a,
+.flow-node__evidence-sources a {
+  color: var(--accent-text);
+  text-decoration: underline;
+}
+
+.flow-box__evidence-score,
+.flow-node__evidence-score {
+  margin-left: 6px;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+/* 상세 패널(FlowNode) — 파라미터 목록 아래 접이식 근거·출처 */
+.flow-node__evidence {
+  margin-top: 4px;
+}
+
+.flow-node__evidence-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  padding: 2px 0;
+  cursor: pointer;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-align: left;
+}
+
+.flow-node__evidence-toggle:hover {
+  color: var(--accent-text);
+}
+
+.flow-node__evidence-chevron {
+  flex-shrink: 0;
+  display: inline-block;
+  font-size: 0.6rem;
+  transition: transform 0.15s ease;
+}
+
+.flow-node__evidence-chevron--open {
+  transform: rotate(90deg);
+}
+
+.flow-node__evidence-body {
+  margin: 4px 0 6px;
+  padding-left: 14px;
+}
+
+.flow-node__evidence-rationale {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text);
 }
 
 .flow-legend {
