@@ -38,6 +38,17 @@ const canStartAnalysis = computed(
     pipeline.analysisStatus === "idle",
 );
 
+// 비전 보강(FR-03)은 vision.py가 지원하는 포맷(PDF/PPTX, PPT는 내부적으로 PPTX로 변환된 뒤
+// 처리됨)에서만, 그리고 분석을 시작하기 전에만 의미가 있다 — 분석이 이미 parsed_content를
+// 읽어간 뒤에는 뒤늦게 보강해도 반영되지 않는다.
+const VISION_EXTS = new Set(["pdf", "pptx", "ppt"]);
+const canEnrichVision = computed(
+  () =>
+    pipeline.document?.status === "parsed" &&
+    pipeline.analysisStatus === "idle" &&
+    VISION_EXTS.has(pipeline.file?.ext),
+);
+
 function openFileDialog() {
   fileInputRef.value?.click();
 }
@@ -516,6 +527,34 @@ function startAddStep() {
               </li>
             </ul>
           </Transition>
+
+          <!-- 비전 보강(FR-03) — 스캔본 등 텍스트가 부족한 페이지를 vision LLM으로 다시 읽는다.
+               페이지당 LLM 호출이라 자동이 아니라 사용자가 명시적으로 트리거한다. -->
+          <div v-if="canEnrichVision || pipeline.visionStatus !== 'idle'" class="vision-enrich">
+            <button
+              v-if="pipeline.visionStatus === 'idle' || pipeline.visionStatus === 'error'"
+              type="button"
+              class="btn btn--outline"
+              :disabled="!canEnrichVision"
+              @click="pipeline.enrichVisionForDocument"
+            >
+              {{ t("upload.vision.button") }}
+            </button>
+            <p v-if="pipeline.visionStatus === 'enriching'" class="vision-enrich__status">
+              <span class="vision-enrich__spinner" aria-hidden="true"></span>
+              {{ pipeline.visionStage || t("upload.vision.enriching") }}
+            </p>
+            <p v-if="pipeline.visionStatus === 'done'" class="vision-enrich__status vision-enrich__status--done">
+              {{
+                pipeline.enrichedPages?.length
+                  ? t("upload.vision.done", { count: pipeline.enrichedPages.length }, pipeline.enrichedPages.length)
+                  : t("upload.vision.noneNeeded")
+              }}
+            </p>
+            <p v-if="pipeline.visionStatus === 'error'" class="vision-enrich__status vision-enrich__status--error">
+              {{ pipeline.visionError || t("upload.vision.failed") }}
+            </p>
+          </div>
 
           <div class="upload-actions">
             <button

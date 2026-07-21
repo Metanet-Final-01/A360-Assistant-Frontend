@@ -1,8 +1,10 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { toBlob } from "html-to-image";
 import { usePipelineStore } from "../stores/pipeline";
 import { formatDateShort } from "../utils/dateFormat";
+import { triggerBlobDownload } from "../utils/download";
 import FlowCanvas from "./flow-canvas/FlowCanvas.vue";
 
 const pipeline = usePipelineStore();
@@ -48,6 +50,29 @@ const flowCanvasRef = ref(null);
 const canvasDirty = ref(false);
 const canvasSaving = ref(false);
 const isMaximized = ref(false);
+
+// "이미지로 저장" — Vue Flow 캔버스는 HTML(div) 기반이라 네이티브 SVG 직렬화가 불가능해
+// (FR-17) DOM 캡처 라이브러리로 PNG를 뜬다. 캔버스 자체(zoom/pan 뷰포트) 대신 이 wrapper를
+// 캡처 대상으로 삼아 스크롤/줌 상태와 무관하게 항상 전체 흐름도가 담기게 한다.
+const canvasCaptureRef = ref(null);
+const capturingImage = ref(false);
+const imageExportError = ref("");
+
+async function downloadFlowImage() {
+  if (!canvasCaptureRef.value || capturingImage.value) return;
+  capturingImage.value = true;
+  imageExportError.value = "";
+  try {
+    const blob = await toBlob(canvasCaptureRef.value, { backgroundColor: "#ffffff", pixelRatio: 2 });
+    if (!blob) throw new Error("empty blob");
+    const version = pipeline.recommendation?.version;
+    triggerBlobDownload(blob, `recommendation-flow-${pipeline.sessionId}${version != null ? `-v${version}` : ""}.png`);
+  } catch {
+    imageExportError.value = t("recommendFlow.exportImageFailed");
+  } finally {
+    capturingImage.value = false;
+  }
+}
 
 // 최대화 버튼을 누른 순간에만 브라우저 실제 전체화면 모드로 전환한다 — 주소창까지 포함해
 // 화면을 진짜로 다 채우려면 이 방법뿐이다. 모달을 그냥 열기만 했을 때는 전체화면으로
@@ -283,10 +308,19 @@ const formatDate = formatDateShort;
             <button type="button" class="btn btn--outline" @click="showHistory = !showHistory">
               {{ t("recommendFlow.versionHistory") }}
             </button>
+            <button
+              type="button"
+              class="btn btn--outline"
+              :disabled="!hasActions || capturingImage"
+              @click="downloadFlowImage"
+            >
+              {{ capturingImage ? t("recommendFlow.exportingImage") : t("recommendFlow.exportImage") }}
+            </button>
           </div>
         </div>
 
         <p v-if="pipeline.recommendSaveError" class="upload-error">{{ pipeline.recommendSaveError }}</p>
+        <p v-if="imageExportError" class="upload-error">{{ imageExportError }}</p>
 
         <Transition :css="false" @enter="onHistoryEnter" @leave="onHistoryLeave">
           <div v-if="showHistory" class="flow-history-collapse">
@@ -323,14 +357,15 @@ const formatDate = formatDateShort;
           </div>
         </Transition>
 
-        <FlowCanvas
-          v-if="hasActions"
-          ref="flowCanvasRef"
-          :steps="steps"
-          :editable="isEditMode"
-          @update:dirty="canvasDirty = $event"
-          @update:saving="canvasSaving = $event"
-        />
+        <div v-if="hasActions" ref="canvasCaptureRef">
+          <FlowCanvas
+            ref="flowCanvasRef"
+            :steps="steps"
+            :editable="isEditMode"
+            @update:dirty="canvasDirty = $event"
+            @update:saving="canvasSaving = $event"
+          />
+        </div>
         <p v-else class="modal__empty">{{ t("recommendFlow.noResults") }}</p>
 
         <p v-if="pipeline.recommendation?.recommendation?.notes" class="flow-notes">

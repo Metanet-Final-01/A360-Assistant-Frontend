@@ -1,5 +1,6 @@
 import { apiRequest, fetchWithAuth, ApiError, notifyUnauthorized } from "./http";
 import { t } from "../i18n";
+import { triggerBlobDownload } from "../utils/download";
 
 // NOTE: 흐름도 생성(POST /api/sessions/{id}/recommend)은 레거시로 제거됐다 (RPA-67) —
 // 생성은 POST /api/sessions/{id}/turn(api/agent.js turnStream)에 합성 메시지를 보내는
@@ -37,12 +38,7 @@ export async function downloadRecommendationExport(sessionId, version) {
   const disposition = response.headers.get("Content-Disposition") ?? "";
   const filename = /filename="?([^";]+)"?/.exec(disposition)?.[1] ?? `recommendation-v${version}.json`;
   const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  triggerBlobDownload(blob, filename);
 }
 
 // POST /api/sessions/{id}/recommendations — 편집된 트리를 새 버전으로 저장 (undo도 이걸로: 이전 트리를 다시 저장)
