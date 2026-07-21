@@ -221,6 +221,7 @@ export default {
     exportImageFailed: "Failed to save the image.",
     windowUnauthorized: "You need to log in. Please close this window and reopen it.",
     windowNotFound: "This flow could not be found. Please close this window and reopen it.",
+    windowLoadError: "Failed to load this flow. Please close this window and reopen it.",
     changeSummary: {
       editLabel: "Edited action text",
       reorder: "Reordered actions",

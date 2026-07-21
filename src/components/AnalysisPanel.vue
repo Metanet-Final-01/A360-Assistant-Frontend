@@ -116,7 +116,10 @@ const canExport = computed(() => !!pipeline.sessionId && pipeline.recommendation
 const exportMenuOpen = ref(false);
 
 function closeExportMenuOnOutsideClick(event) {
-  if (exportMenuOpen.value && !event.target.closest(".export-dd")) {
+  // window 레벨 리스너라 target이 항상 Element라는 보장이 없다(Qodo 리뷰) — 텍스트 노드 등
+  // Element가 아니면 closest 자체가 없어 그냥 바깥 클릭으로 취급해 닫는다.
+  if (!exportMenuOpen.value) return;
+  if (!(event.target instanceof Element) || !event.target.closest(".export-dd")) {
     exportMenuOpen.value = false;
   }
 }

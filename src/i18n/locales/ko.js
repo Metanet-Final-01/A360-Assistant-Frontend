@@ -221,6 +221,7 @@ export default {
     exportImageFailed: "이미지 저장에 실패했습니다.",
     windowUnauthorized: "로그인이 필요합니다. 이 창을 닫고 다시 열어 주세요.",
     windowNotFound: "표시할 흐름도를 찾을 수 없습니다. 이 창을 닫고 다시 열어 주세요.",
+    windowLoadError: "흐름도를 불러오지 못했습니다. 이 창을 닫고 다시 열어 주세요.",
     changeSummary: {
       editLabel: "액션 텍스트 수정",
       reorder: "액션 순서 변경",

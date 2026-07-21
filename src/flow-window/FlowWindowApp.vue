@@ -24,7 +24,7 @@ const { t } = useI18n();
 
 const sessionId = new URLSearchParams(window.location.search).get("session");
 
-const bootStatus = ref("loading"); // loading | unauthorized | not-found | ready
+const bootStatus = ref("loading"); // loading | unauthorized | not-found | error | ready
 
 onMounted(async () => {
   await auth.bootstrapAuth();
@@ -37,6 +37,13 @@ onMounted(async () => {
     return;
   }
   await pipeline.loadSession(sessionId);
+  // loadSession()은 실패해도 예외를 던지지 않고 sessionLoadStatus="error"만 남긴 채 return한다
+  // (Qodo 리뷰) — 이 상태를 먼저 확인하지 않으면 네트워크·API 오류까지 "세션 없음"으로
+  // 오분류해 uploadError에 담긴 실제 오류 메시지가 사라진다.
+  if (pipeline.sessionLoadStatus === "error") {
+    bootStatus.value = "error";
+    return;
+  }
   if (!pipeline.recommendation) {
     bootStatus.value = "not-found";
     return;
@@ -187,6 +194,9 @@ const formatDate = formatDateShort;
     </div>
     <div v-else-if="bootStatus === 'not-found'" class="flow-window__status">
       {{ t("recommendFlow.windowNotFound") }}
+    </div>
+    <div v-else-if="bootStatus === 'error'" class="flow-window__status">
+      {{ pipeline.uploadError || t("recommendFlow.windowLoadError") }}
     </div>
 
     <div v-else class="flow-window__body">
