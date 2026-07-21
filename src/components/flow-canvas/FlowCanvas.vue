@@ -291,6 +291,15 @@ function getImageCaptureTarget() {
   const width = Math.round(bounds.width * scale);
   const height = Math.round(bounds.height * scale);
   const { x, y, zoom } = getTransformForBounds(bounds, width, height, 0.1, 4, 0.05);
+  // 엣지 연결선(.vue-flow__edge-path)의 fill:none은 CSS 클래스로만 지정돼 있는데, html-to-image가
+  // 캡처를 위해 이 서브트리를 복제·직렬화하는 과정에서 그 클래스 규칙이 간헐적으로 안 먹혀
+  // SVG path의 기본값(fill: black)대로 그려질 때가 있다 — 가늘어야 할 연결선이 꺾이는 지점마다
+  // 뾰족한 검은 도형으로 찍히는 원인이다(Try/Catch처럼 선이 많이 꺾이는 구간일수록 두드러진다).
+  // CSS 캐스케이드에 기대지 않고 fill 속성 자체를 엘리먼트에 직접 박아 두면 캡처 방식과 무관하게
+  // 항상 안전하다 — 이미 CSS가 강제하는 값과 같아서 화면상 보이는 모습은 전혀 안 바뀐다.
+  viewportEl.querySelectorAll(".vue-flow__edge-path").forEach((path) => {
+    path.setAttribute("fill", "none");
+  });
   return {
     element: viewportEl,
     width,
