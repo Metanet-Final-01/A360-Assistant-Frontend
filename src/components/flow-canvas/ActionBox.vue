@@ -3,6 +3,7 @@
 // 프레젠테이션 컴포넌트. 더블클릭 또는 연필 버튼으로 라벨을 인라인 편집한다.
 import { computed, nextTick, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { safeExternalHref } from "../../utils/url";
 
 const { t } = useI18n();
 
@@ -100,7 +101,7 @@ function cancel() {
         <p v-if="rationale" class="flow-box__evidence-rationale">{{ rationale }}</p>
         <ul v-if="sources.length" class="flow-box__evidence-sources">
           <li v-for="(source, idx) in sources" :key="idx">
-            <a v-if="source.url" :href="source.url" target="_blank" rel="noopener noreferrer">
+            <a v-if="safeExternalHref(source.url)" :href="safeExternalHref(source.url)" target="_blank" rel="noopener noreferrer">
               {{ source.title || source.url }}
             </a>
             <span v-else>{{ source.title || t("chat.untitledSource") }}</span>

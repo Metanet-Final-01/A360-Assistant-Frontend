@@ -5,6 +5,7 @@
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { formatParamValue } from "../utils/recommendation";
+import { safeExternalHref } from "../utils/url";
 
 const { t } = useI18n();
 
@@ -88,7 +89,7 @@ const evidenceOpen = ref(false);
         <p v-if="rationale" class="flow-node__evidence-rationale">{{ rationale }}</p>
         <ul v-if="sources.length" class="flow-node__evidence-sources">
           <li v-for="(source, idx) in sources" :key="idx">
-            <a v-if="source.url" :href="source.url" target="_blank" rel="noopener noreferrer">
+            <a v-if="safeExternalHref(source.url)" :href="safeExternalHref(source.url)" target="_blank" rel="noopener noreferrer">
               {{ source.title || source.url }}
             </a>
             <span v-else>{{ source.title || t("chat.untitledSource") }}</span>

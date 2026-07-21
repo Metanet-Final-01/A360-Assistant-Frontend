@@ -125,6 +125,10 @@ export async function enrichVision(documentId, { onStage, onDone, onError, signa
 
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
   let buffer = "";
+  // 백엔드가 항상 done/error로 끝나야 하지만, 프록시 타임아웃이나 서버 크래시로 스트림이
+  // 중간에 끊기면(done/error 없이 EOF) sawTerminal이 false로 남아 아래에서 잡아낸다 —
+  // 그렇지 않으면 visionStatus가 'enriching'에 멈춰 스피너가 영원히 돈다.
+  let sawTerminal = false;
 
   try {
     while (true) {
@@ -147,12 +151,20 @@ export async function enrichVision(documentId, { onStage, onDone, onError, signa
         }
 
         if (event.event === "stage") onStage?.(event.message ?? "");
-        else if (event.event === "done") onDone(event.data);
-        else if (event.event === "error") onError(event.message ?? t("api.errors.parseFailed"));
+        else if (event.event === "done") {
+          sawTerminal = true;
+          onDone(event.data);
+        } else if (event.event === "error") {
+          sawTerminal = true;
+          onError(event.message ?? t("api.errors.parseFailed"));
+        }
       }
     }
   } catch (err) {
     if (err?.name === "AbortError") return;
     onError(t("api.errors.parseStreamDisconnected"));
+    return;
   }
+
+  if (!sawTerminal) onError(t("api.errors.parseStreamDisconnected"));
 }

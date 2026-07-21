@@ -35,7 +35,8 @@ const fileSizeLabel = computed(() =>
 const canStartAnalysis = computed(
   () =>
     pipeline.document?.status === "parsed" &&
-    pipeline.analysisStatus === "idle",
+    pipeline.analysisStatus === "idle" &&
+    pipeline.visionStatus !== "enriching",
 );
 
 // 비전 보강(FR-03)은 vision.py가 지원하는 포맷(PDF/PPTX, PPT는 내부적으로 PPTX로 변환된 뒤
