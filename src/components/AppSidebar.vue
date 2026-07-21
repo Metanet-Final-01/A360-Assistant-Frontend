@@ -47,6 +47,13 @@ const VISIBLE_STEP = 10;
 const searchQuery = ref("");
 const visibleCount = ref(VISIBLE_STEP);
 const openMenuId = ref(null);
+const menuPosition = ref({ top: null, bottom: null, right: 0 });
+
+const menuStyle = computed(() => ({
+  top: menuPosition.value.top !== null ? `${menuPosition.value.top}px` : "auto",
+  bottom: menuPosition.value.bottom !== null ? `${menuPosition.value.bottom}px` : "auto",
+  right: `${menuPosition.value.right}px`,
+}));
 
 function toggleCollapsed() {
   if (isMobile.value) {
@@ -87,12 +94,16 @@ function toggleHistory() {
 onMounted(() => {
   mobileMql.addEventListener("change", handleMobileChange);
   window.addEventListener("pointerdown", closeMenuOnOutsideClick);
+  window.addEventListener("scroll", closeMenuOnReflow, true);
+  window.addEventListener("resize", closeMenuOnReflow);
   archive.loadSessions();
 });
 
 onBeforeUnmount(() => {
   mobileMql.removeEventListener("change", handleMobileChange);
   window.removeEventListener("pointerdown", closeMenuOnOutsideClick);
+  window.removeEventListener("scroll", closeMenuOnReflow, true);
+  window.removeEventListener("resize", closeMenuOnReflow);
 });
 
 const filteredSessions = computed(() => {
@@ -120,16 +131,39 @@ function selectSession(id) {
   emit("select-session", id);
 }
 
+// 메뉴는 body로 텔레포트되어 뷰포트 기준 고정 위치로 뜬다 — 사이드바 목록의
+// overflow-y:auto에 의해 하단(특히 마지막 항목)에서 메뉴가 잘리던 문제를 피하기 위함.
+// 버튼 아래 공간이 부족하면 위로 뒤집어 띄운다.
 function toggleMenu(id, event) {
   event.stopPropagation();
-  openMenuId.value = openMenuId.value === id ? null : id;
+  if (openMenuId.value === id) {
+    openMenuId.value = null;
+    return;
+  }
+  const rect = event.currentTarget.getBoundingClientRect();
+  const MENU_HEIGHT_ESTIMATE = 56;
+  const openUp = rect.bottom + MENU_HEIGHT_ESTIMATE > window.innerHeight;
+  menuPosition.value = openUp
+    ? { top: null, bottom: window.innerHeight - rect.top + 4, right: window.innerWidth - rect.right }
+    : { top: rect.bottom + 4, bottom: null, right: window.innerWidth - rect.right };
+  openMenuId.value = id;
 }
 
 // 메뉴 바깥 어디를 눌러도 닫는다 — 이력 목록 안쪽 클릭으로만 닫히던 것을 문서 전체로 넓힌다.
+// 메뉴 자체는 body로 텔레포트되어 .archive-chat__item-menu-wrap 밖에 위치하므로 별도로 확인한다.
 function closeMenuOnOutsideClick(event) {
-  if (openMenuId.value && !event.target.closest(".archive-chat__item-menu-wrap")) {
+  if (
+    openMenuId.value &&
+    !event.target.closest(".archive-chat__item-menu-wrap") &&
+    !event.target.closest(".archive-chat__item-menu")
+  ) {
     openMenuId.value = null;
   }
+}
+
+// 목록 스크롤/창 크기 변경 시 버튼 기준으로 계산해둔 좌표가 어긋나므로 메뉴를 닫는다.
+function closeMenuOnReflow() {
+  if (openMenuId.value) openMenuId.value = null;
 }
 
 async function removeSession(id, event) {
@@ -277,18 +311,6 @@ async function removeSession(id, event) {
                     >
                       &#8942;
                     </button>
-                    <Transition name="fade-up">
-                      <div v-if="openMenuId === session.id" class="archive-chat__item-menu" role="menu">
-                        <button
-                          type="button"
-                          role="menuitem"
-                          class="archive-chat__item-menu-danger"
-                          @click="removeSession(session.id, $event)"
-                        >
-                          {{ t("common.delete") }}
-                        </button>
-                      </div>
-                    </Transition>
                   </div>
                 </li>
 
@@ -389,4 +411,19 @@ async function removeSession(id, event) {
       </div>
     </div>
   </aside>
+
+  <Teleport to="body">
+    <Transition name="fade-up">
+      <div v-if="openMenuId" class="archive-chat__item-menu archive-chat__item-menu--floating" role="menu" :style="menuStyle">
+        <button
+          type="button"
+          role="menuitem"
+          class="archive-chat__item-menu-danger"
+          @click="removeSession(openMenuId, $event)"
+        >
+          {{ t("common.delete") }}
+        </button>
+      </div>
+    </Transition>
+  </Teleport>
 </template>

@@ -4288,6 +4288,14 @@ input {
   z-index: 10;
 }
 
+/* body로 텔레포트되어 뷰포트 기준 고정 위치로 뜨는 변형 — 사이드바 목록의
+   overflow-y:auto에 의해 잘리지 않도록 position:absolute 대신 fixed를 쓴다.
+   top/bottom/right는 JS에서 버튼 위치를 기준으로 계산해 인라인 스타일로 지정한다. */
+.archive-chat__item-menu--floating {
+  position: fixed;
+  z-index: 1000;
+}
+
 .archive-chat__item-menu button {
   width: 100%;
   border: 0;
