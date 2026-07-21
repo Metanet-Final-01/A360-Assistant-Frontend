@@ -94,16 +94,27 @@ function toggleHistory() {
 onMounted(() => {
   mobileMql.addEventListener("change", handleMobileChange);
   window.addEventListener("pointerdown", closeMenuOnOutsideClick);
-  window.addEventListener("scroll", closeMenuOnReflow, true);
-  window.addEventListener("resize", closeMenuOnReflow);
   archive.loadSessions();
 });
 
 onBeforeUnmount(() => {
   mobileMql.removeEventListener("change", handleMobileChange);
   window.removeEventListener("pointerdown", closeMenuOnOutsideClick);
+  // 메뉴가 열린 채로 언마운트되는 경우를 대비한 안전망 — 중복 remove는 안전하다.
   window.removeEventListener("scroll", closeMenuOnReflow, true);
   window.removeEventListener("resize", closeMenuOnReflow);
+});
+
+// scroll(capture) 리스너는 하위 요소의 스크롤에도 반응해 앱 전역에서 계속 발화한다(Qodo 리뷰) —
+// 메뉴가 열려 있을 때만 등록해 평소(대부분의 시간)에는 비용이 들지 않게 한다.
+watch(openMenuId, (id, prevId) => {
+  if (id !== null && prevId === null) {
+    window.addEventListener("scroll", closeMenuOnReflow, true);
+    window.addEventListener("resize", closeMenuOnReflow);
+  } else if (id === null && prevId !== null) {
+    window.removeEventListener("scroll", closeMenuOnReflow, true);
+    window.removeEventListener("resize", closeMenuOnReflow);
+  }
 });
 
 const filteredSessions = computed(() => {
