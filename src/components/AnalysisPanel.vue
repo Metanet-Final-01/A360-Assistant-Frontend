@@ -1,5 +1,5 @@
 <script setup>
-import { computed, defineAsyncComponent, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { usePipelineStore } from "../stores/pipeline";
 import { downloadRecommendationExport } from "../api/recommend";
@@ -8,17 +8,11 @@ import { recommendationToMarkdown, recommendationToDocxBlob } from "../utils/exp
 import { triggerBlobDownload } from "../utils/download";
 import FlowSequence from "./FlowSequence.vue";
 
-// "흐름도 보기" 버튼을 눌러야만 열리는 요약 다이어그램 모달 — 실제로 열 때만 내려받는다.
-const RecommendationFlowModal = defineAsyncComponent(() => import("./RecommendationFlowModal.vue"));
-
-// 루트 노드가 여러 개(패널 + 모달)라 attrs 자동 전달이 안 되므로,
-// 패널 재배치용 data-panel-key/order 스타일을 패널 섹션에 직접 물려준다.
 defineOptions({ inheritAttrs: false });
 
 const pipeline = usePipelineStore();
 const { t } = useI18n();
 
-const showFlowModal = ref(false);
 // 패널 루트 — 국소 수정 중인 단계로 스크롤할 때 그 단계 요소를 여기서 찾는다.
 const rootRef = ref(null);
 
@@ -95,14 +89,22 @@ watch(activeStep, async (stepId) => {
     ?.scrollIntoView({ behavior: "smooth", block: "center" });
 });
 
-// "흐름도 보기" 버튼: 이미 있으면 요약 다이어그램 모달을 열고, 없으면 생성한다 —
-// 생성 과정은 이 패널이 인라인으로 실시간 렌더하므로 별도 로딩 모달을 띄우지 않는다.
+// "흐름도 보기" 버튼: 이미 있으면 별도 브라우저 창(flow-window.html)으로 열고, 없으면 생성한다 —
+// 생성 과정은 이 패널이 인라인으로 실시간 렌더하므로 별도 로딩 화면을 띄우지 않는다.
 async function openFlowView() {
   if (pipeline.recommendStatus === "done") {
-    showFlowModal.value = true;
+    openFlowWindow();
     return;
   }
   await pipeline.startRecommend();
+}
+
+// 인앱 모달 대신 진짜 별도 창으로 연다 — Fullscreen API 없이도 OS 창 컨트롤(최대화/최소화/
+// 이동/크기조절)을 자유롭게 쓸 수 있다. 세션당 창 이름을 고정해 두 번째 클릭은 새 창 대신
+// 기존 창을 포커스한다(브라우저 표준 동작, noopener라 JS 참조로 재사용하는 게 아니다).
+function openFlowWindow() {
+  const url = `/flow-window.html?session=${encodeURIComponent(pipeline.sessionId)}`;
+  window.open(url, `a360-flow-${pipeline.sessionId}`, "width=1280,height=860,resizable=yes,noopener");
 }
 
 // 내보내기는 프론트 로컬 Blob이 아니라 백엔드 표준 export API 응답을 그대로 저장한다
@@ -110,7 +112,33 @@ async function openFlowView() {
 const exportError = ref("");
 const canExport = computed(() => !!pipeline.sessionId && pipeline.recommendation?.version != null);
 
+// 내보내기 드롭다운 (챗봇 에이전트 버전 선택 드롭다운과 동일한 UX) — 헤더 바로 아래로 펼친다.
+const exportMenuOpen = ref(false);
+
+function closeExportMenuOnOutsideClick(event) {
+  // window 레벨 리스너라 target이 항상 Element라는 보장이 없다(Qodo 리뷰) — 텍스트 노드 등
+  // Element가 아니면 closest 자체가 없어 그냥 바깥 클릭으로 취급해 닫는다.
+  if (!exportMenuOpen.value) return;
+  if (!(event.target instanceof Element) || !event.target.closest(".export-dd")) {
+    exportMenuOpen.value = false;
+  }
+}
+function closeExportMenuOnEscape(event) {
+  if (exportMenuOpen.value && event.key === "Escape") {
+    exportMenuOpen.value = false;
+  }
+}
+onMounted(() => {
+  window.addEventListener("pointerdown", closeExportMenuOnOutsideClick);
+  window.addEventListener("keydown", closeExportMenuOnEscape);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener("pointerdown", closeExportMenuOnOutsideClick);
+  window.removeEventListener("keydown", closeExportMenuOnEscape);
+});
+
 async function downloadJson() {
+  exportMenuOpen.value = false;
   if (!canExport.value) return;
   exportError.value = "";
   try {
@@ -128,6 +156,7 @@ const exportFilenameBase = computed(() => {
 });
 
 function downloadMarkdown() {
+  exportMenuOpen.value = false;
   if (!canExport.value) return;
   exportError.value = "";
   try {
@@ -141,6 +170,7 @@ function downloadMarkdown() {
 }
 
 async function downloadDocx() {
+  exportMenuOpen.value = false;
   if (!canExport.value) return;
   exportError.value = "";
   try {
@@ -229,41 +259,42 @@ async function submitCards() {
           신뢰도 {{ Math.round(flowConfidence * 100) }}%
         </span>
         <button
+          v-if="canUseFlowActions"
           type="button"
           class="btn btn--outline panel__header-btn"
-          :disabled="!canUseFlowActions || pipeline.recommendStatus === 'generating' || liveMode"
+          :disabled="pipeline.recommendStatus === 'generating' || liveMode"
           @click="openFlowView"
         >
           {{ pipeline.recommendStatus === "generating" || liveMode ? t("recommendDetail.generating") : t("recommendDetail.viewFlow") }}
         </button>
-        <div class="export-btn-group" role="group" :aria-label="t('recommendDetail.exportTitle')">
+        <div v-if="canExport" class="export-dd">
           <button
             type="button"
-            class="btn btn--outline panel__header-btn"
-            :disabled="!canExport"
-            :title="canExport ? '' : t('recommendDetail.exportDisabledHint')"
-            @click="downloadJson"
+            class="btn btn--outline panel__header-btn export-dd__btn"
+            :class="{ 'export-dd__btn--open': exportMenuOpen }"
+            :aria-label="t('recommendDetail.exportTitle')"
+            :aria-expanded="exportMenuOpen"
+            aria-haspopup="listbox"
+            @click="exportMenuOpen = !exportMenuOpen"
           >
-            {{ t("recommendDetail.exportJson") }}
+            <span>{{ t("recommendDetail.exportTitle") }}</span>
+            <svg class="export-dd__chevron" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M7 9.5 12 14l5-4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
           </button>
-          <button
-            type="button"
-            class="btn btn--outline panel__header-btn"
-            :disabled="!canExport"
-            :title="canExport ? '' : t('recommendDetail.exportDisabledHint')"
-            @click="downloadMarkdown"
-          >
-            {{ t("recommendDetail.exportMarkdown") }}
-          </button>
-          <button
-            type="button"
-            class="btn btn--outline panel__header-btn"
-            :disabled="!canExport"
-            :title="canExport ? '' : t('recommendDetail.exportDisabledHint')"
-            @click="downloadDocx"
-          >
-            {{ t("recommendDetail.exportDocx") }}
-          </button>
+          <Transition name="fade-up">
+            <div v-if="exportMenuOpen" class="export-dd__menu" role="listbox" :aria-label="t('recommendDetail.exportTitle')">
+              <button type="button" role="option" class="export-dd__item" @click="downloadJson">
+                {{ t("recommendDetail.exportJson") }}
+              </button>
+              <button type="button" role="option" class="export-dd__item" @click="downloadMarkdown">
+                {{ t("recommendDetail.exportMarkdown") }}
+              </button>
+              <button type="button" role="option" class="export-dd__item" @click="downloadDocx">
+                {{ t("recommendDetail.exportDocx") }}
+              </button>
+            </div>
+          </Transition>
         </div>
       </div>
     </header>
@@ -438,6 +469,4 @@ async function submitCards() {
       <p v-if="exportError" class="upload-error">{{ exportError }}</p>
     </div>
   </section>
-
-  <RecommendationFlowModal v-if="showFlowModal" @close="showFlowModal = false" />
 </template>
