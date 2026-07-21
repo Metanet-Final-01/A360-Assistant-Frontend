@@ -128,6 +128,7 @@ function refreshAccessToken() {
 async function doRefresh() {
   // 리프레시 토큰은 httpOnly 쿠키라 여기서 값을 읽거나 실어 보낼 수 없다(RPA-205) — 쿠키가
   // 없거나 무효면 서버가 401을 돌려줄 뿐이라 미리 존재 여부를 확인할 방법도, 필요도 없다.
+  const tokenAtStart = getToken(); // 요청 시작 시점의 세션 식별값(Qodo 리뷰) — 완료 후 비교용
   let response;
   try {
     response = await fetch(`${BASE_URL}/api/auth/refresh`, {
@@ -141,11 +142,13 @@ async function doRefresh() {
   if (!response.ok) return null; // INVALID_REFRESH_TOKEN 등 — 재로그인 필요
 
   const data = await response.json();
-  // 갱신이 진행되는 동안 로그아웃했으면 clearToken()이 액세스 토큰을 이미 지웠다 — 그 경우
-  // 이 응답은 낡은 것이니 그대로 저장하면 이미 로그아웃한 세션이 되살아난다. 리프레시 토큰은
-  // 이제 쿠키라 값을 직접 비교할 수 없어, 로컬 로그아웃의 부수효과인 액세스 토큰 소거 여부로
-  // 판단한다.
-  if (getToken() === null) return null;
+  // 갱신이 진행되는 동안 로그아웃하거나(→ null) 다른 세션으로 재로그인했으면(→ 다른 토큰)
+  // 이 응답은 낡은 것이다 — 그대로 저장하면 이미 끝난 세션이 되살아나거나 새 세션의 토큰을
+  // 덮어쓴다. 리프레시 토큰은 쿠키라 직접 비교할 수 없어, 시작 시점 액세스 토큰과 지금 값이
+  // 같은지로 판단한다. 값이 바뀌었으면 현재 토큰을 그대로 반환할 뿐 저장은 하지 않는다(호출자가
+  // null이면 재인증, 값이 있으면 그 토큰으로 재시도).
+  const tokenNow = getToken();
+  if (tokenNow !== tokenAtStart) return tokenNow;
   setToken(data.access_token);
   return data.access_token;
 }
