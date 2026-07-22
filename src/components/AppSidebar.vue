@@ -162,11 +162,14 @@ function toggleMenu(id, event) {
 
 // 메뉴 바깥 어디를 눌러도 닫는다 — 이력 목록 안쪽 클릭으로만 닫히던 것을 문서 전체로 넓힌다.
 // 메뉴 자체는 body로 텔레포트되어 .archive-chat__item-menu-wrap 밖에 위치하므로 별도로 확인한다.
+// window 레벨 리스너라 target이 항상 Element라는 보장이 없다(Qodo 리뷰, AnalysisPanel과 동일 패턴) —
+// 텍스트 노드 등 Element가 아니면 closest 자체가 없어 그냥 바깥 클릭으로 취급해 닫는다.
 function closeMenuOnOutsideClick(event) {
+  if (!openMenuId.value) return;
   if (
-    openMenuId.value &&
-    !event.target.closest(".archive-chat__item-menu-wrap") &&
-    !event.target.closest(".archive-chat__item-menu")
+    !(event.target instanceof Element) ||
+    (!event.target.closest(".archive-chat__item-menu-wrap") &&
+      !event.target.closest(".archive-chat__item-menu"))
   ) {
     openMenuId.value = null;
   }

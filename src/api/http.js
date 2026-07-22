@@ -147,6 +147,10 @@ async function doRefresh() {
   // 덮어쓴다. 리프레시 토큰은 쿠키라 직접 비교할 수 없어, 시작 시점 액세스 토큰과 지금 값이
   // 같은지로 판단한다. 값이 바뀌었으면 현재 토큰을 그대로 반환할 뿐 저장은 하지 않는다(호출자가
   // null이면 재인증, 값이 있으면 그 토큰으로 재시도).
+  // tokenAtStart가 이미 null(로그아웃 상태)이면 tokenNow도 null이라 위 비교(null !== null)를
+  // 그대로 통과해버린다(Qodo 리뷰) — 로그아웃된 세션이 갱신 응답만으로 되살아나지 않도록
+  // 시작 시점에 로그인 상태가 아니었으면 무조건 갱신을 버린다.
+  if (tokenAtStart == null) return null;
   const tokenNow = getToken();
   if (tokenNow !== tokenAtStart) return tokenNow;
   setToken(data.access_token);
