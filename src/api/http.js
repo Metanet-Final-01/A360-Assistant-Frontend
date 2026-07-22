@@ -2,26 +2,17 @@ import { t } from "../i18n";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 const TOKEN_KEY = "a360_access_token";
-const REFRESH_TOKEN_KEY = "a360_refresh_token";
 
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY);
 }
 
-export function getRefreshToken() {
-  return localStorage.getItem(REFRESH_TOKEN_KEY);
-}
-
-// 로그인/가입/갱신 응답은 항상 access_token·refresh_token 쌍으로 온다 — 갱신에 쓸 리프레시
-// 토큰을 함께 저장해야 60분 만료마다 재로그인하지 않는다(RPA-204).
-export function setTokens(accessToken, refreshToken) {
+export function setToken(accessToken) {
   localStorage.setItem(TOKEN_KEY, accessToken);
-  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
 }
 
-export function clearTokens() {
+export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
 
 // 백엔드는 4xx/5xx 응답에서 detail: {code, message} 형태로 내려준다 (API_명세.md 참고)
@@ -94,10 +85,8 @@ export function setUnauthorizedHandler(handler) {
 }
 
 export function notifyUnauthorized() {
-  // logout()이 이 핸들러 안에서 리프레시 토큰으로 서버 세션을 폐기한다 — clearTokens()를
-  // 먼저 부르면 그 토큰을 읽지 못해 자동 만료 경로에서는 서버 세션이 폐기되지 않는다.
+  clearToken();
   unauthorizedHandler?.();
-  clearTokens();
 }
 
 // 로그인/가입/갱신은 만료된 액세스 토큰으로 재시도할 대상이 아니다(로그인·가입은 토큰 자체가
@@ -115,7 +104,10 @@ function isAuthNoRetryPath(path) {
 function rawFetch(url, options, token) {
   const headers = { ...options.headers };
   if (token) headers.Authorization = `Bearer ${token}`;
-  return fetch(url, { ...options, headers });
+  // 리프레시 토큰은 httpOnly 쿠키로 발급된다(RPA-216/205) — credentials: "include"가 있어야
+  // 브라우저가 그 쿠키를 요청에 실어 보내고, 응답의 Set-Cookie(회전된 새 값)도 받아들인다.
+  // 쿠키 자체는 Path=/api/auth로 범위가 좁혀져 있어 다른 엔드포인트로는 전송되지 않는다.
+  return fetch(url, { ...options, headers, credentials: "include" });
 }
 
 // 리프레시 토큰은 1회용(회전)이라 갱신마다 새 토큰이 나오고 옛 토큰은 즉시 무효가 된다.
@@ -134,15 +126,14 @@ function refreshAccessToken() {
 }
 
 async function doRefresh() {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) return null;
-
+  // 리프레시 토큰은 httpOnly 쿠키라 여기서 값을 읽거나 실어 보낼 수 없다(RPA-205) — 쿠키가
+  // 없거나 무효면 서버가 401을 돌려줄 뿐이라 미리 존재 여부를 확인할 방법도, 필요도 없다.
+  const tokenAtStart = getToken(); // 요청 시작 시점의 세션 식별값(Qodo 리뷰) — 완료 후 비교용
   let response;
   try {
     response = await fetch(`${BASE_URL}/api/auth/refresh`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      credentials: "include", // httpOnly 쿠키 전송 + 회전된 새 쿠키(Set-Cookie) 수신
       signal: AbortSignal.timeout(10000), // 갱신 응답이 멈추면 single-flight를 기다리는 모든 요청이 함께 걸린다
     });
   } catch {
@@ -151,10 +142,14 @@ async function doRefresh() {
   if (!response.ok) return null; // INVALID_REFRESH_TOKEN 등 — 재로그인 필요
 
   const data = await response.json();
-  // 갱신이 진행되는 동안 로그아웃 등으로 리프레시 토큰이 바뀌었으면(교체·삭제) 이 응답은
-  // 낡은 것이다 — 그대로 저장하면 이미 로그아웃한 사용자의 토큰이 되살아난다.
-  if (getRefreshToken() !== refreshToken) return null;
-  setTokens(data.access_token, data.refresh_token);
+  // 갱신이 진행되는 동안 로그아웃하거나(→ null) 다른 세션으로 재로그인했으면(→ 다른 토큰)
+  // 이 응답은 낡은 것이다 — 그대로 저장하면 이미 끝난 세션이 되살아나거나 새 세션의 토큰을
+  // 덮어쓴다. 리프레시 토큰은 쿠키라 직접 비교할 수 없어, 시작 시점 액세스 토큰과 지금 값이
+  // 같은지로 판단한다. 값이 바뀌었으면 현재 토큰을 그대로 반환할 뿐 저장은 하지 않는다(호출자가
+  // null이면 재인증, 값이 있으면 그 토큰으로 재시도).
+  const tokenNow = getToken();
+  if (tokenNow !== tokenAtStart) return tokenNow;
+  setToken(data.access_token);
   return data.access_token;
 }
 

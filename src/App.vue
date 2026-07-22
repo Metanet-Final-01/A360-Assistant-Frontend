@@ -209,15 +209,18 @@ function handleNewChat() {
 
     <div class="app-content">
       <main class="app-main" id="analysis">
-        <div
+        <TransitionGroup
+          tag="div"
+          name="panel-move"
           class="app-main__grid"
           :class="{ 'app-main__grid--dock-transition': dockTransitioning }"
           :style="analysisPanels.gridStyle"
-          v-on="analysisPanels.containerHandlers"
+          @pointerdown="analysisPanels.handleGridPointerDown"
         >
-          <UploadPanel v-bind="analysisPanels.panelProps('upload')" />
-          <AnalysisPanel v-bind="analysisPanels.panelProps('analysis')" />
+          <UploadPanel key="upload" v-bind="analysisPanels.panelProps('upload')" />
+          <AnalysisPanel key="analysis" v-bind="analysisPanels.panelProps('analysis')" />
           <ChatWidget
+            key="chat"
             v-bind="analysisPanels.panelProps('chat')"
             panel-key="chat"
             :panel-reorder="analysisPanels"
@@ -261,7 +264,17 @@ function handleNewChat() {
             @keydown.left="analysisPanels.nudgeResize(boundary.leftKey, boundary.rightKey, -24)"
             @keydown.right="analysisPanels.nudgeResize(boundary.leftKey, boundary.rightKey, 24)"
           ></div>
-        </div>
+        </TransitionGroup>
+
+        <div
+          v-if="analysisPanels.dragGhostStyle"
+          class="panel-drag-ghost"
+          :style="analysisPanels.dragGhostStyle"
+          v-html="analysisPanels.dragGhost.html"
+          inert
+          tabindex="-1"
+          aria-hidden="true"
+        ></div>
       </main>
     </div>
 

@@ -43,9 +43,7 @@ onUnmounted(() => {
   <aside class="auth-card__brand">
     <div class="auth-brand__blob auth-brand__blob--1" aria-hidden="true"></div>
     <div class="auth-brand__blob auth-brand__blob--2" aria-hidden="true"></div>
-    <div class="auth-brand__blob auth-brand__blob--3" aria-hidden="true"></div>
     <div class="auth-brand__blob auth-brand__blob--4" aria-hidden="true"></div>
-    <div class="auth-brand__blob auth-brand__blob--5" aria-hidden="true"></div>
     <div class="auth-brand__sheen" aria-hidden="true"></div>
     <div class="auth-brand__grid" aria-hidden="true"></div>
     <div class="auth-brand__sparkles" aria-hidden="true">
@@ -60,19 +58,19 @@ onUnmounted(() => {
     <div class="auth-slider" aria-hidden="true">
       <div class="auth-slide" :class="slideClass(0)">
         <div class="auth-slide-photo">
-          <img :src="slide1Photo" alt="" width="1200" height="800" fetchpriority="high" />
+          <img :src="slide1Photo" alt="" width="900" height="600" fetchpriority="high" />
         </div>
       </div>
 
       <div class="auth-slide" :class="slideClass(1)">
         <div class="auth-slide-photo">
-          <img :src="slide2Photo" alt="" width="1200" height="800" loading="lazy" decoding="async" />
+          <img :src="slide2Photo" alt="" width="900" height="600" loading="lazy" decoding="async" />
         </div>
       </div>
 
       <div class="auth-slide" :class="slideClass(2)">
         <div class="auth-slide-photo">
-          <img :src="slide3Photo" alt="" width="1200" height="800" loading="lazy" decoding="async" />
+          <img :src="slide3Photo" alt="" width="900" height="600" loading="lazy" decoding="async" />
         </div>
       </div>
     </div>

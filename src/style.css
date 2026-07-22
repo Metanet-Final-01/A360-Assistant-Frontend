@@ -570,15 +570,12 @@ input {
   gap: 0;
   align-items: start;
   border-radius: 16px;
-  transition: outline-color 0.15s ease, background 0.15s ease;
-  outline: 3px dashed transparent;
-  outline-offset: 6px;
 }
 
 /* 챗봇 도킹/해제 순간에만 붙는 일시적 클래스(App.vue) — 이때만 남은 패널들이 그 자리를
    부드럽게 채워 들어가도록 grid-template-columns를 보간한다. */
 .app-main__grid--dock-transition {
-  transition: outline-color 0.15s ease, background 0.15s ease, grid-template-columns 0.32s ease;
+  transition: grid-template-columns 0.32s ease;
 }
 
 .app-main__grid > * {
@@ -589,7 +586,6 @@ input {
   .app-main__grid,
   .app-main__grid--dock-transition {
     grid-template-columns: 1fr;
-    transition: outline-color 0.15s ease, background 0.15s ease;
   }
 
   .panel-resize-handle {
@@ -603,11 +599,6 @@ input {
 
 .chat-widget {
   display: contents;
-}
-
-.app-main--drop-active .app-main__grid {
-  outline-color: var(--brand-teal);
-  background: var(--brand-teal-light);
 }
 
 /* ---------- Panel reorder (드래그앤드롭 배치 변경) ---------- */
@@ -680,7 +671,7 @@ input {
   line-height: 1;
   cursor: grab;
   user-select: none;
-  -webkit-user-drag: element;
+  touch-action: none;
 }
 
 .panel-drag-handle:hover {
@@ -691,42 +682,46 @@ input {
   cursor: grabbing;
 }
 
-/* 드래그 중인 패널은 흐리게 표시.
-   챗봇은 래퍼(display: contents)에 클래스가 달리므로 자식 팝업에 적용한다. */
-.panel-reorder-source,
-.panel-reorder-source > .chat-popup--docked {
-  opacity: 0.45;
+/* 핸들로 집어 든 패널 자신(원본) — 폭은 그대로 유지해(usePanelReorder의 effectiveVisible)
+   "이 자리가 곧 놓일 자리"를 그대로 보여주되, 내용은 비우고 점선 테두리의 빈 슬롯으로
+   바꾼다. 폭까지 0으로 접어버리면 커서를 따라다니는 고스트만 남고 실제 놓일 자리는
+   화면 어디에도 안 남아, 고스트가 다른 패널 위에 그냥 겹쳐 보인다.
+   챗봇은 래퍼(display: contents)에 클래스가 달리므로(panelProps 폴스루) 자식 팝업에
+   따로 적용한다 — display: contents 요소엔 배경·테두리가 아예 먹지 않는다. */
+/* .panel-reorder-dragging 단독(특이도 0,1,0)보다 나중에 나오는 .panel/.chat-popup 쪽
+   border 규칙이 특이도가 같아 소스 순서상 이겨버리므로, .panel과 묶은 복합 선택자로
+   특이도를 올려 항상 이기게 한다. */
+.panel.panel-reorder-dragging,
+.panel-reorder-dragging > .chat-popup--docked {
+  background: var(--surface-sunken);
+  border: 2px dashed var(--brand-teal);
+  box-shadow: none;
 }
 
-/* 드롭 대상 표시 — 패널 전체가 아니라, 놓였을 때 실제로 끼워지는 자리(대상 패널의 왼쪽,
-   패널 사이 간격 한가운데)에 세로 점선 하나만 그린다. commitDrop()이 드래그한 패널을
-   "대상의 인덱스 자리"에 꽂아 넣으므로(대상과 그 뒤 패널들은 한 칸씩 밀림), 실제로 새로
-   생기는 경계는 항상 대상 패널의 왼쪽이다 — 패널 하나를 통째로 감싸면 "이 패널을 덮어쓴다"
-   처럼 보여 오해를 사므로, 경계선만 보여준다. */
-.panel-reorder-target,
-.panel-reorder-target > .chat-popup--docked {
-  position: relative;
+.panel-reorder-dragging > *,
+.panel-reorder-dragging > .chat-popup--docked > * {
+  visibility: hidden;
 }
 
-.panel-reorder-target::before,
-.panel-reorder-target > .chat-popup--docked::before {
-  content: "";
-  position: absolute;
-  top: -4px;
-  bottom: -4px;
-  left: calc(var(--panel-gap, 24px) * -0.5 - 1.5px);
-  width: 0;
-  border-left: 3px dashed var(--brand-teal);
+/* 커서를 따라다니는 반투명 패널 — 핸들로 집어 든 패널의 스냅샷 복제본(App.vue,
+   usePanelReorder의 dragGhost/dragGhostStyle). 실시간으로 자리를 비켜주는 나머지
+   패널들과 달리, 이 요소만은 그리드 흐름과 무관하게 항상 커서를 그대로 따라가야
+   하므로 transition을 주지 않는다. */
+.panel-drag-ghost {
+  position: fixed;
+  opacity: 0.6;
   pointer-events: none;
+  overflow: hidden;
+  background: var(--surface);
+  border-radius: 14px;
+  box-shadow: 0 30px 60px rgba(23, 32, 38, 0.35);
+  z-index: 85;
 }
 
-/* 900px 이하에서는 패널이 좌우가 아니라 위아래로 쌓인다(.app-main__grid의 반응형 규칙 참고) —
-   왼쪽 경계에 세로 점선을 긋는 위 마커는 이 레이아웃에서 의미가 없으므로 숨긴다. */
-@media (max-width: 900px) {
-  .panel-reorder-target::before,
-  .panel-reorder-target > .chat-popup--docked::before {
-    display: none;
-  }
+/* 실시간 재배치로 나머지 패널이 자리를 옮길 때 순간 이동 대신 부드럽게 슬라이드한다
+   (Vue TransitionGroup의 FLIP move 애니메이션, App.vue의 name="panel-move"). */
+.panel-move-move {
+  transition: transform 0.3s ease;
 }
 
 /* ---------- Panel ---------- */
@@ -768,19 +763,69 @@ input {
   flex-wrap: wrap;
 }
 
-.export-btn-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
 /* .btn 기본 규칙(패딩 12px/폰트 0.9rem)이 소스 순서상 뒤에 나와 동률 우선순위에서 이겨버리므로,
    클래스 두 개를 겹친 선택자로 우선순위를 올려 확실히 덮어쓴다. */
 .btn.panel__header-btn {
   padding: 5px 12px;
   font-size: 0.76rem;
   line-height: 1.3;
+}
+
+/* 내보내기 드롭다운 — 챗봇 에이전트 버전 드롭다운(.agent-version-dd)과 동일한 상호작용,
+   다만 헤더 상단에 붙어 있어 메뉴는 아래로 펼친다. */
+.export-dd {
+  position: relative;
+}
+
+.export-dd__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.export-dd__chevron {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  transition: transform 0.15s ease;
+}
+
+.export-dd__btn--open .export-dd__chevron {
+  transform: rotate(180deg);
+}
+
+.export-dd__menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: max-content;
+  min-width: 140px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(23, 32, 38, 0.14);
+  padding: 6px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.export-dd__item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 7px;
+  text-align: left;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.export-dd__item:hover {
+  background: var(--brand-teal-light);
 }
 
 .panel__header-version {
@@ -1124,8 +1169,15 @@ input {
   color: var(--accent-text);
 }
 
-.btn--outline:hover {
+.btn--outline:hover:not(:disabled) {
   background: var(--brand-teal-light);
+}
+
+.btn--outline:disabled {
+  border-color: var(--border);
+  color: var(--text-muted);
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* ---------- Analysis panel ---------- */
@@ -1579,43 +1631,6 @@ input {
   box-shadow: 0 30px 60px rgba(0, 0, 0, 0.25);
 }
 
-.modal--flow {
-  width: min(100%, 960px);
-  max-height: 92vh;
-}
-
-.modal--flow:not(.modal--flow-maximized) .modal__header {
-  cursor: grab;
-}
-
-.modal--flow-dragging,
-.modal--flow-dragging .modal__header {
-  cursor: grabbing;
-  user-select: none;
-}
-
-.modal--flow-maximized {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  max-height: 100vh;
-  border-radius: 0;
-}
-
-.modal--flow-maximized .modal__body--flow {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.modal--flow-maximized .flow-canvas {
-  flex: 1 1 auto;
-  min-height: 0;
-  height: auto;
-}
-
 .modal--signup {
   width: min(100%, 480px);
 }
@@ -1653,22 +1668,6 @@ input {
   cursor: pointer;
 }
 
-.modal__maximize {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 0;
-  color: #ffffff;
-  cursor: pointer;
-  padding: 0;
-}
-
-.modal__maximize svg {
-  width: 16px;
-  height: 16px;
-}
-
 .modal__body {
   padding: 20px;
   overflow: auto;
@@ -1687,6 +1686,27 @@ input {
 
 .modal--settings .modal__body {
   padding: 32px 36px 36px;
+}
+
+.modal--settings .modal__header {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.modal--settings .modal__header:active {
+  cursor: grabbing;
+}
+
+.modal--settings.modal--floating {
+  position: fixed;
+  margin: 0;
+  /* position:fixed로 바뀌면 width:min(100%,620px)의 100%가 뷰포트 폭 기준이 되는데,
+     드래그 좌표 clamp(SettingsOverlay.vue)는 좌우 8px 여백만 보장할 뿐 폭을 줄이지는
+     않는다(Qodo 리뷰) — 좁은 화면에서 모달이 뷰포트 밖으로 밀려나지 않도록 여기서도
+     같은 8px 여백만큼 폭·높이를 직접 제한한다. */
+  width: min(calc(100vw - 16px), 620px);
+  max-height: calc(100vh - 16px);
 }
 
 .settings-section {
@@ -1809,8 +1829,47 @@ input {
   transform: translateX(18px);
 }
 
-.modal__body--flow {
+/* ---------- 추천 흐름도 별도 창 (flow-window.html) ---------- */
+/* 인앱 모달이 아니라 window.open으로 띄운 진짜 브라우저 창이라, 창 자체가 뷰포트 전체를
+   차지한다 — OS 창 컨트롤(최대화/최소화/크기조절)을 그대로 쓸 수 있어 Fullscreen API가
+   필요 없다(그 API가 강제로 띄우던 "Esc로 종료" 배너 회피가 이 창의 존재 이유). */
+.flow-window {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+
+.flow-window__status {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  padding: 20px;
+  text-align: center;
+}
+
+.flow-window__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
   padding: 20px 24px 24px;
+}
+
+.flow-window__canvas {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.flow-window__canvas .flow-canvas {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
 }
 
 .flow-toolbar {
@@ -3020,6 +3079,13 @@ input {
   box-shadow: 0 26px 60px rgba(31, 111, 139, 0.4);
 }
 
+/* 드래그 중에는 어디에 놓일지 미리 강조하는 대신(예전의 app-main--drop-active 전체
+   영역 점선 하이라이트), 패널 재배치 드래그(.panel-reorder-dragging)와 같은 방식으로
+   팝업 자체를 흐리게 표시한다. */
+.chat-popup--dragging {
+  opacity: 0.45;
+}
+
 .chat-popup--docked {
   position: static;
   z-index: auto;
@@ -3657,8 +3723,9 @@ input {
   position: absolute;
   z-index: -1;
   border-radius: 50%;
-  filter: blur(80px);
+  filter: blur(56px);
   will-change: transform;
+  transform: translateZ(0);
 }
 
 .auth-brand__blob--1 {
@@ -3681,16 +3748,6 @@ input {
   animation: authBlobFloat2 28s ease-in-out infinite;
 }
 
-.auth-brand__blob--3 {
-  width: 42%;
-  padding-bottom: 42%;
-  top: 38%;
-  left: 30%;
-  background: radial-gradient(circle, #ffffff 0%, transparent 70%);
-  opacity: 0.12;
-  animation: authBlobFloat3 19s ease-in-out infinite;
-}
-
 .auth-brand__blob--4 {
   width: 32%;
   padding-bottom: 32%;
@@ -3699,16 +3756,6 @@ input {
   background: radial-gradient(circle, #ffe08a 0%, transparent 70%);
   opacity: 0.45;
   animation: authBlobFloat4 21s ease-in-out infinite;
-}
-
-.auth-brand__blob--5 {
-  width: 38%;
-  padding-bottom: 38%;
-  bottom: 4%;
-  left: 0%;
-  background: radial-gradient(circle, #7fb9e8 0%, transparent 70%);
-  opacity: 0.4;
-  animation: authBlobFloat2 32s ease-in-out infinite reverse;
 }
 
 @keyframes authBlobFloat1 {
@@ -3731,16 +3778,6 @@ input {
   }
 }
 
-@keyframes authBlobFloat3 {
-  0%,
-  100% {
-    transform: translate(0, 0) rotate(0deg) scale(1);
-  }
-  50% {
-    transform: translate(-4%, 5%) rotate(20deg) scale(1.25);
-  }
-}
-
 @keyframes authBlobFloat4 {
   0%,
   100% {
@@ -3758,12 +3795,12 @@ input {
   background: conic-gradient(
     from 0deg,
     transparent 0deg,
-    rgba(255, 255, 255, 0.32) 60deg,
+    rgba(255, 255, 255, 0.12) 60deg,
     transparent 140deg,
     transparent 360deg
   );
   animation: authSheenRotate 40s linear infinite;
-  mix-blend-mode: overlay;
+  will-change: transform;
 }
 
 @keyframes authSheenRotate {
@@ -4286,6 +4323,14 @@ input {
   box-shadow: 0 12px 28px rgba(23, 32, 38, 0.24);
   padding: 6px;
   z-index: 10;
+}
+
+/* body로 텔레포트되어 뷰포트 기준 고정 위치로 뜨는 변형 — 사이드바 목록의
+   overflow-y:auto에 의해 잘리지 않도록 position:absolute 대신 fixed를 쓴다.
+   top/bottom/right는 JS에서 버튼 위치를 기준으로 계산해 인라인 스타일로 지정한다. */
+.archive-chat__item-menu--floating {
+  position: fixed;
+  z-index: 1000;
 }
 
 .archive-chat__item-menu button {

@@ -14,7 +14,7 @@ export function formatDateLabel(iso) {
   return d.toLocaleString(intlLocale(), { dateStyle: "medium", timeStyle: "short" });
 }
 
-// RecommendationFlowModal.vue의 버전 이력 날짜
+// flow-window(FlowWindowApp.vue)의 버전 이력 날짜
 export function formatDateShort(iso) {
   if (!iso) return "";
   const d = new Date(iso);
