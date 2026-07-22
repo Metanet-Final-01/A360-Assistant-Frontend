@@ -1,3 +1,4 @@
+import { fileURLToPath } from "url";
 import { defineConfig, loadEnv } from "vite";
 import vue from "@vitejs/plugin-vue";
 
@@ -11,6 +12,16 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [vue()],
+    build: {
+      rollupOptions: {
+        // 추천 흐름도를 별도 브라우저 창(window.open)으로 띄우는 독립 엔트리 — 기본 index.html
+        // 번들과 분리된 페이지라 빌드 입력에 명시하지 않으면 dist에 안 나온다(RPA-흐름도 창).
+        input: {
+          main: fileURLToPath(new URL("./index.html", import.meta.url)),
+          flowWindow: fileURLToPath(new URL("./flow-window.html", import.meta.url)),
+        },
+      },
+    },
     define: {
       "import.meta.env.VITE_API_BASE_URL": JSON.stringify(apiBaseUrl),
       // <i18n-t>/<i18n-d>/<i18n-n> 컴포넌트·v-t 디렉티브 어디서도 안 쓴다(전부 useI18n()의 t()

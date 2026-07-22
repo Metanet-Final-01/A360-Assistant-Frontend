@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { register as apiRegister, login as apiLogin, logout as apiLogout, getMe } from "../api/auth";
-import { getToken, getRefreshToken, setTokens, clearTokens, setUnauthorizedHandler } from "../api/http";
+import { getToken, setToken, clearToken, setUnauthorizedHandler } from "../api/http";
 import { usePipelineStore } from "./pipeline";
 import { useChatStore } from "./chat";
 import { useArchiveStore } from "./archive";
@@ -23,15 +23,17 @@ export const useAuthStore = defineStore("auth", () => {
       userEmail.value = me.email;
       isLoggedIn.value = true;
     } catch {
-      clearTokens();
+      clearToken();
     } finally {
       authChecking.value = false;
     }
   }
 
   async function loginWithPassword(email, password) {
-    const { access_token, refresh_token } = await apiLogin(email, password);
-    setTokens(access_token, refresh_token);
+    // 리프레시 토큰은 이제 응답 바디가 아니라 httpOnly 쿠키로 온다(RPA-205) — 브라우저가
+    // 알아서 저장하므로 여기서 다룰 값이 없다. 액세스 토큰만 계속 localStorage에 둔다.
+    const { access_token } = await apiLogin(email, password);
+    setToken(access_token);
     userEmail.value = email;
     isLoggedIn.value = true;
     useChatStore().dockChat(); // 로그인 직후 챗 위젯을 닫고 도킹 상태로 초기화
@@ -44,16 +46,13 @@ export const useAuthStore = defineStore("auth", () => {
   }
 
   function logout() {
-    // 로컬 상태 정리보다 먼저 호출해야 아직 지우지 않은 액세스 토큰으로 Authorization 헤더가
-    // 붙는다(붙지 않아도 서버는 body의 refresh_token만으로 세션을 끊는다). 서버 응답을 기다리지
-    // 않는 베스트 에포트 호출 — 실패해도 로컬 로그아웃은 그대로 진행한다(204는 멱등이라
-    // 이미 폐기된 토큰이어도 안전).
-    const refreshToken = getRefreshToken();
-    if (refreshToken) {
-      apiLogout(refreshToken).catch(() => {});
-    }
+    // 리프레시 토큰은 httpOnly 쿠키라 여기서 값을 읽어 실어 보낼 필요가 없다 — apiRequest가
+    // credentials: "include"로 요청하면 브라우저가 자동으로 첨부한다(RPA-205). 서버 응답을
+    // 기다리지 않는 베스트 에포트 호출 — 실패해도 로컬 로그아웃은 그대로 진행한다(204는
+    // 멱등이라 이미 폐기된 토큰이어도 안전).
+    apiLogout().catch(() => {});
     usePipelineStore().resetUpload();
-    clearTokens();
+    clearToken();
     isLoggedIn.value = false;
     userEmail.value = null;
     useChatStore().resetForLogout();

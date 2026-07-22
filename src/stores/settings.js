@@ -90,6 +90,15 @@ export const useSettingsStore = defineStore("settings", () => {
     { immediate: true },
   );
 
+  // 흐름도 별도 창(flow-window)처럼 같은 오리진에 떠 있는 다른 창에서 테마를 바꾸면, storage
+  // 이벤트는 그 변경을 일으킨 창 자신에게는 안 오고 "다른" 같은 오리진 창에만 온다 — 그 다른
+  // 창들도 새로고침 없이 즉시 따라가게 한다.
+  window.addEventListener("storage", (event) => {
+    if (event.key === THEME_KEY && (event.newValue === "light" || event.newValue === "dark")) {
+      theme.value = event.newValue;
+    }
+  });
+
   return {
     locale,
     theme,

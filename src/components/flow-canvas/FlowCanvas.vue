@@ -5,7 +5,7 @@
 // 드롭이 무효면 다음 렌더에서 트리 기준 위치로 자연히 스냅백된다.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { VueFlow, useVueFlow } from "@vue-flow/core";
+import { VueFlow, useVueFlow, getRectOfNodes, getTransformForBounds } from "@vue-flow/core";
 import { Controls } from "@vue-flow/controls";
 import { Background } from "@vue-flow/background";
 import "@vue-flow/core/dist/style.css";
@@ -27,7 +27,7 @@ const props = defineProps({
   editable: { type: Boolean, default: true },
 });
 
-// dirty/saving은 부모(RecommendationFlowModal)의 저장 버튼이 반응형으로 읽어야 하므로 exposed ref
+// dirty/saving은 부모(flow-window의 FlowWindowApp)의 저장 버튼이 반응형으로 읽어야 하므로 exposed ref
 // 대신 이벤트로 내보낸다 — 템플릿 ref를 통한 중첩 ref 언래핑에 기대지 않는 게 더 안전하다.
 const emit = defineEmits(["update:dirty", "update:saving"]);
 const { t } = useI18n();
@@ -113,7 +113,7 @@ watch(
 // 대신 setCenter로 "시작 필 중심에서 화면 절반 - 여백만큼 아래"인 지점을 화면 중앙에 맞춘다
 // (그러면 시작 필 자체는 화면 상단 여백(topMargin)에 위치하게 된다).
 const canvasRootRef = ref(null);
-const { setCenter, onNodesInitialized, getViewport, setViewport } = useVueFlow();
+const { setCenter, onNodesInitialized, getViewport, setViewport, getNodes } = useVueFlow();
 let didInitialFit = false;
 onNodesInitialized(() => {
   if (didInitialFit || !nodes.value.length) return;
@@ -240,7 +240,7 @@ function nodeExtraClass(node) {
   return `flow-canvas-drop--${dropHighlight.value.side}`;
 }
 
-// ----- 저장/취소 (RecommendationFlowModal이 이 메서드/ref를 템플릿 ref로 호출) -----
+// ----- 저장/취소 (flow-window의 FlowWindowApp이 이 메서드/ref를 템플릿 ref로 호출) -----
 function summaryLabel(key) {
   return t(`recommendFlow.changeSummary.${key}`);
 }
@@ -264,7 +264,60 @@ function discard() {
   pendingSummaries.value = [];
 }
 
-defineExpose({ dirty, saving, save, discard });
+// "이미지로 저장" 전용 캡처 대상 계산 — vue-flow 공식 이미지 내보내기 레시피(getRectOfNodes +
+// getTransformForBounds)를 따른다. 지금 화면에 보이는 팬/줌으로 캡처하면(html-to-image는 DOM을
+// 보이는 대로만 찍는다) 화면 밖으로 벗어난 나머지가 잘리고, 화면에 맞춰 fitView로 줌아웃해서
+// 캡처하면 그만큼 텍스트가 작게 찍혀 화질이 나빠진다 — 대신 전체 노드의 바운딩 박스를 구해
+// "노드 실제 크기 × EXPORT_SCALE"을 목표 해상도로 정하고, 거기에 맞는 transform을 계산해
+// html-to-image의 style 옵션으로 클론에만 적용한다(실제 화면의 팬/줌은 전혀 안 건드리므로
+// 캡처 후 되돌릴 것도 없다).
+// ⚠️ 캡처 대상은 반드시 .vue-flow__transformationpane이어야 한다 — 실제 팬/줌 transform이
+// 걸려 있는 엘리먼트가 바로 이것이다(vue-flow의 Transform 컴포넌트). 겉의 .vue-flow__viewport는
+// 그 transform이 없는 데다 overflow:clip까지 걸려 있어, 거길 캡처 대상으로 삼으면 우리가 준
+// transform이 새로 걸리는 게 아니라 안쪽 transformationpane의 "현재 실제 팬/줌" 위에 하나 더
+// 겹쳐져(이중 transform) 엉뚱한 위치가 찍히고, 그 결과가 클립까지 당해 흐름도가 잘려 나간다.
+const EXPORT_SCALE = 2; // 노드 실제 크기(zoom=1) 대비 배율 — 클수록 텍스트가 선명해진다
+const EXPORT_MAX_SIDE = 4096; // 아주 큰 흐름도에서도 캔버스 한 변이 이 값을 넘지 않게 하는 상한
+
+function getImageCaptureTarget() {
+  const viewportEl = canvasRootRef.value?.querySelector(".vue-flow__transformationpane");
+  // getRectOfNodes는 store가 측정해 둔 computedPosition/dimensions가 있어야 하므로, 우리
+  // 로컬 nodes(레이아웃 계산 직후의 원시 position/width/height)가 아니라 getNodes(store가
+  // 실제로 렌더한 뒤 채워 넣는 값)를 넘겨야 한다 — 안 그러면 좌표가 비어 NaN 바운딩이 나온다.
+  const measuredNodes = getNodes.value;
+  if (!viewportEl || !measuredNodes.length) return null;
+  const bounds = getRectOfNodes(measuredNodes);
+  const scale = Math.min(EXPORT_SCALE, EXPORT_MAX_SIDE / Math.max(bounds.width, bounds.height, 1));
+  const width = Math.round(bounds.width * scale);
+  const height = Math.round(bounds.height * scale);
+  const { x, y, zoom } = getTransformForBounds(bounds, width, height, 0.1, 4, 0.05);
+  // 엣지 연결선(.vue-flow__edge-path)의 fill:none은 CSS 클래스로만 지정돼 있는데, html-to-image가
+  // 캡처를 위해 이 서브트리를 복제·직렬화하는 과정에서 그 클래스 규칙이 간헐적으로 안 먹혀
+  // SVG path의 기본값(fill: black)대로 그려질 때가 있다 — 가늘어야 할 연결선이 꺾이는 지점마다
+  // 뾰족한 검은 도형으로 찍히는 원인이다(Try/Catch처럼 선이 많이 꺾이는 구간일수록 두드러진다).
+  // CSS 캐스케이드에 기대지 않고 fill 속성 자체를 엘리먼트에 직접 박아 두면 캡처 방식과 무관하게
+  // 항상 안전하다 — 이미 CSS가 강제하는 값과 같아서 화면상 보이는 모습은 전혀 안 바뀐다.
+  viewportEl.querySelectorAll(".vue-flow__edge-path").forEach((path) => {
+    path.setAttribute("fill", "none");
+  });
+  return {
+    element: viewportEl,
+    width,
+    height,
+    // .vue-flow__transformationpane는 조상인 .flow-canvas의 배경(--surface-sunken, 라이트/
+    // 다크 테마에 따라 값이 다르다)을 물려받지 않는 별도 서브트리라, 캡처엔 배경이 안 실린다.
+    // 흰 배경을 고정으로 박으면 다크 모드에서 그 배경을 전제로 한 옅은 텍스트(단계 라벨 등)가
+    // 거의 안 보이게 되므로, 지금 실제로 렌더되는 배경색을 그대로 읽어 캡처에 반영한다.
+    backgroundColor: getComputedStyle(canvasRootRef.value).backgroundColor,
+    style: {
+      width: `${width}px`,
+      height: `${height}px`,
+      transform: `translate(${x}px, ${y}px) scale(${zoom})`,
+    },
+  };
+}
+
+defineExpose({ dirty, saving, save, discard, getImageCaptureTarget });
 </script>
 
 <template>

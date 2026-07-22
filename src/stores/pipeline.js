@@ -21,7 +21,7 @@ import { t } from "../i18n";
 // 사용자 편집은 업로드 패널의 업무 단계 카드(analysis.steps, WorkStep[])에서 하고,
 // "흐름도에 저장" 버튼이 그 편집(순서/삭제/추가)을 추천 트리에 step_id 기준으로 투영해
 // 새 버전으로 저장한다(applyAnalysisEditsToFlow → POST .../recommendations, 호출마다 무조건
-// 새 버전 INSERT). RecommendationFlowModal은 읽기 전용 보기 + 버전 이력이다.
+// 새 버전 INSERT). flow-window(별도 창)는 읽기 전용 보기 + 버전 이력이다.
 // 백엔드에 개별 버전 조회 API가 없어 실행취소·버전 되돌리기는 프론트가 들고 있는
 // 트리(recommendUndoStack·recommendTreesByVersion)를 다시 저장하는 것으로 구현한다.
 
@@ -85,6 +85,35 @@ export const usePipelineStore = defineStore("pipeline", () => {
   const recommendUndoStack = ref([]); // 편집 직전 트리 스냅샷들 — 실행취소 시 pop해서 다시 저장
   const recommendTreesByVersion = ref({}); // 이 세션에서 확보한 버전별 트리 캐시 — 버전 이력 "되돌리기"의 원본 (백엔드엔 개별 버전 조회 API가 없다)
   const recommendSaveError = ref(""); // 편집/실행취소 저장 실패 시 메시지 — done 화면은 유지한 채 이 메시지만 보여준다
+
+  // 추천 흐름도 창(flow-window, window.open으로 띄운 별도 브라우저 창)은 이 스토어와는 다른
+  // JS 실행 컨텍스트(별도 Pinia)라 상태를 직접 공유할 수 없다 — 같은 세션을 보는 다른 창이
+  // 저장/되돌리기(persistRecommendationTree)나 챗 재생성(applyTurnArtifacts)으로 새 버전을
+  // 만들면 그 사실만 BroadcastChannel로 알리고, 받은 쪽은 최신 버전을 다시 GET해서 반영한다.
+  const recommendationSyncChannel =
+    typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("a360-recommendation-sync") : null;
+
+  function broadcastRecommendationUpdate(forSessionId, version) {
+    recommendationSyncChannel?.postMessage({ sessionId: forSessionId, version });
+  }
+
+  // FlowCanvas는 steps prop이 바뀌면 저장 안 한 로컬 편집(dirty)이 있어도 무조건 새 steps로
+  // 맞춘다(revertTo와 동일한 기존 정책, FlowCanvas.vue 참고) — 그 정책을 그대로 따라 여기서도
+  // 별도 창에서 편집 중이었는지 여부와 무관하게 최신 버전으로 덮어쓴다.
+  recommendationSyncChannel?.addEventListener("message", (event) => {
+    const { sessionId: fromSessionId, version } = event.data ?? {};
+    if (!fromSessionId || fromSessionId !== sessionId.value || version === recommendation.value?.version) return;
+    if (liveActive.value) return; // 스트리밍 중인 라이브 렌더를 덮어쓰지 않는다
+    getLatestRecommendation(sessionId.value)
+      .then((rec) => {
+        if (sessionId.value !== fromSessionId) return; // 그 사이 세션이 바뀌었으면 버린다
+        recommendation.value = rec;
+        recommendStatus.value = "done";
+        recommendTreesByVersion.value[rec.version] = JSON.parse(JSON.stringify(rec.recommendation));
+        loadRecommendationHistory();
+      })
+      .catch(() => {}); // 다음 상호작용에서 다시 시도됨 — 조용히 무시
+  });
 
   // 매 /turn done.data.usage_gauge — 이 세션의 대화 누적 게이지 (RPA-83).
   // { intake_tokens, limit_tokens, ratio(0~1+), compact_recommended, compact_required }
@@ -425,6 +454,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
       recommendError.value = "";
       recommendTreesByVersion.value[data.version] = JSON.parse(JSON.stringify(data.recommendation));
       loadRecommendationHistory();
+      broadcastRecommendationUpdate(sessionId.value, data.version); // 열려 있는 흐름도 창에도 새 버전을 알린다
     }
   }
 
@@ -713,6 +743,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
       recommendTreesByVersion.value[saved.version] = JSON.parse(JSON.stringify(tree));
       recommendSaveError.value = "";
       loadRecommendationHistory();
+      broadcastRecommendationUpdate(mySessionId, saved.version); // 열려 있는 흐름도 창에도 새 버전을 알린다
     } catch (err) {
       if (sessionId.value !== mySessionId || recommendGeneration !== myRecommendGeneration) return;
       // recommendStatus는 그대로 "done"으로 둔다 — 여기서 "error"로 바꾸면 이미 만들어진
