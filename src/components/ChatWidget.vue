@@ -161,30 +161,17 @@ function isPointInDockZone(event) {
   );
 }
 
-function setDockZoneHighlight(active) {
-  const zoneEl = getDockZoneEl();
-  if (zoneEl) zoneEl.classList.toggle("app-main--drop-active", active);
-}
-
 function startDrag(event) {
   if (!popupRef.value || props.docked) return;
   isDragging.value = true;
   const rect = popupRef.value.getBoundingClientRect();
   dragOffset = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  // 팝업 자신이 이미 반투명 유령 역할을 하므로(chat-popup--dragging), 별도 고스트 없이
+  // order 실시간 갱신에만 참여한다 — beginPanelDrag(핸들 드래그 전용)와 달리 여기선
+  // 원래 숨어 있던(도킹 해제된) 키를 집어 든 것이므로 자리를 곧바로 비우지 않는다.
+  props.panelReorder?.beginDrag(props.panelKey);
   window.addEventListener("pointermove", onDrag);
   window.addEventListener("pointerup", stopDrag);
-}
-
-// 커서 아래에 있는 패널을 찾는다. elementFromPoint는 그 순간 화면에 그려진 최상단 요소를
-// 반환하는데, 드래그 중인 팝업 자신이 커서를 따라다니며 항상 커서 아래 깔려 있어 그대로 부르면
-// 팝업 자신이 잡힌다 — 그래서 호출 직전에만 팝업의 pointer-events를 꺼서 그 아래 실제 패널이
-// 잡히게 한다(동기 처리라 화면 깜빡임 없음).
-function panelUnderCursor(event) {
-  if (!popupRef.value) return null;
-  popupRef.value.style.pointerEvents = "none";
-  const key = props.panelReorder.panelKeyAtPoint(event.clientX, event.clientY);
-  popupRef.value.style.pointerEvents = "";
-  return key;
 }
 
 function onDrag(event) {
@@ -197,14 +184,13 @@ function onDrag(event) {
   position.y = Math.min(Math.max(8, event.clientY - dragOffset.y), Math.max(8, maxY));
 
   isOverDockZone.value = isPointInDockZone(event);
-  setDockZoneHighlight(isOverDockZone.value);
 
   if (props.panelReorder && props.panelKey) {
+    // 도킹 존 위에 있는 동안만 챗봇의 자리를 임시로 펼쳐 나머지 패널이 실시간으로
+    // 비켜주게 하고, 벗어나면 즉시 원래 배치로 되돌린다(아직 놓은 게 아니므로).
+    props.panelReorder.setDragPreviewVisible(isOverDockZone.value);
     if (isOverDockZone.value) {
-      props.panelReorder.beginDrag(props.panelKey);
-      props.panelReorder.setDropTarget(panelUnderCursor(event));
-    } else {
-      props.panelReorder.cancelDrag();
+      props.panelReorder.updateLiveOrder(event.clientX);
     }
   }
 }
@@ -213,15 +199,13 @@ function stopDrag() {
   isDragging.value = false;
   window.removeEventListener("pointermove", onDrag);
   window.removeEventListener("pointerup", stopDrag);
-  setDockZoneHighlight(false);
 
   if (isOverDockZone.value) {
-    // 마우스가 특정 패널 위에 있었으면(dropTargetKey) 그 자리로 들어가고,
-    // 빈 공간에 놓였으면 순서를 건드리지 않고 이전 자리 그대로 도킹한다.
-    props.panelReorder?.commitDrop();
+    // 드래그 내내 실시간으로 반영돼 온 순서를 그대로 저장한다.
+    props.panelReorder?.finishDrag(true);
     emit("dock");
   } else {
-    props.panelReorder?.cancelDrag();
+    props.panelReorder?.finishDrag(false);
   }
   isOverDockZone.value = false;
 }
@@ -373,7 +357,7 @@ onBeforeUnmount(() => {
       v-if="open || docked"
       ref="popupRef"
       class="chat-popup"
-      :class="{ 'chat-popup--docked': docked, 'chat-popup--drop-ready': isOverDockZone }"
+      :class="{ 'chat-popup--docked': docked, 'chat-popup--drop-ready': isOverDockZone, 'chat-popup--dragging': isDragging }"
       :style="popupStyle"
     >
       <header
@@ -384,7 +368,6 @@ onBeforeUnmount(() => {
         <span
           v-if="docked && panelKey"
           class="panel-drag-handle"
-          draggable="true"
           data-panel-handle
           :title="t('common.dragHandle')"
           aria-hidden="true"

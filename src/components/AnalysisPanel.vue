@@ -239,7 +239,6 @@ async function submitCards() {
     <header class="panel__header">
       <span
         class="panel-drag-handle"
-        draggable="true"
         data-panel-handle
         :title="t('common.dragHandle')"
         aria-hidden="true"
