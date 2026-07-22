@@ -45,19 +45,30 @@ function measureTextWidth(text, font) {
 const LABEL_FONT = "700 13px Inter, Pretendard, ui-sans-serif, sans-serif";
 const TAG_FONT = "700 11.5px Inter, Pretendard, ui-sans-serif, sans-serif";
 const NUM_FONT = "800 13px Inter, Pretendard, ui-sans-serif, sans-serif";
+const CONFIDENCE_FONT = "800 11px Inter, Pretendard, ui-sans-serif, sans-serif";
 
 // ActionBox.vue의 실제 CSS(.flow-box padding, gap 등)에 대략 맞춘 여유값을 더해 헤더 폭을 추정한다.
+// 신뢰도 배지(.flow-box__confidence)·근거 버튼(ⓘ)은 값이 있을 때만 렌더되므로 폭 계산에서
+// 빠지면(예전 버전) 그만큼 액션 텍스트가 밀려 말줄임(…)된다 — 실제로 나타나는 요소만큼 정확히
+// 더해야 한다. 편집 버튼(✎)은 편집 모드 여부가 이 시점(레이아웃 계산)엔 아직 안 정해져 있어
+// 늘 있다고 가정한다(과소추정보다 살짝 넉넉한 게 안전).
 function estimateNodeWidth(node) {
   const label = node.label || node.action || t("recommendation.untitledAction");
   const pkg = node.package || t("common.unspecified");
   const numW = measureTextWidth("00.00", NUM_FONT) + 4; // 번호("12.3" 등) 최대 폭 여유
   const labelW = measureTextWidth(label, LABEL_FONT);
   const tagW = measureTextWidth(pkg, TAG_FONT) + 20; // 태그 좌우 패딩
-  const editBtnW = 22;
-  const gaps = 6 * 2; // row 안 flex gap(번호-라벨, 라벨-태그)
+  const hasConfidence = node.confidence != null;
+  const confidenceW = hasConfidence
+    ? measureTextWidth(`${Math.round(node.confidence * 100)}%`, CONFIDENCE_FONT) + 14 // .flow-box__confidence 좌우 패딩(2px+7px)*2
+    : 0;
+  const hasEvidence = !!node.rationale || (node.sources?.length ?? 0) > 0;
+  const evidenceBtnW = hasEvidence ? 22 : 0; // .flow-canvas-box__evidence-btn(ⓘ)
+  const editBtnW = 22; // .flow-canvas-box__edit-btn(✎)
+  const rowGaps = (hasConfidence ? 3 : 2) * 6; // .flow-canvas-box__row 안 flex gap(번호-라벨-태그-[신뢰도])
+  const siblingGaps = (hasEvidence ? 2 : 1) * 12; // .flow-box 안 row-버튼들 사이 gap(각 12px)
   const boxPadding = 28; // .flow-box 좌우 padding
-  const rowGap = 8; // row와 수정 버튼 사이 gap
-  const total = numW + labelW + tagW + editBtnW + gaps + boxPadding + rowGap + 6;
+  const total = numW + labelW + tagW + confidenceW + evidenceBtnW + editBtnW + rowGaps + siblingGaps + boxPadding + 4;
   return Math.max(LAYOUT.NODE_W, Math.round(total));
 }
 
@@ -256,6 +267,12 @@ function layoutBranchSegment(seg, centerX, y, ctx) {
   return { width: frameW, height: frameH, nodes, edges, topId: branchSetId, exitIds };
 }
 
+// steps[stepIdx]는 액션이 아니라 __uid가 없다 — 이 스텝의 타이틀 라벨 노드 id를 flowDrop.js도
+// 같이 알아야(빈 actions[]의 드롭 앵커 기준점) 이름 규칙을 여기 하나로 export해 공유한다.
+export function stepTitleId(stepIdx) {
+  return `__step-title-${stepIdx}`;
+}
+
 function labelNode(id, label, centerX, y, w, h, variant) {
   return { id, type: "label", position: { x: centerX - w / 2, y }, width: w, height: h, data: { label, variant }, draggable: false, selectable: false, zIndex: 3 };
 }
@@ -302,7 +319,7 @@ export function buildFlowGraph(steps) {
   let prevExitIds = [startId];
 
   (steps ?? []).forEach((step, stepIdx) => {
-    const titleId = `__step-title-${stepIdx}`;
+    const titleId = stepTitleId(stepIdx);
     nodes.push(labelNode(titleId, stepLabel(step, stepIdx), centerX, cy, LAYOUT.STEP_TITLE_W, LAYOUT.STEP_TITLE_H, "title"));
     prevExitIds.forEach((id) => edges.push(makeEdge(id, titleId)));
     cy += LAYOUT.STEP_TITLE_H + LAYOUT.V_GAP;

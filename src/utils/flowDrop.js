@@ -10,6 +10,7 @@
 // 분기 무결성이 자동으로 보장된다.
 import { buildSegments } from "./recommendation";
 import { getAt, childListPath } from "./flowTree";
+import { stepTitleId } from "./flowLayout";
 
 function walkItems(items, out) {
   const segments = buildSegments(items.map((it) => ({ node: it.node, path: "", nodePath: it.nodePath })));
@@ -50,6 +51,17 @@ export function buildDropAnchors(steps, listPaths, boxOf) {
   listPaths.forEach((listPath) => {
     const list = getAt(steps, listPath);
     if (!list?.length) {
+      // 스텝 최상위 actions[]([stepIdx, "actions"])가 비면 그 부모(step)는 액션이 아니라서
+      // __uid가 없다(assignUiIds는 액션에만 부여) — 대신 항상 화면에 있는 그 스텝의 타이틀
+      // 라벨 노드를 기준점으로 삼아 "타이틀 바로 아래" 앵커를 만든다. 그 외(컨테이너/분기
+      // 역할 노드의 빈 children[])는 부모 액션 자체가 프레임으로 렌더되므로 그 __uid를 쓴다.
+      if (listPath.length === 2) {
+        const titleBox = boxOf(stepTitleId(listPath[0]));
+        if (titleBox) {
+          anchors.push({ listPath, targetIndex: 0, refId: stepTitleId(listPath[0]), side: "after", x: titleBox.cx, y: titleBox.bottom });
+        }
+        return;
+      }
       const parentNode = getAt(steps, listPath.slice(0, -1));
       const box = parentNode && boxOf(parentNode.__uid);
       if (box) anchors.push({ listPath, targetIndex: 0, refId: parentNode.__uid, side: "inside", x: box.cx, y: box.cy });

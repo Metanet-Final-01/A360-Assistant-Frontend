@@ -347,7 +347,7 @@ defineExpose({ dirty, saving, save, discard, getImageCaptureTarget });
         <BranchColumnNode v-bind="nodeProps" :class="nodeExtraClass(nodeProps)" />
       </template>
       <template #node-label="nodeProps">
-        <LabelNode v-bind="nodeProps" />
+        <LabelNode v-bind="nodeProps" :class="nodeExtraClass(nodeProps)" />
       </template>
       <Background :gap="20" />
       <Controls />
