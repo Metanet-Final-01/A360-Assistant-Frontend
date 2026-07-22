@@ -746,7 +746,9 @@ input {
 .panel__header h2 {
   margin: 0;
   color: #ffffff;
-  font-size: 1rem;
+  /* 헤더 폭보다 긴 타이틀(로케일 전환 등)은 useFitTitle이 --title-scale을 낮춰 줄바꿈 대신
+     한 줄에 맞게 축소한다 — 값이 없으면(관측 전) 1배로 렌더. */
+  font-size: calc(1rem * var(--title-scale, 1));
   font-weight: 800;
   flex: 1 1 auto;
   min-width: 0;

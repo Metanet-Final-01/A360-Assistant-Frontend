@@ -3,9 +3,13 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { usePipelineStore } from "../stores/pipeline";
 import { evidenceLabel, formatBytes } from "../utils/format";
+import { useFitTitle } from "../composables/useFitTitle";
 
 const pipeline = usePipelineStore();
 const { t } = useI18n();
+
+const titleRef = ref(null);
+useFitTitle(titleRef, () => t("upload.title"));
 
 const isDragging = ref(false);
 const fileInputRef = ref(null);
@@ -378,7 +382,7 @@ function startAddStep() {
         aria-hidden="true"
         >⠿</span
       >
-      <h2 id="upload-panel-title">{{ t("upload.title") }}</h2>
+      <h2 id="upload-panel-title" ref="titleRef">{{ t("upload.title") }}</h2>
     </header>
 
     <div class="panel__body">

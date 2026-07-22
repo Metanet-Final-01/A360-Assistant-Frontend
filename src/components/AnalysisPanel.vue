@@ -6,12 +6,16 @@ import { downloadRecommendationExport } from "../api/recommend";
 import { buildPackageColorMap, numberFlowSteps, violationSetByStep } from "../utils/recommendation";
 import { recommendationToMarkdown, recommendationToDocxBlob } from "../utils/exportFlow";
 import { triggerBlobDownload } from "../utils/download";
+import { useFitTitle } from "../composables/useFitTitle";
 import FlowSequence from "./FlowSequence.vue";
 
 defineOptions({ inheritAttrs: false });
 
 const pipeline = usePipelineStore();
 const { t } = useI18n();
+
+const titleRef = ref(null);
+useFitTitle(titleRef, () => t("recommendDetail.title"));
 
 // 패널 루트 — 국소 수정 중인 단계로 스크롤할 때 그 단계 요소를 여기서 찾는다.
 const rootRef = ref(null);
@@ -52,7 +56,7 @@ const working = computed(
   () => liveMode.value || pipeline.analysisStatus === "analyzing" || pipeline.recommendStatus === "generating",
 );
 const workingText = computed(() =>
-  pipeline.analysisStatus === "analyzing" ? "업무를 분석하는 중…" : "흐름도를 구성하는 중… 에이전트가 액션을 탐색하고 있습니다.",
+  pipeline.analysisStatus === "analyzing" ? t("recommendDetail.analyzingWork") : t("recommendDetail.composingFlowDetail"),
 );
 
 const packageColor = computed(() => buildPackageColorMap(activeSteps.value));
@@ -188,7 +192,11 @@ async function downloadDocx() {
 const liveCandidates = computed(() => pipeline.liveCandidates);
 const liveVerdict = computed(() => pipeline.liveVerdict);
 const liveScorecard = computed(() => pipeline.liveScorecard);
-const candStatusText = { composing: "설계 중…", verifying: "검증 중…", failed: "실패" };
+const candStatusText = computed(() => ({
+  composing: t("recommendDetail.candStatus.composing"),
+  verifying: t("recommendDetail.candStatus.verifying"),
+  failed: t("recommendDetail.candStatus.failed"),
+}));
 
 // ── 질문 카드(needs_input, v3) — 미해소 카드만 보여주고 응답을 fill_cards 턴으로 보낸다 ──
 const flowConfidence = computed(() => activeRec.value?.flow_confidence ?? null);
@@ -244,7 +252,7 @@ async function submitCards() {
         aria-hidden="true"
         >⠿</span
       >
-      <h2 id="analysis-panel-title">{{ t("recommendDetail.title") }}</h2>
+      <h2 id="analysis-panel-title" ref="titleRef">{{ t("recommendDetail.title") }}</h2>
       <div v-if="hasActiveSession" class="panel__header-actions">
         <span v-if="pipeline.recommendation" class="panel__header-version">
           v{{ pipeline.recommendation.version }}
@@ -253,9 +261,9 @@ async function submitCards() {
           v-if="flowConfidence != null"
           class="flow-confidence"
           :class="flowConfidence >= 0.7 ? 'flow-confidence--high' : flowConfidence >= 0.4 ? 'flow-confidence--mid' : 'flow-confidence--low'"
-          title="흐름도 수준 신뢰도 — 요구 커버리지 × 검증 결과 × 시뮬레이션 (v3)"
+          :title="t('recommendDetail.confidenceTooltip')"
         >
-          신뢰도 {{ Math.round(flowConfidence * 100) }}%
+          {{ t("recommendDetail.confidenceLabel") }} {{ Math.round(flowConfidence * 100) }}%
         </span>
         <button
           v-if="canUseFlowActions"
@@ -302,9 +310,9 @@ async function submitCards() {
       <!-- 실시간 생성/수정 상태 배너 — 스트림 프레임마다 캡션·위반 수가 갱신된다 -->
       <div v-if="liveMode" class="flow-live-status">
         <span class="analyzing-state__spinner" aria-hidden="true"></span>
-        <span class="flow-live-status__caption">{{ pipeline.liveCaption || "흐름도 구성 중…" }}</span>
+        <span class="flow-live-status__caption">{{ pipeline.liveCaption || t("recommendDetail.composingFlow") }}</span>
         <span v-if="liveViolationCount" class="flow-live-status__violations">
-          검수 위반 {{ liveViolationCount }}건
+          {{ t("recommendDetail.violationCount", { count: liveViolationCount }) }}
         </span>
       </div>
 
@@ -318,19 +326,19 @@ async function submitCards() {
             :class="`quality-cand--${c.status}`"
           >
             <strong>{{ c.persona }}</strong>
-            <em>{{ candStatusText[c.status] ?? `단계 ${c.steps} · 액션 ${c.actions}` }}</em>
+            <em>{{ candStatusText[c.status] ?? t("recommendDetail.candStepActions", { steps: c.steps, actions: c.actions }) }}</em>
           </span>
         </div>
         <p v-if="liveVerdict" class="quality-verdict">
-          🏆 후보 {{ liveVerdict.winner }} 선택 — {{ liveVerdict.reason }}
+          {{ t("recommendDetail.verdictWinner", { winner: liveVerdict.winner, reason: liveVerdict.reason }) }}
         </p>
         <p v-if="liveScorecard" class="quality-scorecard">
-          must 커버리지
+          {{ t("recommendDetail.mustCoverageLabel") }}
           {{ liveScorecard.must_coverage != null ? Math.round(liveScorecard.must_coverage * 100) + "%" : "—" }}
-          · blocker {{ liveScorecard.blockers ?? 0 }}건
-          · 질문 카드 {{ liveScorecard.cards ?? 0 }}장
+          · {{ t("recommendDetail.blockersLabel", { count: liveScorecard.blockers ?? 0 }) }}
+          · {{ t("recommendDetail.questionCardsLabel", { count: liveScorecard.cards ?? 0 }) }}
           <template v-if="liveScorecard.flow_confidence != null">
-            · 흐름도 신뢰도 {{ Math.round(liveScorecard.flow_confidence * 100) }}%
+            · {{ t("recommendDetail.flowConfidenceLabel", { percent: Math.round(liveScorecard.flow_confidence * 100) }) }}
           </template>
         </p>
       </div>
@@ -404,7 +412,7 @@ async function submitCards() {
             :editing="step.step_id === activeStep"
             detailed
           />
-          <p v-else class="flow-step-empty">이 단계는 확정된 액션이 없습니다</p>
+          <p v-else class="flow-step-empty">{{ t("recommendDetail.stepNoActions") }}</p>
         </div>
 
         <p v-if="notes" class="flow-notes"><strong>{{ t("common.notesLabel") }}</strong> {{ notes }}</p>
@@ -412,7 +420,7 @@ async function submitCards() {
         <!-- 질문 카드(v3) — 흐름도는 완성 상태이고, 카드는 시안값 확인/빈칸 채움 요청이다 -->
         <div v-if="!liveMode && questionCards.length" class="question-cards">
           <h4 class="question-cards__title">
-            확인이 필요한 항목 <span class="question-cards__count">{{ questionCards.length }}</span>
+            {{ t("recommendDetail.questionsNeededTitle") }} <span class="question-cards__count">{{ questionCards.length }}</span>
           </h4>
           <div
             v-for="card in questionCards"
@@ -422,7 +430,7 @@ async function submitCards() {
           >
             <p :id="`q-label-${card.card_id}`" class="question-card__q">
               {{ card.question }}
-              <span v-if="card.blocking" class="question-card__badge">필수</span>
+              <span v-if="card.blocking" class="question-card__badge">{{ t("recommendDetail.requiredBadge") }}</span>
             </p>
             <p v-if="card.why" class="question-card__why">{{ card.why }}</p>
             <select
@@ -431,12 +439,12 @@ async function submitCards() {
               class="question-card__input"
               :aria-labelledby="`q-label-${card.card_id}`"
             >
-              <option value="" disabled>선택…</option>
+              <option value="" disabled>{{ t("recommendDetail.selectPlaceholder") }}</option>
               <option v-for="opt in card.options || []" :key="String(opt)" :value="opt">{{ opt }}</option>
             </select>
             <label v-else-if="card.input_type === 'confirm'" class="question-card__confirm">
               <input v-model="cardAnswers[card.card_id]" type="checkbox" />
-              이 전제대로 진행합니다
+              {{ t("recommendDetail.confirmPremise") }}
             </label>
             <input
               v-else
@@ -444,7 +452,7 @@ async function submitCards() {
               :type="card.input_type === 'number' ? 'number' : 'text'"
               class="question-card__input"
               :aria-labelledby="`q-label-${card.card_id}`"
-              :placeholder="card.default != null ? `시안값: ${card.default}` : '값을 입력하세요…'"
+              :placeholder="card.default != null ? t('recommendDetail.defaultValuePlaceholder', { default: card.default }) : t('recommendDetail.valuePlaceholder')"
             />
           </div>
           <button
@@ -453,7 +461,7 @@ async function submitCards() {
             :disabled="!canSubmitCards"
             @click="submitCards"
           >
-            {{ pipeline.fillCardsStatus === "sending" ? "반영 중…" : "응답 반영" }}
+            {{ pipeline.fillCardsStatus === "sending" ? t("recommendDetail.submittingCards") : t("recommendDetail.submitCards") }}
           </button>
         </div>
       </div>
