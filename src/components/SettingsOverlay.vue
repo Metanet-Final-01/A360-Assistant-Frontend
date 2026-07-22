@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, onMounted } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
 import { useSettingsStore } from "../stores/settings";
@@ -8,6 +8,44 @@ const emit = defineEmits(["close"]);
 const { t } = useI18n();
 const auth = useAuthStore();
 const settings = useSettingsStore();
+
+// 헤더를 잡고 드래그하면 팝업을 옮길 수 있다 — ChatWidget.vue의 드래그 방식과 동일
+// (position이 null인 동안은 CSS 그리드 중앙 정렬을 그대로 쓰고, 처음 드래그가 발생한
+// 순간부터 position:fixed로 전환해 left/top을 직접 제어한다).
+const modalRef = ref(null);
+const position = reactive({ x: null, y: null });
+const isDragging = ref(false);
+let dragOffset = { x: 0, y: 0 };
+
+const modalStyle = computed(() => {
+  if (position.x === null) return {};
+  return { left: `${position.x}px`, top: `${position.y}px` };
+});
+
+function startDrag(event) {
+  if (!modalRef.value) return;
+  isDragging.value = true;
+  const rect = modalRef.value.getBoundingClientRect();
+  dragOffset = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  window.addEventListener("pointermove", onDrag);
+  window.addEventListener("pointerup", stopDrag);
+}
+
+function onDrag(event) {
+  if (!isDragging.value || !modalRef.value) return;
+  const width = modalRef.value.offsetWidth;
+  const height = modalRef.value.offsetHeight;
+  const maxX = window.innerWidth - width - 8;
+  const maxY = window.innerHeight - height - 8;
+  position.x = Math.min(Math.max(8, event.clientX - dragOffset.x), Math.max(8, maxX));
+  position.y = Math.min(Math.max(8, event.clientY - dragOffset.y), Math.max(8, maxY));
+}
+
+function stopDrag() {
+  isDragging.value = false;
+  window.removeEventListener("pointermove", onDrag);
+  window.removeEventListener("pointerup", stopDrag);
+}
 
 function onKeydown(event) {
   if (event.key === "Escape") emit("close");
@@ -19,13 +57,23 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeydown);
+  window.removeEventListener("pointermove", onDrag);
+  window.removeEventListener("pointerup", stopDrag);
 });
 </script>
 
 <template>
   <div class="modal-overlay" @click.self="emit('close')">
-    <div class="modal modal--settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-      <header class="modal__header">
+    <div
+      ref="modalRef"
+      class="modal modal--settings"
+      :class="{ 'modal--floating': position.x !== null }"
+      :style="modalStyle"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settings-title"
+    >
+      <header class="modal__header" @pointerdown="startDrag">
         <h2 id="settings-title">{{ t("settings.title") }}</h2>
         <button type="button" class="modal__close" :aria-label="t('common.close')" @click="emit('close')">✕</button>
       </header>

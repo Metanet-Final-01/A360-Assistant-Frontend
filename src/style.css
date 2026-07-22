@@ -1693,6 +1693,21 @@ input {
   padding: 32px 36px 36px;
 }
 
+.modal--settings .modal__header {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.modal--settings .modal__header:active {
+  cursor: grabbing;
+}
+
+.modal--settings.modal--floating {
+  position: fixed;
+  margin: 0;
+}
+
 .settings-section {
   display: flex;
   flex-direction: column;
