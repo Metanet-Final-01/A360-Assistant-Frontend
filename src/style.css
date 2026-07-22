@@ -746,7 +746,9 @@ input {
 .panel__header h2 {
   margin: 0;
   color: #ffffff;
-  font-size: 1rem;
+  /* 헤더 폭보다 긴 타이틀(로케일 전환 등)은 useFitTitle이 --title-scale을 낮춰 줄바꿈 대신
+     한 줄에 맞게 축소한다 — 값이 없으면(관측 전) 1배로 렌더. */
+  font-size: calc(1rem * var(--title-scale, 1));
   font-weight: 800;
   flex: 1 1 auto;
   min-width: 0;
@@ -764,11 +766,28 @@ input {
 }
 
 /* .btn 기본 규칙(패딩 12px/폰트 0.9rem)이 소스 순서상 뒤에 나와 동률 우선순위에서 이겨버리므로,
-   클래스 두 개를 겹친 선택자로 우선순위를 올려 확실히 덮어쓴다. */
+   클래스 두 개를 겹친 선택자로 우선순위를 올려 확실히 덮어쓴다.
+   헤더 배경(brand-teal-dark→brand-navy 그라디언트)은 테마와 무관하게 항상 어둡게 고정되므로,
+   .btn--outline의 라이트 배경(--surface)을 그대로 쓰면 라이트모드에서 흰 알약처럼 붕 뜬다.
+   버튼도 헤더처럼 테마와 무관한 반투명 흰색 스타일로 고정한다. */
 .btn.panel__header-btn {
   padding: 5px 12px;
   font-size: 0.76rem;
   line-height: 1.3;
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.55);
+  color: #ffffff;
+}
+
+.btn.panel__header-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.btn.panel__header-btn:disabled {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.6);
+  opacity: 1;
 }
 
 /* 내보내기 드롭다운 — 챗봇 에이전트 버전 드롭다운(.agent-version-dd)과 동일한 상호작용,
@@ -4131,6 +4150,17 @@ input {
   outline: none;
   border-color: var(--brand-teal);
   box-shadow: 0 0 0 3px var(--brand-teal-light);
+}
+
+.login-input input:-webkit-autofill,
+.login-input input:-webkit-autofill:hover,
+.login-input input:-webkit-autofill:focus,
+.login-input input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--text);
+  -webkit-box-shadow: 0 0 0 1000px var(--surface) inset;
+  box-shadow: 0 0 0 1000px var(--surface) inset;
+  caret-color: var(--text);
+  transition: background-color 9999s ease-in-out 0s;
 }
 
 .login-input__toggle {

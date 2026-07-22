@@ -669,7 +669,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
         const ok = !!data?.recommendation;
         fillCardsStatus.value = ok ? "idle" : "error";
         if (typewriter.started) typewriter.finish();
-        else typewriter.push(data?.answer || (ok ? "질문 카드 응답을 반영했어요." : "카드 반영에 실패했어요."));
+        else typewriter.push(data?.answer || (ok ? t("pipeline.messages.fillCardsDone") : t("pipeline.errors.fillCardsFailed")));
         if (assistantMessage.stages.length) assistantMessage.stagesDone = true;
       },
       onError: (code, message) => {
@@ -678,8 +678,8 @@ export const usePipelineStore = defineStore("pipeline", () => {
         resetLiveFlow();
         fillCardsStatus.value = "error";
         assistantMessage.text = assistantMessage.text
-          ? `${assistantMessage.text}\n\n⚠ ${message || "카드 반영에 실패했어요."}`
-          : `⚠ ${message || "카드 반영에 실패했어요."}`;
+          ? `${assistantMessage.text}\n\n⚠ ${message || t("pipeline.errors.fillCardsFailed")}`
+          : `⚠ ${message || t("pipeline.errors.fillCardsFailed")}`;
       },
     });
   }
