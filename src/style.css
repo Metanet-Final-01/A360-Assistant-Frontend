@@ -1706,6 +1706,12 @@ input {
 .modal--settings.modal--floating {
   position: fixed;
   margin: 0;
+  /* position:fixed로 바뀌면 width:min(100%,620px)의 100%가 뷰포트 폭 기준이 되는데,
+     드래그 좌표 clamp(SettingsOverlay.vue)는 좌우 8px 여백만 보장할 뿐 폭을 줄이지는
+     않는다(Qodo 리뷰) — 좁은 화면에서 모달이 뷰포트 밖으로 밀려나지 않도록 여기서도
+     같은 8px 여백만큼 폭·높이를 직접 제한한다. */
+  width: min(calc(100vw - 16px), 620px);
+  max-height: calc(100vh - 16px);
 }
 
 .settings-section {

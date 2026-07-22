@@ -29,6 +29,9 @@ function startDrag(event) {
   dragOffset = { x: event.clientX - rect.left, y: event.clientY - rect.top };
   window.addEventListener("pointermove", onDrag);
   window.addEventListener("pointerup", stopDrag);
+  // 터치 중 OS 제스처가 가로채는 등으로 pointerup 없이 끝나면(Qodo 리뷰) isDragging이 계속
+  // true로 남아 리스너가 안 풀리고, 이후 무관한 포인터 이동에도 팝업이 다시 움직인다.
+  window.addEventListener("pointercancel", stopDrag);
 }
 
 function onDrag(event) {
@@ -45,6 +48,7 @@ function stopDrag() {
   isDragging.value = false;
   window.removeEventListener("pointermove", onDrag);
   window.removeEventListener("pointerup", stopDrag);
+  window.removeEventListener("pointercancel", stopDrag);
 }
 
 function onKeydown(event) {
@@ -59,6 +63,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("pointermove", onDrag);
   window.removeEventListener("pointerup", stopDrag);
+  window.removeEventListener("pointercancel", stopDrag);
 });
 </script>
 
