@@ -570,15 +570,12 @@ input {
   gap: 0;
   align-items: start;
   border-radius: 16px;
-  transition: outline-color 0.15s ease, background 0.15s ease;
-  outline: 3px dashed transparent;
-  outline-offset: 6px;
 }
 
 /* 챗봇 도킹/해제 순간에만 붙는 일시적 클래스(App.vue) — 이때만 남은 패널들이 그 자리를
    부드럽게 채워 들어가도록 grid-template-columns를 보간한다. */
 .app-main__grid--dock-transition {
-  transition: outline-color 0.15s ease, background 0.15s ease, grid-template-columns 0.32s ease;
+  transition: grid-template-columns 0.32s ease;
 }
 
 .app-main__grid > * {
@@ -589,7 +586,6 @@ input {
   .app-main__grid,
   .app-main__grid--dock-transition {
     grid-template-columns: 1fr;
-    transition: outline-color 0.15s ease, background 0.15s ease;
   }
 
   .panel-resize-handle {
@@ -603,11 +599,6 @@ input {
 
 .chat-widget {
   display: contents;
-}
-
-.app-main--drop-active .app-main__grid {
-  outline-color: var(--brand-teal);
-  background: var(--brand-teal-light);
 }
 
 /* ---------- Panel reorder (드래그앤드롭 배치 변경) ---------- */
@@ -680,7 +671,7 @@ input {
   line-height: 1;
   cursor: grab;
   user-select: none;
-  -webkit-user-drag: element;
+  touch-action: none;
 }
 
 .panel-drag-handle:hover {
@@ -691,42 +682,46 @@ input {
   cursor: grabbing;
 }
 
-/* 드래그 중인 패널은 흐리게 표시.
-   챗봇은 래퍼(display: contents)에 클래스가 달리므로 자식 팝업에 적용한다. */
-.panel-reorder-source,
-.panel-reorder-source > .chat-popup--docked {
-  opacity: 0.45;
+/* 핸들로 집어 든 패널 자신(원본) — 폭은 그대로 유지해(usePanelReorder의 effectiveVisible)
+   "이 자리가 곧 놓일 자리"를 그대로 보여주되, 내용은 비우고 점선 테두리의 빈 슬롯으로
+   바꾼다. 폭까지 0으로 접어버리면 커서를 따라다니는 고스트만 남고 실제 놓일 자리는
+   화면 어디에도 안 남아, 고스트가 다른 패널 위에 그냥 겹쳐 보인다.
+   챗봇은 래퍼(display: contents)에 클래스가 달리므로(panelProps 폴스루) 자식 팝업에
+   따로 적용한다 — display: contents 요소엔 배경·테두리가 아예 먹지 않는다. */
+/* .panel-reorder-dragging 단독(특이도 0,1,0)보다 나중에 나오는 .panel/.chat-popup 쪽
+   border 규칙이 특이도가 같아 소스 순서상 이겨버리므로, .panel과 묶은 복합 선택자로
+   특이도를 올려 항상 이기게 한다. */
+.panel.panel-reorder-dragging,
+.panel-reorder-dragging > .chat-popup--docked {
+  background: var(--surface-sunken);
+  border: 2px dashed var(--brand-teal);
+  box-shadow: none;
 }
 
-/* 드롭 대상 표시 — 패널 전체가 아니라, 놓였을 때 실제로 끼워지는 자리(대상 패널의 왼쪽,
-   패널 사이 간격 한가운데)에 세로 점선 하나만 그린다. commitDrop()이 드래그한 패널을
-   "대상의 인덱스 자리"에 꽂아 넣으므로(대상과 그 뒤 패널들은 한 칸씩 밀림), 실제로 새로
-   생기는 경계는 항상 대상 패널의 왼쪽이다 — 패널 하나를 통째로 감싸면 "이 패널을 덮어쓴다"
-   처럼 보여 오해를 사므로, 경계선만 보여준다. */
-.panel-reorder-target,
-.panel-reorder-target > .chat-popup--docked {
-  position: relative;
+.panel-reorder-dragging > *,
+.panel-reorder-dragging > .chat-popup--docked > * {
+  visibility: hidden;
 }
 
-.panel-reorder-target::before,
-.panel-reorder-target > .chat-popup--docked::before {
-  content: "";
-  position: absolute;
-  top: -4px;
-  bottom: -4px;
-  left: calc(var(--panel-gap, 24px) * -0.5 - 1.5px);
-  width: 0;
-  border-left: 3px dashed var(--brand-teal);
+/* 커서를 따라다니는 반투명 패널 — 핸들로 집어 든 패널의 스냅샷 복제본(App.vue,
+   usePanelReorder의 dragGhost/dragGhostStyle). 실시간으로 자리를 비켜주는 나머지
+   패널들과 달리, 이 요소만은 그리드 흐름과 무관하게 항상 커서를 그대로 따라가야
+   하므로 transition을 주지 않는다. */
+.panel-drag-ghost {
+  position: fixed;
+  opacity: 0.6;
   pointer-events: none;
+  overflow: hidden;
+  background: var(--surface);
+  border-radius: 14px;
+  box-shadow: 0 30px 60px rgba(23, 32, 38, 0.35);
+  z-index: 85;
 }
 
-/* 900px 이하에서는 패널이 좌우가 아니라 위아래로 쌓인다(.app-main__grid의 반응형 규칙 참고) —
-   왼쪽 경계에 세로 점선을 긋는 위 마커는 이 레이아웃에서 의미가 없으므로 숨긴다. */
-@media (max-width: 900px) {
-  .panel-reorder-target::before,
-  .panel-reorder-target > .chat-popup--docked::before {
-    display: none;
-  }
+/* 실시간 재배치로 나머지 패널이 자리를 옮길 때 순간 이동 대신 부드럽게 슬라이드한다
+   (Vue TransitionGroup의 FLIP move 애니메이션, App.vue의 name="panel-move"). */
+.panel-move-move {
+  transition: transform 0.3s ease;
 }
 
 /* ---------- Panel ---------- */
@@ -3061,6 +3056,13 @@ input {
 .chat-popup--drop-ready {
   border-color: var(--brand-teal);
   box-shadow: 0 26px 60px rgba(31, 111, 139, 0.4);
+}
+
+/* 드래그 중에는 어디에 놓일지 미리 강조하는 대신(예전의 app-main--drop-active 전체
+   영역 점선 하이라이트), 패널 재배치 드래그(.panel-reorder-dragging)와 같은 방식으로
+   팝업 자체를 흐리게 표시한다. */
+.chat-popup--dragging {
+  opacity: 0.45;
 }
 
 .chat-popup--docked {
