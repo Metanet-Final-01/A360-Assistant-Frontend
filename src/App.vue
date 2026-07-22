@@ -271,6 +271,8 @@ function handleNewChat() {
           class="panel-drag-ghost"
           :style="analysisPanels.dragGhostStyle"
           v-html="analysisPanels.dragGhost.html"
+          inert
+          tabindex="-1"
           aria-hidden="true"
         ></div>
       </main>

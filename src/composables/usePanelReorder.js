@@ -32,11 +32,11 @@ function layoutRect(el) {
   const rect = el.getBoundingClientRect();
   const transform = getComputedStyle(el).transform;
   if (!transform || transform === "none") return rect;
-  const match = transform.match(/matrix\(([^)]+)\)/);
-  if (!match) return rect;
-  const parts = match[1].split(",").map((s) => parseFloat(s.trim()));
-  const dx = parts[4] || 0;
-  const dy = parts[5] || 0;
+  // DOMMatrixReadOnly는 브라우저가 matrix(...)/matrix3d(...) 어느 쪽으로 직렬화하든
+  // m41/m42(translateX/Y)를 동일하게 돌려준다(Qodo 리뷰) — 문자열을 직접 정규식으로
+  // 파싱하면 3D 직렬화 환경에서 보정이 통째로 스킵된다.
+  const dx = new DOMMatrixReadOnly(transform).m41;
+  const dy = new DOMMatrixReadOnly(transform).m42;
   return {
     left: rect.left - dx,
     right: rect.right - dx,
@@ -129,16 +129,17 @@ export function usePanelReorder({
   const dragPreviewVisible = ref(false);
   let dragOrderSnapshot = null;
   // updateLiveOrder에서 매 픽셀 pointermove마다 재계산하지 않도록 손 떨림 정도의 이동은
-  // 건너뛰는 데 쓰는 마지막 처리 좌표.
-  let lastPointerX = null;
+  // 건너뛰는 데 쓰는 마지막 처리 좌표 — 900px 이하 단일 컬럼(세로 스택)에서는 y좌표,
+  // 그 외엔 x좌표를 담는다(updateLiveOrder가 매 호출마다 축을 골라 같은 변수를 쓴다).
+  let lastPointerPos = null;
   // 폭이 많이 다른 패널끼리 스왑하면 경계가 커서보다 훨씬 멀리 "점프"한다 — 예를 들어
   // 좁은 패널이 넓은 패널을 지나쳐 그 뒤로 넘어가면, 넓은 패널이 이제 반대쪽 이웃이
   // 되면서 같은 커서 좌표가 "반대 방향으로도 스왑해야 한다"는 기하학적 조건을 동시에
   // 만족해버려 곧바로 되돌아가는 흔들림이 생긴다. 그래서 마지막 스왑이 일어난 좌표·방향을
   // 기억해 두고, 반대 방향 스왑은 커서가 그 좌표에서 실제로 충분히(HYSTERESIS_PX) 되돌아
   // 나왔을 때만 허용한다.
-  let lastSwapPointerX = null;
-  let lastSwapDirection = 0; // 0=아직 없음, 1=오른쪽 이웃과 스왑, -1=왼쪽 이웃과 스왑
+  let lastSwapPointerPos = null;
+  let lastSwapDirection = 0; // 0=아직 없음, 1=정방향(오른쪽/아래) 이웃과 스왑, -1=역방향(왼쪽/위) 이웃과 스왑
 
   // 도킹 해제된 챗봇처럼 지금 그리드에 안 보이는 패널도 트랙 자체는 항상 남겨 두고
   // (minmax(0px,0fr)로 접어서) 폭만 0으로 만든다 — 트랙 개수·구성이 보이기/숨기기 상태와
@@ -327,17 +328,25 @@ export function usePanelReorder({
     order.value = next;
   }
 
-  // 커서 x좌표를 기준으로, 드래그 중인 패널의 "빈 자리"와 바로 옆 이웃 사이의 경계선을
-  // 넘었는지만 본다 — 넓은 패널이라도 그 패널의 중심까지 갈 필요 없이, 옆 패널과
-  // 맞닿는 경계선만 넘으면 즉시 그 이웃과 자리를 맞바꾼다. 한 번에 여러 칸을 건너뛰는
-  // 빠른 이동은, 매 pointermove마다 이 함수가 다시 불리면서 자연스럽게 연쇄적으로
-  // 이어진다(order.value가 바뀐 직후엔 DOM이 아직 리렌더되지 않아 같은 호출 안에서
-  // 두 칸을 한꺼번에 확정할 수 없으므로, 한 번의 호출에서는 한 칸만 옮긴다).
-  function updateLiveOrder(pointerX) {
+  // 900px 이하에서는 그리드가 단일 컬럼(세로 스택)으로 바뀐다(style.css) — 그 상태에서
+  // 커서의 x좌표로 스왑을 판정하면 좁은 화면에서 재배치가 거의 동작하지 않거나 엉뚱한
+  // 스왑이 일어난다(Qodo 리뷰). 레이아웃 축(가로/세로)에 맞는 좌표·경계를 골라 쓴다.
+  const stackedLayoutMql = window.matchMedia("(max-width: 900px)");
+
+  // 커서 좌표(가로 배치면 x, 세로 스택이면 y)를 기준으로, 드래그 중인 패널의 "빈 자리"와
+  // 바로 옆 이웃 사이의 경계선을 넘었는지만 본다 — 넓은 패널이라도 그 패널의 중심까지 갈
+  // 필요 없이, 옆 패널과 맞닿는 경계선만 넘으면 즉시 그 이웃과 자리를 맞바꾼다. 한 번에
+  // 여러 칸을 건너뛰는 빠른 이동은, 매 pointermove마다 이 함수가 다시 불리면서 자연스럽게
+  // 연쇄적으로 이어진다(order.value가 바뀐 직후엔 DOM이 아직 리렌더되지 않아 같은 호출
+  // 안에서 두 칸을 한꺼번에 확정할 수 없으므로, 한 번의 호출에서는 한 칸만 옮긴다).
+  function updateLiveOrder(pointerX, pointerY) {
     const dragged = draggingKey.value;
-    if (!dragged || pointerX == null) return;
-    if (lastPointerX != null && Math.abs(pointerX - lastPointerX) < MIN_MOVE_PX) return;
-    lastPointerX = pointerX;
+    if (!dragged) return;
+    const stacked = stackedLayoutMql.matches;
+    const pointerPos = stacked ? pointerY : pointerX;
+    if (pointerPos == null) return;
+    if (lastPointerPos != null && Math.abs(pointerPos - lastPointerPos) < MIN_MOVE_PX) return;
+    lastPointerPos = pointerPos;
 
     const current = order.value;
     const draggedIdx = current.indexOf(dragged);
@@ -345,35 +354,39 @@ export function usePanelReorder({
     const draggedRect = layoutRectByKey(dragged);
     if (!draggedRect) return;
 
-    const rightKey = findAdjacentVisible(current, draggedIdx, 1);
-    if (rightKey) {
-      const rightRect = layoutRectByKey(rightKey);
-      // 직전 스왑이 왼쪽 방향이었다면, 커서가 그때 좌표에서 실제로 오른쪽으로 충분히
-      // 되돌아 나왔을 때만 다시 오른쪽으로 스왑한다 — 그렇지 않으면 폭 차이가 큰 패널과
+    const forwardKey = findAdjacentVisible(current, draggedIdx, 1);
+    if (forwardKey) {
+      const forwardRect = layoutRectByKey(forwardKey);
+      // 직전 스왑이 반대 방향이었다면, 커서가 그때 좌표에서 실제로 정방향으로 충분히
+      // 되돌아 나왔을 때만 다시 스왑한다 — 그렇지 않으면 폭/높이 차이가 큰 패널과
       // 스왑한 직후 같은 좌표에서 곧바로 되돌아가는 흔들림이 생긴다.
       const directionOk =
-        lastSwapDirection >= 0 || lastSwapPointerX == null || pointerX >= lastSwapPointerX + HYSTERESIS_PX;
-      if (rightRect && directionOk) {
-        const boundary = (draggedRect.right + rightRect.left) / 2;
-        if (pointerX >= boundary + HYSTERESIS_PX / 2) {
-          swapKeys(dragged, rightKey);
-          lastSwapPointerX = pointerX;
+        lastSwapDirection >= 0 || lastSwapPointerPos == null || pointerPos >= lastSwapPointerPos + HYSTERESIS_PX;
+      if (forwardRect && directionOk) {
+        const boundary = stacked
+          ? (draggedRect.bottom + forwardRect.top) / 2
+          : (draggedRect.right + forwardRect.left) / 2;
+        if (pointerPos >= boundary + HYSTERESIS_PX / 2) {
+          swapKeys(dragged, forwardKey);
+          lastSwapPointerPos = pointerPos;
           lastSwapDirection = 1;
           return;
         }
       }
     }
 
-    const leftKey = findAdjacentVisible(current, draggedIdx, -1);
-    if (leftKey) {
-      const leftRect = layoutRectByKey(leftKey);
+    const backwardKey = findAdjacentVisible(current, draggedIdx, -1);
+    if (backwardKey) {
+      const backwardRect = layoutRectByKey(backwardKey);
       const directionOk =
-        lastSwapDirection <= 0 || lastSwapPointerX == null || pointerX <= lastSwapPointerX - HYSTERESIS_PX;
-      if (leftRect && directionOk) {
-        const boundary = (draggedRect.left + leftRect.right) / 2;
-        if (pointerX <= boundary - HYSTERESIS_PX / 2) {
-          swapKeys(leftKey, dragged);
-          lastSwapPointerX = pointerX;
+        lastSwapDirection <= 0 || lastSwapPointerPos == null || pointerPos <= lastSwapPointerPos - HYSTERESIS_PX;
+      if (backwardRect && directionOk) {
+        const boundary = stacked
+          ? (draggedRect.top + backwardRect.bottom) / 2
+          : (draggedRect.left + backwardRect.right) / 2;
+        if (pointerPos <= boundary - HYSTERESIS_PX / 2) {
+          swapKeys(backwardKey, dragged);
+          lastSwapPointerPos = pointerPos;
           lastSwapDirection = -1;
         }
       }
@@ -381,8 +394,8 @@ export function usePanelReorder({
   }
 
   function resetDragHysteresis() {
-    lastPointerX = null;
-    lastSwapPointerX = null;
+    lastPointerPos = null;
+    lastSwapPointerPos = null;
     lastSwapDirection = 0;
   }
 
@@ -436,7 +449,7 @@ export function usePanelReorder({
 
   function onPanelDragMove(event) {
     dragPointer.value = { x: event.clientX, y: event.clientY };
-    updateLiveOrder(event.clientX);
+    updateLiveOrder(event.clientX, event.clientY);
   }
 
   function removePanelDragListeners() {
@@ -459,6 +472,9 @@ export function usePanelReorder({
   // 경우에만 반응한다 — 이렇게 하면 같은 화면의 다른 네이티브 드래그(파일 업로드
   // 드롭존, 분석 결과 카드 순서 변경)와 이벤트가 섞이지 않는다.
   function handleGridPointerDown(event) {
+    // 마우스 좌클릭(또는 터치/펜의 주 포인터)만 드래그를 시작한다(Qodo 리뷰) — 그렇지
+    // 않으면 우클릭 컨텍스트 메뉴나 보조 버튼 클릭에서도 재배치가 시작돼 버린다.
+    if (event.button !== 0 || !event.isPrimary) return;
     const handle = event.target.closest?.("[data-panel-handle]");
     if (!handle) return;
     const panelEl = handle.closest("[data-panel-key]");

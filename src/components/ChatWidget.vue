@@ -190,7 +190,7 @@ function onDrag(event) {
     // 비켜주게 하고, 벗어나면 즉시 원래 배치로 되돌린다(아직 놓은 게 아니므로).
     props.panelReorder.setDragPreviewVisible(isOverDockZone.value);
     if (isOverDockZone.value) {
-      props.panelReorder.updateLiveOrder(event.clientX);
+      props.panelReorder.updateLiveOrder(event.clientX, event.clientY);
     }
   }
 }
