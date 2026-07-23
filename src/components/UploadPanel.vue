@@ -25,10 +25,17 @@ const uploadSectionCollapsed = ref(false);
 // file이 사라지는 시점 자체를 감시해서 지운다. 다만 watch는 값이 실제로 바뀔 때만 발동해서
 // file이 이미 null인 상태(예: 파일 없이 텍스트만 쓰던 중)의 리셋은 못 잡는다 — 그 경우는
 // switchMode에서 명시적으로 지운다.
+// 또한 세션 이력을 다시 열었을 때(loadSession) 어느 탭이 활성이어야 하는지도 여기서 함께
+// 정한다 — 자연어 요청 문서는 백엔드가 파일명을 "{제목}.txt"로 저장해(ext==="txt") 파일
+// 업로드와 구분된다(RPA-264).
 watch(
   () => pipeline.file,
   (file) => {
-    if (!file) textDraft.value = "";
+    if (!file) {
+      textDraft.value = "";
+      return;
+    }
+    inputMode.value = file.ext === "txt" ? "text" : "file";
   },
 );
 
@@ -36,22 +43,13 @@ const fileSizeLabel = computed(() =>
   pipeline.file ? formatBytes(pipeline.file.size) : "",
 );
 
+// 비전 보강이 parsed_content를 갱신하는 도중에 분석이 먼저 시작되면 보강 결과가 반영되지
+// 않은 채로 분석이 진행될 수 있어(RPA-264), 보강이 끝날 때까지는 분석 시작을 막는다.
 const canStartAnalysis = computed(
   () =>
     pipeline.document?.status === "parsed" &&
     pipeline.analysisStatus === "idle" &&
     pipeline.visionStatus !== "enriching",
-);
-
-// 비전 보강(FR-03)은 vision.py가 지원하는 포맷(PDF/PPTX, PPT는 내부적으로 PPTX로 변환된 뒤
-// 처리됨)에서만, 그리고 분석을 시작하기 전에만 의미가 있다 — 분석이 이미 parsed_content를
-// 읽어간 뒤에는 뒤늦게 보강해도 반영되지 않는다.
-const VISION_EXTS = new Set(["pdf", "pptx", "ppt"]);
-const canEnrichVision = computed(
-  () =>
-    pipeline.document?.status === "parsed" &&
-    pipeline.analysisStatus === "idle" &&
-    VISION_EXTS.has(pipeline.file?.ext),
 );
 
 function openFileDialog() {
@@ -533,17 +531,8 @@ function startAddStep() {
           </Transition>
 
           <!-- 비전 보강(FR-03) — 스캔본 등 텍스트가 부족한 페이지를 vision LLM으로 다시 읽는다.
-               페이지당 LLM 호출이라 자동이 아니라 사용자가 명시적으로 트리거한다. -->
-          <div v-if="canEnrichVision || pipeline.visionStatus !== 'idle'" class="vision-enrich">
-            <button
-              v-if="pipeline.visionStatus === 'idle' || pipeline.visionStatus === 'error'"
-              type="button"
-              class="btn btn--outline"
-              :disabled="!canEnrichVision"
-              @click="pipeline.enrichVisionForDocument"
-            >
-              {{ t("upload.vision.button") }}
-            </button>
+               지원 포맷(PDF/PPT/PPTX)이면 파싱 완료 직후 자동 실행되며, 여기서는 진행 상태만 보여준다. -->
+          <div v-if="pipeline.visionStatus !== 'idle'" class="vision-enrich">
             <p v-if="pipeline.visionStatus === 'enriching'" class="vision-enrich__status">
               <span class="vision-enrich__spinner" aria-hidden="true"></span>
               {{ pipeline.visionStage || t("upload.vision.enriching") }}
