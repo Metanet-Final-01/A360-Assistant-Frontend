@@ -297,6 +297,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
 
       if (doc.status === "parsed") {
         uploadStatus.value = "uploaded";
+        autoEnrichVisionIfNeeded();
         return;
       }
 
@@ -308,6 +309,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
           if (myGeneration !== uploadGeneration) return;
           document.value = data;
           uploadStatus.value = "uploaded";
+          autoEnrichVisionIfNeeded();
         },
         onError: (message) => {
           if (myGeneration !== uploadGeneration) return;
@@ -324,8 +326,21 @@ export const usePipelineStore = defineStore("pipeline", () => {
     }
   }
 
+  // 비전 보강(FR-03)이 의미 있는 포맷(PDF/PPTX, PPT는 내부적으로 PPTX로 변환되어 처리됨).
+  // vision.py가 다른 포맷은 지원하지 않으므로 이 목록 밖의 파일은 시도 자체를 하지 않는다.
+  const VISION_EXTS = new Set(["pdf", "pptx", "ppt"]);
+
+  // 파싱이 끝나자마자 자동으로 비전 보강을 시도한다 — 스캔본/캡처 위주 문서라 텍스트만으로는
+  // 정보가 유실되는 경우가 많아 사용자가 버튼을 누르게 하지 않고 바로 진행한다. 분석 시작 전에만
+  // 의미가 있는데, 파싱 직후 시점이라 analysisStatus는 항상 idle이다. 보강할 페이지가 없으면
+  // 서버가 LLM 호출 없이 즉시 done을 반환하므로 지원 포맷이면 비용 걱정 없이 매번 시도해도 된다.
+  function autoEnrichVisionIfNeeded() {
+    if (!VISION_EXTS.has(file.value?.ext)) return;
+    enrichVisionForDocument();
+  }
+
   // 텍스트가 부족한 페이지(스캔본 등)를 비전 LLM으로 다시 읽는다 (FR-03). 페이지당 LLM 호출로
-  // 수십 초 걸릴 수 있어 분석 시작 전 사용자가 직접 트리거하는 선택 단계로 둔다. 업로드/초기화와
+  // 수십 초 걸릴 수 있어 사용자가 파일을 고르는 즉시(파싱 완료 후) 자동으로 트리거된다. 업로드/초기화와
   // 같은 uploadGeneration 세대 가드를 공유해, 응답이 오기 전에 새 파일을 고르거나 초기화하면
   // 늦게 온 결과가 지금 문서를 덮어쓰지 않는다.
   async function enrichVisionForDocument() {
