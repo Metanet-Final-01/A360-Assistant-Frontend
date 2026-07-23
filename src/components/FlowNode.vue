@@ -23,8 +23,8 @@ const props = defineProps({
 
 const node = computed(() => props.item.node);
 const isContainer = computed(() => (node.value.children?.length ?? 0) > 0);
-const pkg = computed(() => node.value.package || "미지정");
-const label = computed(() => node.value.label || node.value.action || "액션");
+const pkg = computed(() => node.value.package || t("common.unspecified"));
+const label = computed(() => node.value.label || node.value.action || t("recommendDetail.actionFallback"));
 const parameters = computed(() => node.value.parameters ?? []);
 const hasViolation = computed(() => !!props.violationPaths && props.violationPaths.has(props.item.path));
 
@@ -50,7 +50,7 @@ const evidenceOpen = ref(false);
       <span class="flow-box__label">
         <span v-if="item.prefix" class="flow-node__num">{{ item.prefix }}</span>
         {{ label }}
-        <span v-if="isContainer" class="flow-node__container-tag">컨테이너</span>
+        <span v-if="isContainer" class="flow-node__container-tag">{{ t("recommendDetail.containerTag") }}</span>
       </span>
       <span class="flow-box__meta">
         <span class="flow-box__tag" :style="{ background: colorFor(pkg) }">{{ pkg }}</span>
@@ -62,7 +62,7 @@ const evidenceOpen = ref(false);
         >
           {{ Math.round(confidence * 100) }}%
         </span>
-        <span v-if="hasViolation" class="flow-box__violation-mark" title="검수 위반">⚠</span>
+        <span v-if="hasViolation" class="flow-box__violation-mark" :title="t('recommendDetail.violationMark')">⚠</span>
       </span>
     </div>
 
