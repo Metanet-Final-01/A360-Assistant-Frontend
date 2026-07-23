@@ -6,10 +6,13 @@
 // 자식 본문은 자기 자신(FlowSequence)을 재귀 호출해 그린다 — 컬럼 안에 또 분기가 있으면
 // 그 안에서 다시 컬럼이 된다.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import FlowNode from "./FlowNode.vue";
 import { buildSegments, childItems, branchColumnExits, branchRole, branchLabel } from "../utils/recommendation";
 
 defineOptions({ name: "FlowSequence" });
+
+const { t } = useI18n();
 
 const props = defineProps({
   // [{ node, prefix, path }] — numberFlowSteps / childItems 산출
@@ -175,15 +178,15 @@ function mergeBar(seg) {
               :editing="editing"
             />
           </div>
-          <p v-else class="flow-branch__empty">(본문 없음)</p>
+          <p v-else class="flow-branch__empty">{{ t("recommendation.noBody") }}</p>
           <!-- 상세 패널(비다이어그램): 컬럼 하단에 진행(↓ 화살표)/종료(✕, Finally로 합류) 그래픽 -->
           <div
             v-if="!arrows"
             class="flow-branch__drop"
             :class="columnExits(seg, col) ? 'flow-branch__drop--go' : 'flow-branch__drop--stop'"
             :title="columnExits(seg, col)
-              ? '다음 단계(또는 완료)로 이어짐'
-              : '여기서 끝나지 않고 Finally로 합류한 뒤 진행됨'"
+              ? t('recommendation.continuesHint')
+              : t('recommendation.terminalHint')"
           ></div>
         </div>
       </div>
