@@ -25,10 +25,17 @@ const uploadSectionCollapsed = ref(false);
 // file이 사라지는 시점 자체를 감시해서 지운다. 다만 watch는 값이 실제로 바뀔 때만 발동해서
 // file이 이미 null인 상태(예: 파일 없이 텍스트만 쓰던 중)의 리셋은 못 잡는다 — 그 경우는
 // switchMode에서 명시적으로 지운다.
+// 또한 세션 이력을 다시 열었을 때(loadSession) 어느 탭이 활성이어야 하는지도 여기서 함께
+// 정한다 — 자연어 요청 문서는 백엔드가 파일명을 "{제목}.txt"로 저장해(ext==="txt") 파일
+// 업로드와 구분된다(RPA-264).
 watch(
   () => pipeline.file,
   (file) => {
-    if (!file) textDraft.value = "";
+    if (!file) {
+      textDraft.value = "";
+      return;
+    }
+    inputMode.value = file.ext === "txt" ? "text" : "file";
   },
 );
 
