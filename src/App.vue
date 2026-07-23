@@ -107,6 +107,7 @@ const chatBlocked = computed(
     pipeline.uploadStatus === "uploading" ||
     pipeline.analysisStatus === "analyzing" ||
     pipeline.recommendStatus === "generating" ||
+    pipeline.visionStatus === "enriching" ||
     pipeline.sessionLoadStatus === "loading",
 );
 
@@ -200,6 +201,7 @@ function handleNewChat() {
     <AppSidebar
       :active-session-id="pipeline.sessionId"
       :active-session-loading="pipeline.sessionLoadStatus === 'loading'"
+      :active-session-busy="chatBlocked"
       @select-session="pipeline.loadSession"
       @new-chat="handleNewChat"
       @logout="handleLogout"

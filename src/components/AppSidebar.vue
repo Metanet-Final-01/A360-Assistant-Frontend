@@ -15,6 +15,9 @@ const props = defineProps({
   // 바로 그 항목으로 옮겨가므로(pipeline.loadSession이 동기적으로 먼저 반영) 스피너도
   // 자연히 새로 클릭한 항목으로 따라 움직인다 — 별도의 취소 처리가 필요 없다.
   activeSessionLoading: { type: Boolean, default: false },
+  // 활성 세션에 업로드·분석·비전 보강·추천 생성·챗 응답 대기 등 진행 중인 작업이 있는지 —
+  // 그 세션을 삭제하는 도중이라도 화면을 강제로 새 채팅으로 되돌리지 않기 위한 가드(RPA-264).
+  activeSessionBusy: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(["logout", "tutorial", "open-settings", "select-session", "new-chat"]);
@@ -184,9 +187,12 @@ async function removeSession(id, event) {
   event.stopPropagation();
   if (!window.confirm(t("sidebar.deleteConfirm"))) return;
   const wasActive = id === props.activeSessionId;
+  // 활성 세션이 삭제 대상이어도, 그 세션에서 작업이 진행 중이면 화면을 새 채팅으로 넘기지
+  // 않는다 — 삭제(목록 갱신)와 진행 중인 작업이 서로 방해하지 않고 병렬로 진행되게 한다.
+  // 작업이 없을 때는 기존처럼 곧바로 새 채팅으로 이동해 지워진 세션 화면에 남지 않게 한다.
   const removed = await archive.removeSession(id);
   openMenuId.value = null;
-  if (removed && wasActive) startNewChat();
+  if (removed && wasActive && !props.activeSessionBusy) startNewChat();
 }
 </script>
 

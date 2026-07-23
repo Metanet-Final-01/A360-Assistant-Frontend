@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { computed, reactive, ref, watch } from "vue";
-import { uploadDocument, parseDocument, createDocumentFromText, enrichVision } from "../api/documents";
+import { uploadDocument, parseDocument, createDocumentFromText, enrichVision, getDocument } from "../api/documents";
 import { turnStream } from "../api/agent";
 import { listRecommendations, saveRecommendation, getLatestRecommendation } from "../api/recommend";
 import { getLatestAnalysis } from "../api/sessions";
@@ -316,6 +316,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
 
       if (doc.status === "parsed") {
         uploadStatus.value = "uploaded";
+        autoEnrichVisionIfNeeded();
         return;
       }
 
@@ -327,6 +328,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
           if (myGeneration !== uploadGeneration) return;
           document.value = data;
           uploadStatus.value = "uploaded";
+          autoEnrichVisionIfNeeded();
         },
         onError: (message) => {
           if (myGeneration !== uploadGeneration) return;
@@ -343,8 +345,21 @@ export const usePipelineStore = defineStore("pipeline", () => {
     }
   }
 
+  // 비전 보강(FR-03)이 의미 있는 포맷(PDF/PPTX, PPT는 내부적으로 PPTX로 변환되어 처리됨).
+  // vision.py가 다른 포맷은 지원하지 않으므로 이 목록 밖의 파일은 시도 자체를 하지 않는다.
+  const VISION_EXTS = new Set(["pdf", "pptx", "ppt"]);
+
+  // 파싱이 끝나자마자 자동으로 비전 보강을 시도한다 — 스캔본/캡처 위주 문서라 텍스트만으로는
+  // 정보가 유실되는 경우가 많아 사용자가 버튼을 누르게 하지 않고 바로 진행한다. 분석 시작 전에만
+  // 의미가 있는데, 파싱 직후 시점이라 analysisStatus는 항상 idle이다. 보강할 페이지가 없으면
+  // 서버가 LLM 호출 없이 즉시 done을 반환하므로 지원 포맷이면 비용 걱정 없이 매번 시도해도 된다.
+  function autoEnrichVisionIfNeeded() {
+    if (!VISION_EXTS.has(file.value?.ext)) return;
+    enrichVisionForDocument();
+  }
+
   // 텍스트가 부족한 페이지(스캔본 등)를 비전 LLM으로 다시 읽는다 (FR-03). 페이지당 LLM 호출로
-  // 수십 초 걸릴 수 있어 분석 시작 전 사용자가 직접 트리거하는 선택 단계로 둔다. 업로드/초기화와
+  // 수십 초 걸릴 수 있어 사용자가 파일을 고르는 즉시(파싱 완료 후) 자동으로 트리거된다. 업로드/초기화와
   // 같은 uploadGeneration 세대 가드를 공유해, 응답이 오기 전에 새 파일을 고르거나 초기화하면
   // 늦게 온 결과가 지금 문서를 덮어쓰지 않는다.
   async function enrichVisionForDocument() {
@@ -357,11 +372,16 @@ export const usePipelineStore = defineStore("pipeline", () => {
       return;
     }
     const myGeneration = uploadGeneration;
+    // 업로드용 컨트롤러를 재사용해 signal을 발급한다 — 이 시점엔 이전 업로드/파싱 요청이 이미
+    // 끝나 있어 abort()가 실질적으로 아무것도 끊지 않지만, resetUpload()/loadSession()이 부르는
+    // cancelActiveUpload()가 이 vision 요청도 함께 취소 대상으로 잡을 수 있게 된다.
+    const signal = startUploadController();
     visionStatus.value = "enriching";
     visionStage.value = "";
     visionError.value = "";
 
     await enrichVision(document.value.id, {
+      signal,
       onStage: (message) => {
         if (myGeneration !== uploadGeneration) return;
         visionStage.value = message;
@@ -487,6 +507,9 @@ export const usePipelineStore = defineStore("pipeline", () => {
   }
 
   async function startAnalysis() {
+    // visionStatus 가드: UI(UploadPanel의 canStartAnalysis)뿐 아니라 store 액션 자체에서도
+    // 막아야, 향후 다른 호출 지점이 생기거나 버튼 비활성화를 우회해도 비전 보강이 갱신 중인
+    // parsed_content를 분석이 먼저 읽어가는 경쟁 조건이 재발하지 않는다.
     if (
       document.value?.status !== "parsed" ||
       !sessionId.value ||
@@ -844,7 +867,9 @@ export const usePipelineStore = defineStore("pipeline", () => {
   }
 
   // 사이드바 세션 이력에서 과거 세션을 선택했을 때, 그 세션을 "현재 세션"으로 하이드레이션한다.
-  // 목록 API가 원본 업로드 파일명을 돌려주지 않으므로 업로드 패널은 빈 드롭존으로 시작하되,
+  // 업로드 패널의 문서 카드(파일명·크기·파싱 상태)는 최신 분석이 참조하는 document_id로
+  // GET /api/documents/{id}를 불러와 복원한다(RPA-264) — 세션 단위로 문서를 직접 조회하는
+  // API는 없어, 분석이 아직 없는 세션(문서만 올리고 분석 전인 경우)은 복원 대상에서 빠진다.
   // 같은 sessionId로 새 문서를 이어 올리거나(selectFile) 채팅을 계속할 수 있다.
   async function loadSession(id) {
     if (!id || sessionId.value === id) return;
@@ -888,6 +913,28 @@ export const usePipelineStore = defineStore("pipeline", () => {
     }
     // 응답이 오기 전에 세션이 바뀌었거나 같은 세션을 다시 불러왔으면 버린다
     if (myGeneration !== sessionGeneration.value) return;
+
+    // 문서 카드 복원 — 세션 자체에는 문서 조회 API가 없어, 최신 분석이 들고 있는 document_id로
+    // 대신 조회한다. 복원 전용 보조 조회라 실패해도 조용히 넘어간다(드롭존만 비어 있게 둔다) —
+    // 이미 확보한 분석·추천·대화 이력까지 에러로 날리지 않기 위함.
+    if (analysisRes?.document_id) {
+      try {
+        const doc = await getDocument(analysisRes.document_id);
+        if (myGeneration === sessionGeneration.value) {
+          document.value = doc;
+          const ext = doc.filename?.includes(".") ? doc.filename.split(".").pop().toLowerCase() : "";
+          file.value = { name: doc.filename, size: doc.size_bytes, ext };
+          if (doc.status === "failed") {
+            uploadStatus.value = "error";
+            uploadError.value = doc.error || t("api.errors.parseFailed");
+          } else {
+            uploadStatus.value = "uploaded";
+          }
+        }
+      } catch {
+        // 복원 실패는 무시 — 업로드 패널이 빈 드롭존으로 남을 뿐, 분석·추천·대화는 정상 표시된다.
+      }
+    }
 
     if (analysisRes) {
       analysis.value = { ...analysisRes.result, analysis_id: analysisRes.analysis_id ?? null };

@@ -48,7 +48,22 @@ export const useArchiveStore = defineStore("archive", () => {
     await sessionsQuery.refetch();
   }
 
-  const deleteMutation = useMutation({ mutationFn: (id) => deleteSession(id) });
+  // 활성 세션에 분석·비전 보강 등 진행 중인 작업이 있으면 그 요청도 같은 DB 커넥션 풀을
+  // 오래 붙들고 있어(RPA-264 — 삭제 중에도 작업을 취소하지 않기로 함), DELETE 응답이 눈에
+  // 띄게 늦게 올 때가 있다. 응답을 기다렸다 목록을 지우면 "삭제가 바로 반영 안 되는" 것처럼
+  // 보이므로, 목록에서는 요청 즉시(낙관적으로) 지우고 실패했을 때만 되돌린다.
+  const deleteMutation = useMutation({
+    mutationFn: (id) => deleteSession(id),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: SESSIONS_QUERY_KEY });
+      const previous = queryClient.getQueryData(SESSIONS_QUERY_KEY);
+      queryClient.setQueryData(SESSIONS_QUERY_KEY, (old) => (old ?? []).filter((s) => s.id !== id));
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) queryClient.setQueryData(SESSIONS_QUERY_KEY, context.previous);
+    },
+  });
 
   async function removeSession(id) {
     deleteError.value = "";
@@ -58,7 +73,6 @@ export const useArchiveStore = defineStore("archive", () => {
       deleteError.value = err instanceof ApiError ? err.message : t("archive.errors.deleteFailed");
       return false;
     }
-    queryClient.setQueryData(SESSIONS_QUERY_KEY, (old) => (old ?? []).filter((s) => s.id !== id));
     return true;
   }
 
