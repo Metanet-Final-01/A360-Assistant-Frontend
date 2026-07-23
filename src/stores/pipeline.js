@@ -346,11 +346,16 @@ export const usePipelineStore = defineStore("pipeline", () => {
   async function enrichVisionForDocument() {
     if (!document.value || document.value.status !== "parsed" || visionStatus.value === "enriching") return;
     const myGeneration = uploadGeneration;
+    // 업로드용 컨트롤러를 재사용해 signal을 발급한다 — 이 시점엔 이전 업로드/파싱 요청이 이미
+    // 끝나 있어 abort()가 실질적으로 아무것도 끊지 않지만, resetUpload()/loadSession()이 부르는
+    // cancelActiveUpload()가 이 vision 요청도 함께 취소 대상으로 잡을 수 있게 된다.
+    const signal = startUploadController();
     visionStatus.value = "enriching";
     visionStage.value = "";
     visionError.value = "";
 
     await enrichVision(document.value.id, {
+      signal,
       onStage: (message) => {
         if (myGeneration !== uploadGeneration) return;
         visionStage.value = message;
@@ -476,7 +481,15 @@ export const usePipelineStore = defineStore("pipeline", () => {
   }
 
   async function startAnalysis() {
-    if (document.value?.status !== "parsed" || !sessionId.value || analysisStatus.value === "analyzing") {
+    // visionStatus 가드: UI(UploadPanel의 canStartAnalysis)뿐 아니라 store 액션 자체에서도
+    // 막아야, 향후 다른 호출 지점이 생기거나 버튼 비활성화를 우회해도 비전 보강이 갱신 중인
+    // parsed_content를 분석이 먼저 읽어가는 경쟁 조건이 재발하지 않는다.
+    if (
+      document.value?.status !== "parsed" ||
+      !sessionId.value ||
+      analysisStatus.value === "analyzing" ||
+      visionStatus.value === "enriching"
+    ) {
       return;
     }
     // 챗 턴 진행 중엔 취소하지 않고 거부한다 — selectFile()과 동일한 이유(RPA-107)
