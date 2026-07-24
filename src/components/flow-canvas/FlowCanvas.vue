@@ -86,14 +86,22 @@ watch(
 // 기존 하위 액션을 그대로 보존하고, 리프를 컨테이너로 바꾸면 새로 빈 children[]을 만들어야
 // 컨테이너 프레임으로 렌더되고 드롭도 받을 수 있다. 반대로 컨테이너를 리프로 바꾸면 children을
 // 지워야 옛 하위 액션이 유령처럼 남아 계속 컨테이너로 렌더되는 걸 막는다.
+// 컨테이너 → 리프로 바꾸면 children을 지워야 하는데(Qodo 리뷰), 그 안에 이미 하위 액션이
+// 있으면 트리 전체가 조용히 사라진다 — 삭제(deleteActionConfirm)와 같은 수준의 파괴적 동작이라
+// 동일하게 window.confirm으로 사용자 확인을 받은 뒤에만 진행한다. 취소하면 아무것도 바꾸지 않는다.
+// 취소되면 false를 반환한다 — 호출부가 markDirty/rebuildNodes 같은 후속 처리를 건너뛰게 하기 위함.
 function applyActionChange(target, descriptor) {
   const { children: newChildren, ...patch } = createActionNode(descriptor);
+  if (newChildren === undefined && Array.isArray(target.children) && target.children.length > 0) {
+    if (!window.confirm(t("recommendFlow.changeActionChildrenConfirm"))) return false;
+  }
   Object.assign(target, patch);
   if (newChildren !== undefined) {
     if (!Array.isArray(target.children)) target.children = [];
   } else {
     delete target.children;
   }
+  return true;
 }
 
 function markDirty(summaryKey) {
@@ -123,8 +131,7 @@ function enrich(node) {
       // 맞게(보존/신설/제거) 처리한다.
       onChangeAction: (descriptor) => {
         const target = getAt(editableTree.value, nodePath);
-        if (target) {
-          applyActionChange(target, descriptor);
+        if (target && applyActionChange(target, descriptor)) {
           markDirty("changeAction");
         }
       },
@@ -168,8 +175,7 @@ function toFloatingFlowNode(entry) {
       onChangeAction: (descriptor) => {
         const idx = unplacedNodes.value.findIndex((e) => e.node.__uid === node.__uid);
         if (idx === -1) return;
-        applyActionChange(unplacedNodes.value[idx].node, descriptor);
-        rebuildNodes();
+        if (applyActionChange(unplacedNodes.value[idx].node, descriptor)) rebuildNodes();
       },
       onDelete: () => {
         unplacedNodes.value = unplacedNodes.value.filter((e) => e.node.__uid !== node.__uid);
@@ -437,7 +443,9 @@ function onExternalDragOver(event) {
 // 캔버스 내부면 실제로 벗어난 게 아니므로 무시한다(안 그러면 하이라이트가 깜빡인다).
 function onExternalDragLeave(event) {
   if (!isExternalActionDrag(event)) return;
-  if (canvasRootRef.value?.contains(event.relatedTarget)) return;
+  // relatedTarget은 EventTarget일 뿐 Node가 아닐 수 있다(Qodo 리뷰, ActionBox의
+  // elementContainsTarget과 동일 패턴) — Node가 아니면 contains() 없이 그냥 바깥으로 취급한다.
+  if (event.relatedTarget instanceof Node && canvasRootRef.value?.contains(event.relatedTarget)) return;
   dropHighlight.value = null;
   externalDragAnchors = null;
   externalDragBest = null;

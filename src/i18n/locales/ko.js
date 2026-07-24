@@ -246,6 +246,7 @@ export default {
     changeActionPickerTitle: "다른 패키지/액션으로 바꾸기",
     deleteActionTitle: "삭제",
     deleteActionConfirm: "정말 삭제하시겠습니까?",
+    changeActionChildrenConfirm: "이 안에 있는 하위 액션이 모두 사라집니다. 계속하시겠습니까?",
     unsavedHint: "저장하지 않은 변경사항이 있습니다.",
     unplacedHint: "배치되지 않은 액션이 {count}개 있습니다. 흐름도 위로 끌어다 놓아야 저장할 수 있습니다.",
     exportImage: "이미지로 저장",

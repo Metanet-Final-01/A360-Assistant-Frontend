@@ -246,6 +246,7 @@ export default {
     changeActionPickerTitle: "Switch to a different package/action",
     deleteActionTitle: "Delete",
     deleteActionConfirm: "Are you sure you want to delete this?",
+    changeActionChildrenConfirm: "All actions inside this container will be lost. Continue?",
     unsavedHint: "You have unsaved changes.",
     unplacedHint: "{count} action(s) haven't been placed yet. Drag them onto the flow before you can save.",
     exportImage: "Save as image",
