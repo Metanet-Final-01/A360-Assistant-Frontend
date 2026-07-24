@@ -101,16 +101,19 @@ function layoutList(items, centerX, y, ctx) {
 }
 
 // 일반 액션(리프) 또는 단일 컨테이너(Loop/Step/단독 If) 세그먼트 하나를 배치한다.
+// 컨테이너 여부는 children 배열의 길이가 아니라 존재(Array.isArray) 자체로 판단한다 — 카탈로그
+// 피커로 막 추가한 컨테이너 액션은 children: []으로 시작해서(RPA-289), length 기준이면 리프로
+// 오인되어 프레임 없이 렌더되고 그 안으로 드롭도 받을 수 없었다.
 function layoutNodeSegment(item, centerX, y, ctx) {
   const node = item.node;
   const uid = node.__uid;
-  const hasChildren = (node.children?.length ?? 0) > 0;
+  const isContainer = Array.isArray(node.children);
   const data = {
     label: node.label || node.action || t("recommendation.untitledAction"),
     prefix: ctx.prefixes.get(uid) ?? "",
     pkg: node.package || t("common.unspecified"),
     color: ctx.colorFor(node.package),
-    isContainer: hasChildren,
+    isContainer,
     nodePath: item.nodePath,
     segment: { listPath: nodePathToListPath(item.nodePath), startIndex: item.nodePath[item.nodePath.length - 1], count: 1 },
     rationale: node.rationale ?? null,
@@ -118,7 +121,7 @@ function layoutNodeSegment(item, centerX, y, ctx) {
     confidence: node.confidence ?? null,
   };
 
-  if (!hasChildren) {
+  if (!isContainer) {
     const w = estimateNodeWidth(node);
     const x = centerX - w / 2;
     return {

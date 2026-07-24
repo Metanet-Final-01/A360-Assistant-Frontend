@@ -69,11 +69,19 @@ function positionEvidence() {
   };
 }
 
+// event.target은 타입상 EventTarget | null이라 Node가 아닐 수 있다(예: 일부 scroll 이벤트가
+// window/document 등을 target으로 들고 오는 경우) — Node가 아닌 값을 그대로 contains()에 넘기면
+// 던진다. 팝오버 3종(근거/삭제확인/피커)의 바깥 클릭·스크롤 핸들러가 전부 이 패턴을 쓰므로
+// 한 군데서 안전하게 감싼다.
+function elementContainsTarget(el, event) {
+  return !!el && event.target instanceof Node && el.contains(event.target);
+}
+
 // 팝오버 바깥 클릭(캔버스 팬 시작 포함)이나 스크롤/리사이즈로 좌표가 어긋나면 즉시 닫는다 —
 // 텔레포트된 뒤라 pan/zoom을 따라가지 않으므로, 다시 열 때 새로 계산하는 편이 어긋난 위치를
 // 붙잡고 있는 것보다 낫다.
 function onOutsidePointerDown(event) {
-  if (evidencePanelRef.value?.contains(event.target) || evidenceBtnRef.value?.contains(event.target)) return;
+  if (elementContainsTarget(evidencePanelRef.value, event) || elementContainsTarget(evidenceBtnRef.value, event)) return;
   closeEvidence();
 }
 
@@ -81,7 +89,7 @@ function onOutsidePointerDown(event) {
 // 캡처 단계 scroll 리스너가 window까지 그 이벤트를 받는다 — target이 팝오버 내부면 "바깥에서
 // 스크롤돼 좌표가 어긋난" 상황이 아니므로 무시해야, 팝오버 안 스크롤이 곧바로 닫히는 걸 막는다.
 function onScrollMaybeCloseEvidence(event) {
-  if (evidencePanelRef.value?.contains(event.target)) return;
+  if (elementContainsTarget(evidencePanelRef.value, event)) return;
   closeEvidence();
 }
 
@@ -135,13 +143,13 @@ function positionDeleteConfirm() {
 }
 
 function onOutsideDeleteConfirmPointerDown(event) {
-  if (deleteConfirmPanelRef.value?.contains(event.target) || deleteBtnRef.value?.contains(event.target)) return;
+  if (elementContainsTarget(deleteConfirmPanelRef.value, event) || elementContainsTarget(deleteBtnRef.value, event)) return;
   closeDeleteConfirm();
 }
 
 // 팝오버 자체 스크롤과 바깥 스크롤을 구분하는 이유는 onScrollMaybeCloseEvidence 참고.
 function onScrollMaybeCloseDeleteConfirm(event) {
-  if (deleteConfirmPanelRef.value?.contains(event.target)) return;
+  if (elementContainsTarget(deleteConfirmPanelRef.value, event)) return;
   closeDeleteConfirm();
 }
 
@@ -200,7 +208,7 @@ function positionPicker() {
 }
 
 function onOutsidePickerPointerDown(event) {
-  if (pickerPanelRef.value?.contains(event.target) || pickerBtnRef.value?.contains(event.target)) return;
+  if (elementContainsTarget(pickerPanelRef.value, event) || elementContainsTarget(pickerBtnRef.value, event)) return;
   closePicker();
 }
 
@@ -208,7 +216,7 @@ function onOutsidePickerPointerDown(event) {
 // 특히 ActionCatalogList의 목록이 overflow-y:auto라 마우스 휠로 스크롤할 일이 훨씬 잦다(그
 // 가드 없이는 목록을 내리려는 순간 팝오버가 곧바로 닫혀 버린다).
 function onScrollMaybeClosePicker(event) {
-  if (pickerPanelRef.value?.contains(event.target)) return;
+  if (elementContainsTarget(pickerPanelRef.value, event)) return;
   closePicker();
 }
 

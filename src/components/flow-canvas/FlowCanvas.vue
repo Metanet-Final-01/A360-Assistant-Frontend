@@ -40,7 +40,7 @@ const props = defineProps({
 
 // dirty/saving은 부모(flow-window의 FlowWindowApp)의 저장 버튼이 반응형으로 읽어야 하므로 exposed ref
 // 대신 이벤트로 내보낸다 — 템플릿 ref를 통한 중첩 ref 언래핑에 기대지 않는 게 더 안전하다.
-const emit = defineEmits(["update:dirty", "update:saving", "update:unplacedCount"]);
+const emit = defineEmits(["update:dirty", "update:saving", "update:unplaced-count"]);
 const { t } = useI18n();
 
 function cloneTree(steps) {
@@ -59,9 +59,11 @@ const unplacedNodes = ref([]);
 
 watch(dirty, (v) => emit("update:dirty", v));
 watch(saving, (v) => emit("update:saving", v));
+// Vue는 커스텀 emit 이름을 kebab-case로 자동 변환해 주지 않는다(props와 다름) — 템플릿의
+// @update:unplaced-count 리스너와 정확히 같은 문자열이어야 실제로 연결된다.
 watch(
   () => unplacedNodes.value.length,
-  (n) => emit("update:unplacedCount", n),
+  (n) => emit("update:unplaced-count", n),
   { immediate: true },
 );
 
@@ -77,6 +79,22 @@ watch(
     pendingSummaries.value = [];
   },
 );
+
+// 카탈로그에서 고른 새 액션으로 target을 통째로 바꿔치기한다. children은 상황에 따라 다르게
+// 다룬다 — flowLayout/flowDrop은 children.length가 아니라 Array.isArray(children)로 컨테이너
+// 여부를 판단하므로: 이미 컨테이너였던 노드(children이 배열)를 다른 컨테이너 종류로 바꾸면
+// 기존 하위 액션을 그대로 보존하고, 리프를 컨테이너로 바꾸면 새로 빈 children[]을 만들어야
+// 컨테이너 프레임으로 렌더되고 드롭도 받을 수 있다. 반대로 컨테이너를 리프로 바꾸면 children을
+// 지워야 옛 하위 액션이 유령처럼 남아 계속 컨테이너로 렌더되는 걸 막는다.
+function applyActionChange(target, descriptor) {
+  const { children: newChildren, ...patch } = createActionNode(descriptor);
+  Object.assign(target, patch);
+  if (newChildren !== undefined) {
+    if (!Array.isArray(target.children)) target.children = [];
+  } else {
+    delete target.children;
+  }
+}
 
 function markDirty(summaryKey) {
   dirty.value = true;
@@ -101,17 +119,12 @@ function enrich(node) {
       // 라벨을 자유 텍스트로 고치는 대신 항상 카탈로그에서 다른 패키지/액션을 골라 통째로
       // 바꿔치기한다 — createActionNode가 package/action/label/parameters/confidence/rationale/
       // sources를 새 값으로 리셋해 주므로, 옛 액션의 신뢰도·근거처럼 새 선택과 무관해진 값이
-      // 남아 헷갈리지 않는다. __uid와 children(컨테이너 하위 액션들)은 그대로 보존한다 —
-      // 위치·자식 구조는 "이 액션이 뭘 하는지"와는 별개다.
+      // 남아 헷갈리지 않는다. __uid는 그대로 보존한다. children은 applyActionChange가 상황에
+      // 맞게(보존/신설/제거) 처리한다.
       onChangeAction: (descriptor) => {
         const target = getAt(editableTree.value, nodePath);
         if (target) {
-          // children은 절대 안 건드린다 — descriptor.isContainer가 false면 createActionNode는
-          // children 필드 자체를 안 만들지만, true면 항상 빈 배열([])을 만든다. 그걸 그대로
-          // Object.assign하면 이미 하위 액션이 있는 컨테이너를 다른 컨테이너 종류로 바꿔치기할
-          // 때 기존 자식들이 통째로 사라진다.
-          const { children: _ignoredChildren, ...patch } = createActionNode(descriptor);
-          Object.assign(target, patch);
+          applyActionChange(target, descriptor);
           markDirty("changeAction");
         }
       },
@@ -155,8 +168,7 @@ function toFloatingFlowNode(entry) {
       onChangeAction: (descriptor) => {
         const idx = unplacedNodes.value.findIndex((e) => e.node.__uid === node.__uid);
         if (idx === -1) return;
-        const { children: _ignoredChildren, ...patch } = createActionNode(descriptor);
-        Object.assign(unplacedNodes.value[idx].node, patch);
+        applyActionChange(unplacedNodes.value[idx].node, descriptor);
         rebuildNodes();
       },
       onDelete: () => {
