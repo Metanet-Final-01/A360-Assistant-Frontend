@@ -242,8 +242,13 @@ export default {
     saving: "저장 중…",
     discard: "편집 취소",
     discardConfirm: "저장하지 않은 변경사항이 있습니다. 버리고 닫으시겠습니까?",
-    editTextTitle: "텍스트 수정",
+    changeActionTitle: "액션 변경",
+    changeActionPickerTitle: "다른 패키지/액션으로 바꾸기",
+    deleteActionTitle: "삭제",
+    deleteActionConfirm: "정말 삭제하시겠습니까?",
+    changeActionChildrenConfirm: "이 안에 있는 하위 액션이 모두 사라집니다. 계속하시겠습니까?",
     unsavedHint: "저장하지 않은 변경사항이 있습니다.",
+    unplacedHint: "배치되지 않은 액션이 {count}개 있습니다. 흐름도 위로 끌어다 놓아야 저장할 수 있습니다.",
     exportImage: "이미지로 저장",
     exportingImage: "저장 중…",
     exportImageFailed: "이미지 저장에 실패했습니다.",
@@ -251,8 +256,10 @@ export default {
     windowNotFound: "표시할 흐름도를 찾을 수 없습니다. 이 창을 닫고 다시 열어 주세요.",
     windowLoadError: "흐름도를 불러오지 못했습니다. 이 창을 닫고 다시 열어 주세요.",
     changeSummary: {
-      editLabel: "액션 텍스트 수정",
+      changeAction: "액션 변경",
       reorder: "액션 순서 변경",
+      insertAction: "액션 추가",
+      deleteAction: "액션 삭제",
     },
     source: {
       llm: "자동 생성",
@@ -260,6 +267,15 @@ export default {
       chat: "챗 수정",
       feedback: "피드백",
     },
+  },
+
+  actionCatalog: {
+    title: "패키지 · 액션",
+    hint: "클릭하거나 드래그하면 캔버스 여백에 추가됩니다. 흐름도 위 원하는 위치로 끌어다 놓아야 실제로 반영돼요.",
+    searchPlaceholder: "패키지/액션 검색",
+    noMatches: "검색 결과가 없습니다.",
+    dragHint: "드래그해서 원하는 위치에 놓으세요",
+    containerBadge: "컨테이너",
   },
 
   upload: {
@@ -368,6 +384,12 @@ export default {
   },
 
   archive: {
+    solution: {
+      badge: "{name} 모드",
+      badgeTitle: "이 세션은 대화에서 확인된 {name} 카탈로그로 흐름도를 만듭니다. 눌러서 A360으로 되돌립니다.",
+      otherFallback: "타 솔루션",
+      revertFailed: "솔루션 모드를 되돌리지 못했어요. 잠시 후 다시 시도해 주세요.",
+    },
     errors: {
       loadFailed: "세션 목록을 불러오지 못했습니다.",
       deleteFailed: "세션을 삭제하지 못했습니다.",

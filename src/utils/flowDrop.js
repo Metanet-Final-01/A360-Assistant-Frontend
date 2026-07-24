@@ -1,13 +1,13 @@
 // Vue Flow 캔버스의 드래그앤드롭 재정렬 — "어디에 드롭할 수 있는지"만 순수하게 계산한다
 // (실제 트리 변형은 flowTree.moveSegment, 화면 좌표 변환은 FlowCanvas가 담당).
 //
-// 유효한 드롭 리스트 = buildSegments가 인식하는 모든 리스트: 각 step의 actions[], 그리고
-// (a) 지금 자식이 있는 일반 컨테이너(Loop/Step/단독 If)의 children[], (b) 분기 역할 노드
-// (Try/Catch/Finally/If/ElseIf/Else)의 children[] — 이건 지금 비어 있어도 항상 포함한다.
-// (b)만 비어 있어도 포함하는 이유: 화면에 항상 "프레임"으로 보여서(비어 있는 컨테이너는
-// action 타입 리프로 렌더돼 프레임이 아예 없다) 드롭 가능한 영역이 실제로 보이는 것만 유효하게
-// 만들기 위함이다 — Try/Catch/Finally 사이로는(=세그먼트 내부로는) 애초에 앵커가 생기지 않으므로
-// 분기 무결성이 자동으로 보장된다.
+// 유효한 드롭 리스트 = buildSegments가 인식하는 모든 리스트: 각 step의 actions[], 일반
+// 컨테이너(Loop/Step/단독 If)의 children[], 분기 역할 노드(Try/Catch/Finally/If/ElseIf/Else)의
+// children[] — 전부 지금 비어 있어도 항상 포함한다. flowLayout이 children 길이가 아니라
+// Array.isArray(children)로 컨테이너 여부를 판단해 빈 컨테이너도 항상 "프레임"으로 렌더되므로
+// (카탈로그로 막 추가한 컨테이너 액션이 대표적, RPA-289), 여기서도 같은 기준으로 맞춰야 그
+// 프레임 안이 드롭 가능한 영역으로 인식된다 — Try/Catch/Finally 사이로는(=세그먼트 내부로는)
+// 애초에 앵커가 생기지 않으므로 분기 무결성이 자동으로 보장된다.
 import { buildSegments } from "./recommendation";
 import { getAt, childListPath } from "./flowTree";
 import { stepTitleId } from "./flowLayout";
@@ -17,10 +17,10 @@ function walkItems(items, out) {
   segments.forEach((seg) => {
     if (seg.type === "node") {
       const { node, nodePath } = seg.item;
-      if ((node.children?.length ?? 0) > 0) {
+      if (Array.isArray(node.children)) {
         out.push(childListPath(nodePath));
         const childItems = node.children.map((c, i) => ({ node: c, nodePath: [...nodePath, "children", i] }));
-        walkItems(childItems, out);
+        if (childItems.length) walkItems(childItems, out);
       }
     } else {
       seg.items.forEach((col) => {

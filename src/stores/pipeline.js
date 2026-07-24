@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from "vue";
 import { uploadDocument, parseDocument, createDocumentFromText, enrichVision, getDocument } from "../api/documents";
 import { turnStream } from "../api/agent";
 import { listRecommendations, saveRecommendation, getLatestRecommendation } from "../api/recommend";
-import { getLatestAnalysis } from "../api/sessions";
+import { getLatestAnalysis, patchSession } from "../api/sessions";
 import { ApiError } from "../api/http";
 import { useChatStore } from "./chat";
 import { useArchiveStore } from "./archive";
@@ -437,6 +437,33 @@ export const usePipelineStore = defineStore("pipeline", () => {
       uploadError.value =
         err instanceof ApiError ? err.message : t("pipeline.errors.textRequestUnknown");
       return null;
+    }
+  }
+
+  // 이 세션이 어떤 솔루션 어휘로 도는지 (RPA-286). 별도 상태로 들지 않고 세션 목록에서
+  // 파생한다 — applyTurnArtifacts가 매 턴 loadSessions()로 목록을 갱신하므로 자동으로
+  // 최신이고, 동기화 코드를 따로 둘 필요가 없다. 목록에 없는 새 세션은 기본값 a360.
+  const solution = computed(() => {
+    const id = sessionId.value;
+    if (!id) return "a360";
+    return useArchiveStore().sessions.find((s) => s.id === id)?.solution || "a360";
+  });
+  const isOtherSolution = computed(() => solution.value !== "a360");
+  const solutionSaveError = ref("");
+
+  // 타 솔루션 모드는 백엔드가 대화에서 카탈로그를 확인하면 자동 확정한다 — 세션 시작에
+  // "어떤 RPA 쓰세요?"를 묻지 않아 마찰이 없는 대신 오탐 가능성이 있다. 이 함수가 그 되돌리기
+  // 수단이다: 되돌릴 수 있으면 자동 확정의 리스크가 사실상 사라진다.
+  async function setSolution(next) {
+    const id = sessionId.value;
+    if (!id || solution.value === next) return;
+    solutionSaveError.value = "";
+    try {
+      const updated = await patchSession(id, { solution: next });
+      // 응답이 갱신된 세션 객체라 그 행만 캐시에 반영한다 — 목록 전체 refetch는 낭비다.
+      useArchiveStore().applySessionPatch(updated);
+    } catch (err) {
+      solutionSaveError.value = err instanceof ApiError ? err.message : t("archive.solution.revertFailed");
     }
   }
 
@@ -990,6 +1017,10 @@ export const usePipelineStore = defineStore("pipeline", () => {
     recommendTreesByVersion,
     recommendSaveError,
     usageGauge,
+    solution,
+    isOtherSolution,
+    solutionSaveError,
+    setSolution,
     sessionLoadStatus,
     liveFlow,
     liveViolations,

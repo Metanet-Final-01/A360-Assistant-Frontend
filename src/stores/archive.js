@@ -81,8 +81,24 @@ export const useArchiveStore = defineStore("archive", () => {
     deleteError.value = "";
   }
 
+  // PATCH 응답(갱신된 세션 객체)을 캐시의 해당 행에만 반영한다 (RPA-286, Qodo 리뷰).
+  // 전체 목록 refetch로도 되지만 한 필드 바꾸자고 목록을 다시 받는 건 낭비고, 응답이 이미
+  // 갱신된 세션이라 그걸 쓰면 왕복이 하나 줄고 배지도 즉시 바뀐다. dateLabel은 목록 로더가
+  // 붙이는 파생 필드라 여기서도 같이 다시 계산한다(안 하면 갱신 후 날짜 라벨이 사라진다).
+  function applySessionPatch(updated) {
+    if (!updated?.id) return;
+    queryClient.setQueryData(SESSIONS_QUERY_KEY, (old) =>
+      (old ?? []).map((s) =>
+        s.id === updated.id
+          ? { ...s, ...updated, dateLabel: formatDateLabel(updated.updated_at ?? updated.created_at) }
+          : s,
+      ),
+    );
+  }
+
   return {
     sessions,
+    applySessionPatch,
     listStatus,
     listError,
     deleteError,

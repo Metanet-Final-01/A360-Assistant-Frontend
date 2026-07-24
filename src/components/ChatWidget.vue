@@ -23,6 +23,13 @@ const props = defineProps({
   // 다른 작업이 진행 중이면 입력을 막는다 — 동시에 여러 턴을 보내면 응답이 뒤섞이거나
   // 진행 중이던 작업이 중간에 끊긴다.
   sending: { type: Boolean, default: false },
+  // 이 세션이 도는 솔루션 어휘 (RPA-286). "a360"이 아니면 헤더에 모드 배지를 띄운다 —
+  // 타 솔루션 모드는 대화에서 카탈로그가 확인되면 자동 확정되므로, 표시가 없으면 사용자는
+  // "왜 A360 액션 추천이 안 나오지?"에서 막힌다.
+  solution: { type: String, default: "a360" },
+  // 모드 되돌리기(PATCH) 실패 메시지 — 비어 있으면 표시하지 않는다. 이걸 안 그리면
+  // 네트워크·권한 오류로 되돌리기가 실패해도 사용자는 원인을 모른 채 같은 모드에 갇힌다.
+  solutionError: { type: String, default: "" },
   // 매 턴 done.data.usage_gauge — 대화 누적 링 게이지 표시용 (RPA-83)
   // { intake_tokens, limit_tokens, ratio(0~1+), compact_recommended, compact_required }
   usageGauge: { type: Object, default: null },
@@ -37,7 +44,17 @@ const props = defineProps({
   // 그 패널의 원래 자리로 들어간다(usePanelReorder가 반환하는 인스턴스를 그대로 전달).
   panelReorder: { type: Object, default: null },
 });
-const emit = defineEmits(["toggle", "close", "dock", "undock", "send", "compact", "select-version"]);
+const emit = defineEmits([
+  "toggle", "close", "dock", "undock", "send", "compact", "select-version",
+  "revert-solution", // 모드 배지 클릭 — 타 솔루션 자동 확정의 오탐을 되돌린다 (RPA-286)
+]);
+
+// 타 솔루션 모드 배지 (RPA-286). 백엔드가 솔루션 이름을 못 밝히면 "other"로 확정하므로
+// 그 경우엔 일반 문구로 표시한다 — 화면에 "other 모드"가 그대로 노출되면 안 된다.
+const isOtherSolution = computed(() => (props.solution || "a360") !== "a360");
+const solutionLabel = computed(() =>
+  props.solution === "other" ? t("archive.solution.otherFallback") : props.solution,
+);
 
 const POPUP_WIDTH = 540;
 const POPUP_HEIGHT = 780;
@@ -378,6 +395,16 @@ onBeforeUnmount(() => {
           {{ docked ? dockedTitleDisplay : floatingTitleDisplay }}
         </span>
         <button
+          v-if="isOtherSolution"
+          type="button"
+          class="chat-popup__solution"
+          :title="t('archive.solution.badgeTitle', { name: solutionLabel })"
+          @click.stop="emit('revert-solution')"
+          @pointerdown.stop
+        >
+          {{ t("archive.solution.badge", { name: solutionLabel }) }}
+        </button>
+        <button
           v-if="docked"
           type="button"
           class="chat-popup__minimize"
@@ -396,6 +423,10 @@ onBeforeUnmount(() => {
           ✕
         </button>
       </header>
+
+      <p v-if="solutionError" class="upload-error chat-popup__solution-error" role="alert">
+        {{ solutionError }}
+      </p>
 
       <div
         class="chat-popup__messages"
