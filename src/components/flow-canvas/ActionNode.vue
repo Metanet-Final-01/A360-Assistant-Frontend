@@ -22,7 +22,8 @@ defineProps({
       :confidence="data.confidence"
       :rationale="data.rationale"
       :sources="data.sources"
-      @commit="data.onCommit?.($event)"
+      @change-action="data.onChangeAction?.($event)"
+      @delete="data.onDelete?.()"
     />
     <Handle type="source" :position="Position.Bottom" id="out" />
   </div>
