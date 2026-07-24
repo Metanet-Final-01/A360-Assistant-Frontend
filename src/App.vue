@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import { useAuthStore } from "./stores/auth";
 import { useChatStore } from "./stores/chat";
 import { usePipelineStore } from "./stores/pipeline";
+import { useArchiveStore } from "./stores/archive";
 import { useSettingsStore } from "./stores/settings";
 import LoginPage from "./components/LoginPage.vue";
 import { ANALYSIS_PANEL_ORDER_KEY, usePanelReorder } from "./composables/usePanelReorder";
@@ -62,6 +63,11 @@ const ChatWidget = lazyPanel(() => import("./components/ChatWidget.vue"));
 const auth = useAuthStore();
 const chat = useChatStore();
 const pipeline = usePipelineStore();
+// archive는 TanStack useQuery를 쓰므로 반드시 컴포넌트 setup(주입 컨텍스트) 안에서 처음
+// 생성돼야 한다. 지금까지는 AppSidebar가 먼저 setup되며 우연히 그 조건을 만족했지만,
+// AppSidebar·ChatWidget 둘 다 비동기 컴포넌트라 해석 순서가 보장되지 않는다 —
+// pipeline.solution(RPA-286)이 archive를 읽으므로 여기서 명시적으로 만들어 순서 의존을 끊는다.
+useArchiveStore();
 // 앱 부팅 시 locale/theme(다크모드)·에이전트 버전 목록 초기화 보장 — App.vue가 가장 이른 진입점
 const settings = useSettingsStore();
 const { t } = useI18n();
@@ -235,6 +241,7 @@ function handleNewChat() {
             :compacting="chat.isCompacting"
             :sending="chatBlocked"
             :usage-gauge="pipeline.usageGauge"
+            :solution="pipeline.solution"
             :agent-versions="settings.agentVersions"
             :agent-version="settings.agentVersion"
             @select-version="settings.setAgentVersion"
@@ -244,6 +251,7 @@ function handleNewChat() {
             @undock="chat.undockChat"
             @send="chat.sendChatMessage"
             @compact="chat.compactConversation"
+            @revert-solution="pipeline.setSolution('a360')"
           />
 
           <div
