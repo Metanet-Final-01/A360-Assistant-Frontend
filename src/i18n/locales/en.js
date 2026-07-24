@@ -368,6 +368,12 @@ export default {
   },
 
   archive: {
+    solution: {
+      badge: "{name} mode",
+      badgeTitle: "This session builds flows from the {name} catalog found in the conversation. Click to switch back to A360.",
+      otherFallback: "Other solution",
+      revertFailed: "Could not switch the solution mode back. Please try again.",
+    },
     errors: {
       loadFailed: "Failed to load the session list.",
       deleteFailed: "Failed to delete the session.",

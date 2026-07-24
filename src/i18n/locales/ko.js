@@ -368,6 +368,12 @@ export default {
   },
 
   archive: {
+    solution: {
+      badge: "{name} 모드",
+      badgeTitle: "이 세션은 대화에서 확인된 {name} 카탈로그로 흐름도를 만듭니다. 눌러서 A360으로 되돌립니다.",
+      otherFallback: "타 솔루션",
+      revertFailed: "솔루션 모드를 되돌리지 못했어요. 잠시 후 다시 시도해 주세요.",
+    },
     errors: {
       loadFailed: "세션 목록을 불러오지 못했습니다.",
       deleteFailed: "세션을 삭제하지 못했습니다.",

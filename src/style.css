@@ -3148,6 +3148,37 @@ input {
   flex: 1;
 }
 
+/* 타 솔루션 모드 배지 (RPA-286) — 세션이 A360이 아닌 어휘로 돌고 있음을 알린다.
+   클릭하면 A360으로 되돌아간다(자동 확정의 오탐 복구 수단). 제목이 flex:1로 남은 폭을
+   차지하므로 배지는 줄어들지 않게 flex-shrink:0으로 고정한다. */
+.chat-popup__solution {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-popup__solution:hover,
+.chat-popup__solution:focus-visible {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+/* 모드 되돌리기 실패 — 배지 바로 아래(실패한 조작 옆)에 띄운다. upload-error의 색/타이포를
+   그대로 쓰고 헤더 아래 배치에 필요한 여백만 얹는다. */
+.chat-popup__solution-error {
+  margin: 8px 16px 0;
+}
+
 .chat-popup__close {
   background: transparent;
   border: 0;
