@@ -11,6 +11,17 @@ export function listSessions() {
   return apiRequest("/api/sessions");
 }
 
+// PATCH /api/sessions/{id} — 세션 부분 수정. 지금은 solution만 (RPA-286).
+// 타 솔루션 모드는 대화에서 카탈로그가 확인되면 백엔드가 자동 확정한다 — 마찰이 없는 대신
+// 오탐 가능성이 있어, 사용자가 "a360"으로 되돌릴 수 있어야 한다. 응답: 갱신된 세션 객체.
+export function patchSession(sessionId, patch) {
+  return apiRequest(`/api/sessions/${sessionId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+}
+
 // DELETE /api/sessions/{id} — 세션 삭제 (문서/분석/추천/대화가 CASCADE로 함께 삭제) → 204
 export function deleteSession(sessionId) {
   return apiRequest(`/api/sessions/${sessionId}`, { method: "DELETE" });

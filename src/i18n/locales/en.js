@@ -242,8 +242,12 @@ export default {
     saving: "Saving…",
     discard: "Discard edits",
     discardConfirm: "You have unsaved changes. Discard them and close?",
-    editTextTitle: "Edit text",
+    changeActionTitle: "Change action",
+    changeActionPickerTitle: "Switch to a different package/action",
+    deleteActionTitle: "Delete",
+    deleteActionConfirm: "Are you sure you want to delete this?",
     unsavedHint: "You have unsaved changes.",
+    unplacedHint: "{count} action(s) haven't been placed yet. Drag them onto the flow before you can save.",
     exportImage: "Save as image",
     exportingImage: "Saving…",
     exportImageFailed: "Failed to save the image.",
@@ -251,8 +255,10 @@ export default {
     windowNotFound: "This flow could not be found. Please close this window and reopen it.",
     windowLoadError: "Failed to load this flow. Please close this window and reopen it.",
     changeSummary: {
-      editLabel: "Edited action text",
+      changeAction: "Changed an action",
       reorder: "Reordered actions",
+      insertAction: "Added an action",
+      deleteAction: "Deleted an action",
     },
     source: {
       llm: "Auto-generated",
@@ -260,6 +266,15 @@ export default {
       chat: "Edited via chat",
       feedback: "Feedback",
     },
+  },
+
+  actionCatalog: {
+    title: "Packages & Actions",
+    hint: "Click or drag to add it to the canvas margin — drag it onto the flow wherever you want it to take effect.",
+    searchPlaceholder: "Search packages/actions",
+    noMatches: "No matches found.",
+    dragHint: "Drag to place it anywhere in the flow",
+    containerBadge: "Container",
   },
 
   upload: {
@@ -368,6 +383,12 @@ export default {
   },
 
   archive: {
+    solution: {
+      badge: "{name} mode",
+      badgeTitle: "This session builds flows from the {name} catalog found in the conversation. Click to switch back to A360.",
+      otherFallback: "Other solution",
+      revertFailed: "Could not switch the solution mode back. Please try again.",
+    },
     errors: {
       loadFailed: "Failed to load the session list.",
       deleteFailed: "Failed to delete the session.",

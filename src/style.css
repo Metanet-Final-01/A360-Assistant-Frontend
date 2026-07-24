@@ -1199,6 +1199,21 @@ input {
   cursor: not-allowed;
 }
 
+.btn--danger {
+  background: var(--danger);
+  color: #ffffff;
+}
+
+.btn--danger:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+.btn--small {
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  border-radius: 7px;
+}
+
 /* ---------- Analysis panel ---------- */
 
 .panel--wide {
@@ -1878,8 +1893,16 @@ input {
   padding: 20px 24px 24px;
 }
 
+.flow-window__workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  gap: 16px;
+}
+
 .flow-window__canvas {
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -1889,6 +1912,190 @@ input {
   flex: 1 1 auto;
   min-height: 0;
   height: auto;
+}
+
+/* ---------- 패키지/액션 피커(ActionCatalogPanel) ---------- */
+
+.flow-catalog-panel {
+  flex: 0 0 260px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.flow-catalog-panel__header {
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ActionCatalogList.vue의 루트 — 사이드바(ActionCatalogPanel)에서는 헤더 아래 남은 세로 공간을
+   전부 채우고, 액션 교체 팝오버(ActionPickerPopover)에서는 그 팝오버의 고정 높이 안에서
+   목록만 스크롤되게 한다. 두 맥락 모두 부모가 flex column이라 flex:1 1 auto로 알아서 맞는다. */
+.flow-catalog-list {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.flow-catalog-panel__title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.flow-catalog-panel__hint {
+  margin: 4px 0 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.flow-catalog-panel__search {
+  position: relative;
+  margin: 10px 12px;
+  flex-shrink: 0;
+}
+
+.flow-catalog-panel__search svg {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.flow-catalog-panel__search input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px 8px 32px;
+  font-size: 0.82rem;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.flow-catalog-panel__search input::placeholder {
+  color: var(--text-muted);
+}
+
+.flow-catalog-panel__search input:focus {
+  outline: none;
+  border-color: var(--brand-teal);
+  box-shadow: 0 0 0 3px rgba(47, 154, 178, 0.2);
+}
+
+.flow-catalog-panel__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 8px 12px;
+}
+
+.flow-catalog-panel__empty {
+  padding: 16px 8px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.flow-catalog-panel__group {
+  margin-top: 4px;
+}
+
+.flow-catalog-panel__group-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 8px 6px;
+  border-radius: 8px;
+  color: var(--text);
+}
+
+.flow-catalog-panel__group-header:hover {
+  background: var(--surface-sunken-hover);
+}
+
+.flow-catalog-panel__group-name {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.flow-catalog-panel__group-chevron {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.flow-catalog-panel__group-chevron--open {
+  transform: rotate(180deg);
+}
+
+.flow-catalog-panel__actions {
+  list-style: none;
+  margin: 0;
+  padding: 2px 0 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.flow-catalog-panel__action {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid transparent;
+  background: var(--surface);
+  cursor: grab;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: var(--text);
+  text-align: left;
+}
+
+.flow-catalog-panel__action:hover {
+  border-color: var(--brand-teal);
+  background: var(--surface-sunken-hover);
+}
+
+.flow-catalog-panel__action:active {
+  cursor: grabbing;
+}
+
+.flow-catalog-panel__action-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flow-catalog-panel__action-badge {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
 }
 
 .flow-toolbar {
@@ -2219,6 +2426,10 @@ input {
   font-size: 0.82rem;
   color: var(--accent-text);
   font-weight: 700;
+}
+
+.flow-save-status--warning {
+  color: var(--warning);
 }
 
 .flow-box {
@@ -2832,14 +3043,14 @@ input {
   color: var(--accent-text);
 }
 
-/* 캔버스 노드 위에 뜨는 근거 팝오버 — 고정 크기 박스 바로 아래, 다른 노드 위로 오버레이 */
+/* 캔버스 노드의 근거 팝오버 — body로 텔레포트되어 뷰포트 기준 고정 위치로 뜬다(ActionBox.vue
+   positionEvidence()). vue-flow가 각 노드 래퍼에 매기는 개별 z-index에 갇혀 다음 노드에
+   가려지거나, .flow-canvas의 overflow:hidden에 잘리는 것을 피하기 위함 — AppSidebar.vue의
+   아카이브 메뉴(.archive-chat__item-menu--floating)와 동일한 해법. left/top/bottom/width/
+   max-height는 열릴 때마다 버튼 위치를 기준으로 JS가 인라인으로 계산한다. */
 .flow-box__evidence {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  z-index: 20;
-  margin-top: 6px;
+  position: fixed;
+  z-index: 1000;
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -2847,6 +3058,7 @@ input {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
   font-size: 0.78rem;
   color: var(--text);
+  overflow-y: auto;
 }
 
 .flow-box__evidence-rationale {
@@ -2878,6 +3090,58 @@ input {
   font-size: 0.68rem;
   color: var(--text-muted);
   opacity: 0.8;
+}
+
+/* 삭제 확인 팝오버 — .flow-box__evidence와 같은 이유로 body에 텔레포트된다(ActionBox.vue
+   positionDeleteConfirm()). 내용이 짧아 폭은 박스 너비에 맞추지 않고 내용에 맞춰 자연스럽게 줄인다. */
+.flow-box__delete-confirm {
+  position: fixed;
+  z-index: 1000;
+  max-width: 220px;
+  padding: 10px 12px;
+  border: 1px solid var(--danger);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
+}
+
+.flow-box__delete-confirm-text {
+  margin: 0 0 10px;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.flow-box__delete-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+/* 액션 교체 팝오버 — 자유 텍스트 편집 대신 카탈로그(ActionCatalogList)에서 골라 패키지/액션을
+   바꿔치기한다. .flow-box__evidence/.flow-box__delete-confirm과 같은 이유로 body에 텔레포트. */
+.flow-box__action-picker {
+  position: fixed;
+  z-index: 1000;
+  width: 280px;
+  max-height: 360px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-sunken);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
+  overflow: hidden;
+}
+
+.flow-box__action-picker-title {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 10px 12px 8px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
 }
 
 /* 상세 패널(FlowNode) — 파라미터 목록 아래 접이식 근거·출처 */
@@ -3146,6 +3410,37 @@ input {
   font-weight: 800;
   font-size: 0.94rem;
   flex: 1;
+}
+
+/* 타 솔루션 모드 배지 (RPA-286) — 세션이 A360이 아닌 어휘로 돌고 있음을 알린다.
+   클릭하면 A360으로 되돌아간다(자동 확정의 오탐 복구 수단). 제목이 flex:1로 남은 폭을
+   차지하므로 배지는 줄어들지 않게 flex-shrink:0으로 고정한다. */
+.chat-popup__solution {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-popup__solution:hover,
+.chat-popup__solution:focus-visible {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+/* 모드 되돌리기 실패 — 배지 바로 아래(실패한 조작 옆)에 띄운다. upload-error의 색/타이포를
+   그대로 쓰고 헤더 아래 배치에 필요한 여백만 얹는다. */
+.chat-popup__solution-error {
+  margin: 8px 16px 0;
 }
 
 .chat-popup__close {
@@ -4738,9 +5033,38 @@ input {
   cursor: pointer;
 }
 
-.flow-canvas-box__edit-btn:hover {
+.flow-canvas-box__edit-btn:hover,
+.flow-canvas-box__edit-btn--open {
   background: var(--surface-sunken-hover);
   color: var(--text);
+}
+
+.flow-canvas-box__delete-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.flow-canvas-box__delete-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.flow-canvas-box__delete-btn:hover,
+.flow-canvas-box__delete-btn--open {
+  background: var(--danger-bg);
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .flow-canvas-box__input {
@@ -4852,4 +5176,13 @@ input {
 
 .flow-canvas-drop--inside {
   box-shadow: inset 0 0 0 2px var(--brand-teal-dark);
+}
+
+/* 패키지/액션 피커에서 캔버스 여백에 막 놓인 "미배치" 카드 — 아직 흐름도 트리에 편입되지
+   않았다는 걸 점선 테두리로 표시한다. 흐름도 위로 끌어다 놓으면 이 스타일은 사라지고
+   일반 액션 박스(실선, 패키지별 색상 태그)로 바뀐다. */
+.flow-canvas-node--unplaced .flow-canvas-box {
+  border-style: dashed;
+  border-color: var(--warning);
+  background: var(--warning-bg);
 }
