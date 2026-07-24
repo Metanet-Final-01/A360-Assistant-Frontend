@@ -8,6 +8,7 @@ import { useSettingsStore } from "../stores/settings";
 import { formatDateShort } from "../utils/dateFormat";
 import { triggerBlobDownload } from "../utils/download";
 import FlowCanvas from "../components/flow-canvas/FlowCanvas.vue";
+import ActionCatalogPanel from "../components/flow-canvas/ActionCatalogPanel.vue";
 
 // 추천 흐름도를 인앱 모달 대신 진짜 별도 브라우저 창(window.open)으로 띄운 페이지 — OS 창
 // 컨트롤(최대화/최소화/이동/크기조절)을 그대로 쓸 수 있어, Fullscreen API가 강제로 띄우던
@@ -58,6 +59,7 @@ const hasActions = computed(() => steps.value.some((s) => (s.actions?.length ?? 
 const flowCanvasRef = ref(null);
 const canvasDirty = ref(false);
 const canvasSaving = ref(false);
+const canvasUnplacedCount = ref(0);
 
 // "이미지로 저장" — FlowCanvas.getImageCaptureTarget()이 vue-flow 공식 레시피대로 전체 노드
 // 바운딩 박스 기준 고해상도 캡처 대상(엘리먼트+목표 width/height/transform)을 계산해 준다.
@@ -103,6 +105,14 @@ function exitEditMode() {
 function discardCanvasEdits() {
   flowCanvasRef.value?.discard();
   isEditMode.value = false;
+}
+
+// 좌측 패키지/액션 피커를 클릭하면 캔버스 여백에 "미배치" 카드로 놓인다 — 사용자가 그 카드를
+// 흐름도 위 원하는 자리로 직접 끌어다 놓아야 실제로 편입된다(FlowCanvas.addUnplacedAction).
+// 피커에서 곧바로 흐름도로 드래그하는 경우는 FlowCanvas가 네이티브 DnD로 직접 받으므로
+// 이 창은 관여하지 않는다.
+function insertCatalogAction(descriptor) {
+  flowCanvasRef.value?.addUnplacedAction(descriptor);
 }
 
 async function saveCanvasEdits() {
@@ -203,7 +213,10 @@ const formatDate = formatDateShort;
       <div class="flow-toolbar">
         <p class="flow-hint">
           {{ t("recommendFlow.hint") }}
-          <span v-if="canvasDirty" class="flow-save-status">{{ t("recommendFlow.unsavedHint") }}</span>
+          <span v-if="canvasUnplacedCount > 0" class="flow-save-status flow-save-status--warning">
+            {{ t("recommendFlow.unplacedHint", { count: canvasUnplacedCount }) }}
+          </span>
+          <span v-else-if="canvasDirty" class="flow-save-status">{{ t("recommendFlow.unsavedHint") }}</span>
         </p>
         <div class="flow-toolbar__actions">
           <template v-if="isEditMode">
@@ -211,7 +224,13 @@ const formatDate = formatDateShort;
               <button type="button" class="btn btn--outline" :disabled="canvasSaving" @click="discardCanvasEdits">
                 {{ t("recommendFlow.discard") }}
               </button>
-              <button type="button" class="btn btn--primary" :disabled="canvasSaving" @click="saveCanvasEdits">
+              <button
+                type="button"
+                class="btn btn--primary"
+                :disabled="canvasSaving || canvasUnplacedCount > 0"
+                :title="canvasUnplacedCount > 0 ? t('recommendFlow.unplacedHint', { count: canvasUnplacedCount }) : ''"
+                @click="saveCanvasEdits"
+              >
                 {{ canvasSaving ? t("recommendFlow.saving") : t("recommendFlow.save") }}
               </button>
             </template>
@@ -274,14 +293,18 @@ const formatDate = formatDateShort;
         </div>
       </Transition>
 
-      <div v-if="hasActions" class="flow-window__canvas">
-        <FlowCanvas
-          ref="flowCanvasRef"
-          :steps="steps"
-          :editable="isEditMode"
-          @update:dirty="canvasDirty = $event"
-          @update:saving="canvasSaving = $event"
-        />
+      <div v-if="hasActions" class="flow-window__workspace">
+        <ActionCatalogPanel v-if="isEditMode" @insert="insertCatalogAction" />
+        <div class="flow-window__canvas">
+          <FlowCanvas
+            ref="flowCanvasRef"
+            :steps="steps"
+            :editable="isEditMode"
+            @update:dirty="canvasDirty = $event"
+            @update:saving="canvasSaving = $event"
+            @update:unplaced-count="canvasUnplacedCount = $event"
+          />
+        </div>
       </div>
       <p v-else class="modal__empty">{{ t("recommendFlow.noResults") }}</p>
 

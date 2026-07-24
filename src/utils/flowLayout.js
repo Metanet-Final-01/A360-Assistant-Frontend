@@ -50,8 +50,8 @@ const CONFIDENCE_FONT = "800 11px Inter, Pretendard, ui-sans-serif, sans-serif";
 // ActionBox.vue의 실제 CSS(.flow-box padding, gap 등)에 대략 맞춘 여유값을 더해 헤더 폭을 추정한다.
 // 신뢰도 배지(.flow-box__confidence)·근거 버튼(ⓘ)은 값이 있을 때만 렌더되므로 폭 계산에서
 // 빠지면(예전 버전) 그만큼 액션 텍스트가 밀려 말줄임(…)된다 — 실제로 나타나는 요소만큼 정확히
-// 더해야 한다. 편집 버튼(✎)은 편집 모드 여부가 이 시점(레이아웃 계산)엔 아직 안 정해져 있어
-// 늘 있다고 가정한다(과소추정보다 살짝 넉넉한 게 안전).
+// 더해야 한다. 편집 버튼(✎)·삭제 버튼(🗑)은 편집 모드 여부가 이 시점(레이아웃 계산)엔 아직
+// 안 정해져 있어 늘 있다고 가정한다(과소추정보다 살짝 넉넉한 게 안전).
 function estimateNodeWidth(node) {
   const label = node.label || node.action || t("recommendation.untitledAction");
   const pkg = node.package || t("common.unspecified");
@@ -65,10 +65,12 @@ function estimateNodeWidth(node) {
   const hasEvidence = !!node.rationale || (node.sources?.length ?? 0) > 0;
   const evidenceBtnW = hasEvidence ? 22 : 0; // .flow-canvas-box__evidence-btn(ⓘ)
   const editBtnW = 22; // .flow-canvas-box__edit-btn(✎)
+  const deleteBtnW = 22; // .flow-canvas-box__delete-btn(🗑)
   const rowGaps = (hasConfidence ? 3 : 2) * 6; // .flow-canvas-box__row 안 flex gap(번호-라벨-태그-[신뢰도])
-  const siblingGaps = (hasEvidence ? 2 : 1) * 12; // .flow-box 안 row-버튼들 사이 gap(각 12px)
+  const siblingGaps = (hasEvidence ? 3 : 2) * 12; // .flow-box 안 row-버튼들 사이 gap(각 12px)
   const boxPadding = 28; // .flow-box 좌우 padding
-  const total = numW + labelW + tagW + confidenceW + evidenceBtnW + editBtnW + rowGaps + siblingGaps + boxPadding + 4;
+  const total =
+    numW + labelW + tagW + confidenceW + evidenceBtnW + editBtnW + deleteBtnW + rowGaps + siblingGaps + boxPadding + 4;
   return Math.max(LAYOUT.NODE_W, Math.round(total));
 }
 
