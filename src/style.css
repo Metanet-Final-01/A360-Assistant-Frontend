@@ -3173,6 +3173,12 @@ input {
   background: rgba(255, 255, 255, 0.32);
 }
 
+/* 모드 되돌리기 실패 — 배지 바로 아래(실패한 조작 옆)에 띄운다. upload-error의 색/타이포를
+   그대로 쓰고 헤더 아래 배치에 필요한 여백만 얹는다. */
+.chat-popup__solution-error {
+  margin: 8px 16px 0;
+}
+
 .chat-popup__close {
   background: transparent;
   border: 0;

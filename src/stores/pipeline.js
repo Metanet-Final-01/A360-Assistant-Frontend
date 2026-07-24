@@ -433,8 +433,9 @@ export const usePipelineStore = defineStore("pipeline", () => {
     if (!id || solution.value === next) return;
     solutionSaveError.value = "";
     try {
-      await patchSession(id, { solution: next });
-      await useArchiveStore().loadSessions(); // solution은 목록에서 파생 — 목록을 새로 받아야 반영된다
+      const updated = await patchSession(id, { solution: next });
+      // 응답이 갱신된 세션 객체라 그 행만 캐시에 반영한다 — 목록 전체 refetch는 낭비다.
+      useArchiveStore().applySessionPatch(updated);
     } catch (err) {
       solutionSaveError.value = err instanceof ApiError ? err.message : t("archive.solution.revertFailed");
     }

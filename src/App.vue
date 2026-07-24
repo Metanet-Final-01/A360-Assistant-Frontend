@@ -242,6 +242,7 @@ function handleNewChat() {
             :sending="chatBlocked"
             :usage-gauge="pipeline.usageGauge"
             :solution="pipeline.solution"
+            :solution-error="pipeline.solutionSaveError"
             :agent-versions="settings.agentVersions"
             :agent-version="settings.agentVersion"
             @select-version="settings.setAgentVersion"

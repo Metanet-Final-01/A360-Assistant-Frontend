@@ -26,6 +26,9 @@ const props = defineProps({
   // 타 솔루션 모드는 대화에서 카탈로그가 확인되면 자동 확정되므로, 표시가 없으면 사용자는
   // "왜 A360 액션 추천이 안 나오지?"에서 막힌다.
   solution: { type: String, default: "a360" },
+  // 모드 되돌리기(PATCH) 실패 메시지 — 비어 있으면 표시하지 않는다. 이걸 안 그리면
+  // 네트워크·권한 오류로 되돌리기가 실패해도 사용자는 원인을 모른 채 같은 모드에 갇힌다.
+  solutionError: { type: String, default: "" },
   // 매 턴 done.data.usage_gauge — 대화 누적 링 게이지 표시용 (RPA-83)
   // { intake_tokens, limit_tokens, ratio(0~1+), compact_recommended, compact_required }
   usageGauge: { type: Object, default: null },
@@ -419,6 +422,10 @@ onBeforeUnmount(() => {
           ✕
         </button>
       </header>
+
+      <p v-if="solutionError" class="upload-error chat-popup__solution-error" role="alert">
+        {{ solutionError }}
+      </p>
 
       <div
         class="chat-popup__messages"
