@@ -1,15 +1,18 @@
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { usePipelineStore } from "../stores/pipeline";
-import { downloadRecommendationExport } from "../api/recommend";
+import { downloadRecommendationExport, downloadRecommendationDocx } from "../api/recommend";
 import { triggerBlobDownload } from "../utils/download";
 
 // 흐름도 내보내기(JSON/Markdown/DOCX) — 상단 헤더의 "내보내기"와 하단 액션 바의
 // "JSON 다운로드"가 같은 동작을 제공하므로 로직을 한 곳에 모은다.
 //
-// utils/exportFlow는 docx 라이브러리를 끌고 와 무겁다. 이 컴포저블은 상단 헤더(메인 청크에
-// 정적 임포트)에서도 쓰이므로, 정적 임포트로 두면 로그인 화면 첫 로딩에 그 비용이 얹힌다 —
-// 실제로 누를 때 동적 임포트해서 메인 청크 밖에 남긴다.
+// DOCX는 백엔드가 서식 있는 문서로 만들어 준다(RPA-296/RPA-329) — 이 컴포저블 호출부(헤더·
+// 액션 바)엔 흐름도 캔버스가 없어 이미지 없이 호출하지만, 개요·요구사항·변수·질문카드 등
+// 나머지 내용은 그대로 담긴 문서가 나온다(흐름도 이미지까지 포함하는 캡처는 flow-window의
+// downloadFlowDocx 참고). utils/exportFlow(Markdown 조립)는 그 자체는 가볍지만, 이 컴포저블은
+// 상단 헤더(메인 청크에 정적 임포트)에서도 쓰이므로 정적 임포트로 두면 로그인 화면 첫 로딩에
+// 그 비용이 얹힌다 — 실제로 누를 때 동적 임포트해서 메인 청크 밖에 남긴다.
 export function useRecommendationExport() {
   const pipeline = usePipelineStore();
   const { t } = useI18n();
@@ -55,13 +58,9 @@ export function useRecommendationExport() {
     if (!canExport.value) return;
     exportError.value = "";
     try {
-      const { recommendationToDocxBlob } = await import("../utils/exportFlow");
-      const blob = await recommendationToDocxBlob(pipeline.recommendation.recommendation, {
-        documentTitle: pipeline.analysis?.document_title,
-      });
-      triggerBlobDownload(blob, `${filenameBase.value}.docx`);
-    } catch {
-      exportError.value = t("recommendDetail.errors.exportFailed");
+      await downloadRecommendationDocx(pipeline.sessionId, pipeline.recommendation.version);
+    } catch (err) {
+      exportError.value = err?.message ?? t("recommendDetail.errors.exportFailed");
     }
   }
 
