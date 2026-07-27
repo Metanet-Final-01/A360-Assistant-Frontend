@@ -3,6 +3,7 @@
 // 별개의 스킴이다. 여기서는 경로를 배열(["stepIdx","actions",idx,"children",idx,...])로 다뤄
 // 세그먼트 단위로 비교한다 — 문자열 접두어 비교는 "actions[1]"이 "actions[10]"의 접두어로
 // 잘못 매칭되는 버그가 있어 피한다.
+import { isBranchNode } from "./recommendation";
 
 // path/listPath 둘 다 steps 배열 루트에서 시작하는 동일한 세그먼트 배열이다 — path가 배열이 나오면
 // "리스트 경로", 액션 객체가 나오면 "노드 경로"일 뿐 함수는 구분하지 않는다.
@@ -69,6 +70,34 @@ function walkAssignUid(node) {
 // in-place splice로만 트리를 변형하는 한(새 객체로 교체하지 않는 한) 재정렬 후에도 그대로 유지된다.
 export function assignUiIds(steps) {
   (steps ?? []).forEach((step) => (step.actions ?? []).forEach(walkAssignUid));
+  return steps;
+}
+
+function walkStripEmptyChildren(node) {
+  if (!Array.isArray(node.children)) return;
+  if (node.children.length === 0) {
+    // 분기 역할 노드(Try/Catch/Finally/If/ElseIf/Else)는 children이 비어 있어도(예: 액션이
+    // 없는 Else 분기) flowDrop.collectDropLists가 그 children[] 경로를 항상 드롭 가능 리스트로
+    // 내놓는다(분기 컬럼은 children 유무와 무관하게 항상 프레임으로 보여야 하므로) — 여기서
+    // children 자체를 지워버리면 그 경로가 undefined가 되어, 드롭 시 insertAt()의
+    // list.splice()가 예외를 던진다(Qodo 리뷰). 진짜로 스키마 기본값일 뿐인 리프 액션의
+    // children[]만 지우고, 분기 노드는 빈 배열이어도 그대로 둔다.
+    if (!isBranchNode(node)) delete node.children;
+    return;
+  }
+  node.children.forEach(walkStripEmptyChildren);
+}
+
+// 백엔드 RecommendedAction 스키마는 children을 항상 list(default_factory=list)로 내려보내
+// 리프 액션도 children: []을 갖는다. flowLayout/flowDrop은 (RPA-289로 빈 컨테이너를 프레임
+// 없는 리프로 오인하던 버그를 고치려고) children 길이가 아니라 Array.isArray(children)로
+// 컨테이너 여부를 판단하므로, 백엔드에서 막 불러온 트리를 그대로 넘기면 모든 리프 액션이
+// 컨테이너 프레임(점선 테두리)으로 잘못 렌더된다. 백엔드 트리를 로컬 편집 버퍼로 복제하는
+// 시점에 한 번, 실제로 비어 있는 children[]을 지워 진짜 컨테이너(children이 있었던 노드)만
+// 남긴다 — 카탈로그로 새로 만든 빈 컨테이너나 사용자가 편집 중 만든 children[]은 이 시점
+// 이후에 생기므로 영향받지 않는다. 분기 역할 노드는 예외(위 walkStripEmptyChildren 참고).
+export function stripEmptyChildren(steps) {
+  (steps ?? []).forEach((step) => (step.actions ?? []).forEach(walkStripEmptyChildren));
   return steps;
 }
 
