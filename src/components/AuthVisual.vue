@@ -56,7 +56,11 @@ function handleVisibilityChange() {
 }
 
 onMounted(() => {
-  startSlideTimer();
+  // 이미 백그라운드 탭/창에서 마운트되는 경우(예: 로그인 화면이 새 탭으로 열렸지만 포커스는
+  // 다른 탭에 있는 경우) 무조건 타이머부터 켜면, 이후 visibilitychange가 한 번도 안 와서
+  // (지금 상태 그대로 유지되는 한 이벤트가 안 뜬다) 꺼줄 계기가 없다 — 처음부터 현재 가시성을
+  // 반영해 시작한다.
+  if (!document.hidden) startSlideTimer();
   document.addEventListener("visibilitychange", handleVisibilityChange);
 });
 
