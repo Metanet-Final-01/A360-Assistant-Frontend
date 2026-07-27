@@ -12,6 +12,7 @@
 // 프라미스를 캐싱하므로 재마운트해도 실제 재요청은 최초 1회뿐이다.
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { ApiError } from "../../api/http";
 import { ACTION_CATALOG_MIME, loadActionCatalog, toActionDescriptor } from "../../utils/actionCatalog";
 
 const { t } = useI18n();
@@ -25,14 +26,22 @@ const collapsedGroups = ref(new Set());
 const catalog = ref([]);
 const loading = ref(true);
 const loadFailed = ref(false);
+// ApiError면 백엔드가 내려준 code/requestId를 함께 보존한다 — 화면엔 여전히 일반 문구만
+// 보여주되(사용자에게 코드/요청ID가 의미 있진 않다), title에 실어 두면 문의가 왔을 때 그
+// 값으로 서버 로그를 바로 찾을 수 있다(Qodo 리뷰 — catch { }가 진단 정보를 폐기하던 문제).
+const loadErrorDetail = ref("");
 
 async function load() {
   loading.value = true;
   loadFailed.value = false;
+  loadErrorDetail.value = "";
   try {
     catalog.value = await loadActionCatalog();
-  } catch {
+  } catch (err) {
     loadFailed.value = true;
+    if (err instanceof ApiError) {
+      loadErrorDetail.value = [err.code, err.requestId].filter(Boolean).join(" · ");
+    }
   } finally {
     loading.value = false;
   }
@@ -97,7 +106,7 @@ function onPick(group, entry) {
     <div class="flow-catalog-panel__list">
       <p v-if="loading" class="flow-catalog-panel__empty">{{ t("actionCatalog.loading") }}</p>
       <div v-else-if="loadFailed" class="flow-catalog-panel__empty">
-        <p>{{ t("actionCatalog.loadError") }}</p>
+        <p :title="loadErrorDetail || undefined">{{ t("actionCatalog.loadError") }}</p>
         <button type="button" class="btn btn--outline btn--small" @click="load">
           {{ t("actionCatalog.retry") }}
         </button>
