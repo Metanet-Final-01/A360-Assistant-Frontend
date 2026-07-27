@@ -8,6 +8,7 @@
 // FlowCanvas가 자체 로직(소스 오브 트루스=트리)으로 처리하고 매번 이 함수로 위치를 다시 계산해
 // 덮어쓰므로, 컨테이너 노드가 화면상 자식들을 "품고 있는 프레임"이면 충분하고 Vue Flow 쪽의
 // 자동 부모-자식 좌표 상속은 필요 없다.
+import { MarkerType } from "@vue-flow/core";
 import { buildSegments, buildPackageColorMap, branchColumnExits, branchRole, branchLabel, stepLabel } from "./recommendation";
 import { nodePathToListPath } from "./flowTree";
 import { t } from "../i18n";
@@ -28,7 +29,17 @@ export const LAYOUT = {
 };
 
 function makeEdge(source, target) {
-  return { id: `e-${source}->${target}`, source, target, type: "smoothstep", sourceHandle: "out", targetHandle: "in" };
+  return {
+    id: `e-${source}->${target}`,
+    source,
+    target,
+    type: "smoothstep",
+    sourceHandle: "out",
+    targetHandle: "in",
+    // color는 그대로 marker polyline에 인라인 style로 박히므로(vue-flow가 CSS로 덮어쓸 여지가
+    // 없다), 여기서 var()로 직접 테마 색을 지정한다 — 하드코딩한 헥스값이면 다크모드에서 안 맞다.
+    markerEnd: { type: MarkerType.ArrowClosed, color: "var(--accent-text)" },
+  };
 }
 
 // 라벨이 잘리지 않도록 노드 헤더(번호+라벨+패키지 태그+수정버튼)가 한 줄에 다 들어가는 폭을
@@ -348,4 +359,119 @@ export function buildFlowGraph(steps) {
   nodes.push(labelNode(doneId, t("recommendFlow.done"), centerX, cy, LAYOUT.PILL_W, LAYOUT.PILL_H, "pill"));
 
   return { nodes, edges };
+}
+
+// ---------- Export 전용: 스텝 경계에서 여러 페이지로 나눈 레이아웃(RPA-296 후속) ----------
+// DOCX는 흐름도 이미지를 고정 폭(6.3in)으로만 삽입하고 높이는 원본 비율 그대로 따라가는데,
+// Word는 페이지보다 큰 인라인 그림을 다음 페이지로 이어 그려주지 않고 페이지 경계에서 그냥
+// 잘라버린다(자동 페이지 넘김 없음 — 실측 확인됨). 백엔드가 이미지 여러 장을 받아 각 장 사이에
+// 페이지 나눔을 넣도록 바뀐 뒤(RPA-296 후속 백엔드 작업)로는, 프론트도 흐름도 원래 모양(세로
+// 한 줄)을 그대로 유지한 채 "페이지 한 장에 들어갈 만큼"씩 여러 조각으로 잘라 각각 따로
+// 캡처한다 — 컬럼으로 욱여넣지 않으므로 글자 크기가 항상 일정하다. 스텝 "안"에서는 절대
+// 끊지 않으므로 컨테이너/분기 프레임이 조각 사이에서 잘리는 일이 없다.
+
+// 스텝 하나(타이틀 라벨 + 그 안의 액션 트리)를 원점(0,0) 기준 독립 블록으로 계산한다 —
+// buildFlowGraph의 스텝 루프 본문과 같은 계산이지만, 페이지 분할을 위해 따로 떼어 재사용한다.
+function buildStepBlock(step, stepIdx, ctx) {
+  const titleId = stepTitleId(stepIdx);
+  const titleNode = labelNode(titleId, stepLabel(step, stepIdx), 0, 0, LAYOUT.STEP_TITLE_W, LAYOUT.STEP_TITLE_H, "title");
+
+  const items = (step.actions ?? []).map((a, i) => ({ node: a, nodePath: [stepIdx, "actions", i] }));
+  if (!items.length) {
+    return { width: LAYOUT.STEP_TITLE_W, height: LAYOUT.STEP_TITLE_H, nodes: [titleNode], edges: [], topId: titleId, exitIds: [titleId] };
+  }
+
+  const list = layoutList(items, 0, LAYOUT.STEP_TITLE_H + LAYOUT.V_GAP, ctx);
+  const edges = [...list.edges];
+  if (list.topId) edges.push(makeEdge(titleId, list.topId));
+  return {
+    width: Math.max(LAYOUT.STEP_TITLE_W, list.width),
+    height: LAYOUT.STEP_TITLE_H + LAYOUT.V_GAP + list.height,
+    nodes: [titleNode, ...list.nodes],
+    edges,
+    topId: titleId,
+    exitIds: list.exitIds,
+  };
+}
+
+// 스텝 블록들을 순서대로 그리디하게 페이지에 채운다 — 다음 블록을 더하면 페이지 높이 상한을
+// 넘길 때만 새 페이지로 넘어간다(스텝 하나가 통째로 상한을 넘겨도 쪼개지 않는다). 각 페이지는
+// 독립된 이미지로 캡처되므로(컬럼처럼 한 이미지 안에서 나란히 놓는 게 아니다), 컬럼 분할과
+// 달리 "전체를 몇 개로 나눌지" 미리 정할 필요 없이 상한 하나만으로 그리디하게 잘라도 충분하다.
+function groupIntoPages(blocks, maxHeightToWidthRatio) {
+  // 상한 폭을 전체 블록의 최댓값(global)으로 한 번만 정하면, 실제로 더 좁은 블록들만 모인
+  // 페이지는 렌더될 때 그 페이지 "자신"의 폭(더 좁음)을 쓰므로 높이:폭 비율이 목표보다 커질 수
+  // 있다 — 그래서 "현재 페이지에 지금까지 들어온 블록들의 최댓값 폭"을 매번 갱신해 가며, 항상
+  // 그 페이지가 최종적으로 렌더될 때와 같은 폭 기준으로 상한을 판단한다.
+  const pages = [];
+  let current = [];
+  let currentHeight = 0;
+  let currentWidth = LAYOUT.PILL_W;
+  blocks.forEach((b) => {
+    const widthWithNext = Math.max(currentWidth, b.width);
+    const heightWithNext = currentHeight + b.height + LAYOUT.V_GAP;
+    if (current.length && heightWithNext > widthWithNext * maxHeightToWidthRatio) {
+      pages.push(current);
+      current = [];
+      currentHeight = 0;
+      currentWidth = LAYOUT.PILL_W;
+    }
+    current.push(b);
+    currentWidth = Math.max(currentWidth, b.width);
+    currentHeight += b.height + LAYOUT.V_GAP;
+  });
+  if (current.length) pages.push(current);
+  return pages;
+}
+
+// steps[] → 캡처(DOCX 다중 페이지 내보내기) 전용 Vue Flow 그래프 배열. 배열 원소 하나가 문서의
+// 페이지 한 장에 해당하는 흐름도 조각이다 — buildFlowGraph와 같은 세로 한 줄 배치를 그대로
+// 유지한 채 스텝 경계에서만 끊는다. "시작" 필은 첫 페이지에만, "완료" 필은 마지막 페이지에만
+// 붙인다. 편집 캔버스(buildFlowGraph)와 달리 draggable이 필요 없고, 편집용 드롭 로직
+// (flowDrop.js)과도 호환되지 않는다 — 오직 화면에 페이지 순서대로 잠깐씩 띄워 캡처한 뒤
+// 버리는 용도로만 쓴다.
+export function buildFlowGraphPages(steps, maxHeightToWidthRatio = 8.4 / 6.3) {
+  if (!steps?.length) return [buildFlowGraph(steps)];
+
+  const prefixes = computePrefixes(steps);
+  const packageColor = buildPackageColorMap(steps);
+  const colorFor = (pkg) => packageColor.get(pkg || t("common.unspecified")) ?? "#888888";
+  const ctx = { prefixes, colorFor, listCache: new Map() };
+
+  const blocks = steps.map((step, i) => buildStepBlock(step, i, ctx));
+  const pages = groupIntoPages(blocks, maxHeightToWidthRatio);
+
+  return pages.map((pageBlocks, pageIdx) => {
+    const nodes = [];
+    const edges = [];
+    const width = Math.max(LAYOUT.PILL_W, ...pageBlocks.map((b) => b.width));
+    const centerX = width / 2;
+    let cy = 0;
+
+    if (pageIdx === 0) {
+      const startId = "__start";
+      nodes.push(labelNode(startId, t("recommendFlow.start"), centerX, cy, LAYOUT.PILL_W, LAYOUT.PILL_H, "pill"));
+      cy += LAYOUT.PILL_H + LAYOUT.V_GAP;
+      if (pageBlocks.length) edges.push(makeEdge(startId, pageBlocks[0].topId));
+    }
+
+    pageBlocks.forEach((b, i) => {
+      const translated = translateLayout(b, centerX, cy);
+      nodes.push(...translated.nodes);
+      edges.push(...b.edges);
+      cy += b.height + LAYOUT.V_GAP;
+      if (i < pageBlocks.length - 1) {
+        b.exitIds.forEach((id) => edges.push(makeEdge(id, pageBlocks[i + 1].topId)));
+      }
+    });
+
+    if (pageIdx === pages.length - 1) {
+      const doneId = "__done";
+      const lastBlock = pageBlocks[pageBlocks.length - 1];
+      (lastBlock?.exitIds ?? []).forEach((id) => edges.push(makeEdge(id, doneId)));
+      nodes.push(labelNode(doneId, t("recommendFlow.done"), centerX, cy, LAYOUT.PILL_W, LAYOUT.PILL_H, "pill"));
+    }
+
+    return { nodes, edges };
+  });
 }
