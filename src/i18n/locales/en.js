@@ -324,6 +324,9 @@ export default {
     noMatches: "No matches found.",
     dragHint: "Drag to place it anywhere in the flow",
     containerBadge: "Container",
+    loading: "Loading catalog…",
+    loadError: "Failed to load the catalog.",
+    retry: "Retry",
   },
 
   upload: {

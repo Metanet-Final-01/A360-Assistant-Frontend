@@ -324,6 +324,9 @@ export default {
     noMatches: "검색 결과가 없습니다.",
     dragHint: "드래그해서 원하는 위치에 놓으세요",
     containerBadge: "컨테이너",
+    loading: "카탈로그를 불러오는 중…",
+    loadError: "카탈로그를 불러오지 못했습니다.",
+    retry: "다시 시도",
   },
 
   upload: {

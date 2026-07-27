@@ -1,14 +1,19 @@
 <script setup>
-// ACTION_CATALOG(목업, 추후 API로 교체)를 검색·패키지별 접기/펼치기로 훑어보는 목록 — 사이드바
+// 카탈로그 API(GET /api/catalog/packages)를 검색·패키지별 접기/펼치기로 훑어보는 목록 — 사이드바
 // 피커(ActionCatalogPanel, 캔버스 여백에 새 카드 추가)와 액션 교체 팝오버(ActionPickerPopover,
 // 기존 액션의 패키지/액션을 다른 걸로 바꿔치기)가 이 컴포넌트 하나를 공유한다. 두 맥락의 유일한
 // 차이는 "새로 추가"냐 "교체"냐일 뿐 목록 자체(검색·그룹핑·항목 모양)는 동일해서, 부모가 select
 // 이벤트를 각자의 의미로 소비한다. draggable=false면(팝오버 맥락) 네이티브 드래그를 끈다 — 이미
 // 존재하는 노드 위에 뜬 좁은 팝오버에서 드래그를 시작하면 밑에 깔린 흐름도 드래그 재정렬과
 // 제스처가 충돌하기 쉽다.
-import { computed, ref } from "vue";
+//
+// 두 맥락 모두 이 컴포넌트를 v-if로 마운트한다(사이드바는 편집모드 진입 시, 팝오버는 열 때) —
+// 그래서 onMounted에서 로드하면 "피커를 열 때" 로드 요건이 자연히 충족된다. loadActionCatalog가
+// 프라미스를 캐싱하므로 재마운트해도 실제 재요청은 최초 1회뿐이다.
+import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { ACTION_CATALOG, ACTION_CATALOG_MIME, toActionDescriptor } from "../../utils/actionCatalog";
+import { ApiError } from "../../api/http";
+import { ACTION_CATALOG_MIME, loadActionCatalog, toActionDescriptor } from "../../utils/actionCatalog";
 
 const { t } = useI18n();
 const props = defineProps({
@@ -18,6 +23,31 @@ const emit = defineEmits(["select"]);
 
 const query = ref("");
 const collapsedGroups = ref(new Set());
+const catalog = ref([]);
+const loading = ref(true);
+const loadFailed = ref(false);
+// ApiError면 백엔드가 내려준 code/requestId를 함께 보존한다 — 화면엔 여전히 일반 문구만
+// 보여주되(사용자에게 코드/요청ID가 의미 있진 않다), title에 실어 두면 문의가 왔을 때 그
+// 값으로 서버 로그를 바로 찾을 수 있다(Qodo 리뷰 — catch { }가 진단 정보를 폐기하던 문제).
+const loadErrorDetail = ref("");
+
+async function load() {
+  loading.value = true;
+  loadFailed.value = false;
+  loadErrorDetail.value = "";
+  try {
+    catalog.value = await loadActionCatalog();
+  } catch (err) {
+    loadFailed.value = true;
+    if (err instanceof ApiError) {
+      loadErrorDetail.value = [err.code, err.requestId].filter(Boolean).join(" · ");
+    }
+  } finally {
+    loading.value = false;
+  }
+}
+
+onMounted(load);
 
 function toggleGroup(groupId) {
   const next = new Set(collapsedGroups.value);
@@ -34,8 +64,8 @@ function isExpanded(groupId) {
 
 const filteredGroups = computed(() => {
   const q = query.value.trim().toLowerCase();
-  if (!q) return ACTION_CATALOG;
-  return ACTION_CATALOG.map((group) => {
+  if (!q) return catalog.value;
+  return catalog.value.map((group) => {
     const groupMatches = group.name.toLowerCase().includes(q);
     const actions = groupMatches
       ? group.actions
@@ -74,7 +104,14 @@ function onPick(group, entry) {
     </div>
 
     <div class="flow-catalog-panel__list">
-      <p v-if="!filteredGroups.length" class="flow-catalog-panel__empty">{{ t("actionCatalog.noMatches") }}</p>
+      <p v-if="loading" class="flow-catalog-panel__empty">{{ t("actionCatalog.loading") }}</p>
+      <div v-else-if="loadFailed" class="flow-catalog-panel__empty">
+        <p :title="loadErrorDetail || undefined">{{ t("actionCatalog.loadError") }}</p>
+        <button type="button" class="btn btn--outline btn--small" @click="load">
+          {{ t("actionCatalog.retry") }}
+        </button>
+      </div>
+      <p v-else-if="!filteredGroups.length" class="flow-catalog-panel__empty">{{ t("actionCatalog.noMatches") }}</p>
 
       <div v-for="group in filteredGroups" :key="group.id" class="flow-catalog-panel__group">
         <button
