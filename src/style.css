@@ -4952,6 +4952,10 @@ input {
   padding: 44px 48px;
   background: linear-gradient(160deg, var(--brand-teal-dark) 0%, var(--brand-navy) 100%);
   color: #ffffff;
+  /* 이 안의 blob/sheen 애니메이션이 나머지 페이지의 레이아웃·페인트에 영향 없다고(그 반대도)
+     브라우저에 알려줘서, 매 프레임 이 서브트리 밖까지 다시 검사하지 않게 한다 — 시각적으로는
+     아무 변화 없는 순수 렌더링 최적화(이미 overflow:hidden이라 어차피 밖으로 안 튀어나온다). */
+  contain: layout paint style;
 }
 
 .auth-brand__blob {
@@ -5036,6 +5040,7 @@ input {
   );
   animation: authSheenRotate 40s linear infinite;
   will-change: transform;
+  transform: translateZ(0);
 }
 
 @keyframes authSheenRotate {
@@ -5132,6 +5137,15 @@ input {
   .auth-brand__sparkle {
     animation: none;
   }
+}
+
+/* 탭이 백그라운드로 가면(다른 창 전환 등) AuthVisual.vue가 이 클래스를 붙인다 — 화면에 보이지도
+   않는 blob/sheen/sparkle 애니메이션이 계속 컴포지팅되며 CPU/GPU/배터리를 낭비하지 않게 멈춘다.
+   보이는 동안에는 전혀 적용되지 않아 시각적 차이가 없다. */
+.auth-card__brand--paused .auth-brand__blob,
+.auth-card__brand--paused .auth-brand__sheen,
+.auth-card__brand--paused .auth-brand__sparkle {
+  animation-play-state: paused;
 }
 
 .auth-brand__logo {
