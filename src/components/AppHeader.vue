@@ -114,7 +114,13 @@ function runFromMenu(action) {
 <template>
   <header class="app-header">
     <div class="app-header__brand">
-      <img src="../assets/a360-mark.svg" :alt="t('sidebar.logoAlt')" class="app-header__logo" />
+      <img
+        src="../assets/a360-mark.png"
+        :alt="t('sidebar.logoAlt')"
+        class="app-header__logo"
+        width="36"
+        height="36"
+      />
       <div class="app-header__titles">
         <h1 class="app-header__title">{{ t("header.title") }}</h1>
         <span class="app-header__subtitle">{{ t("header.subtitle") }}</span>
