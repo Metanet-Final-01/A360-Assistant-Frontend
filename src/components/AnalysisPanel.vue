@@ -172,28 +172,6 @@ const refineNotice = computed(() => {
   return pipeline.refineReason || t(key);
 });
 
-// "흐름도 보기": 이미 있으면 별도 브라우저 창(flow-window.html)으로 열고, 없으면 생성한다 —
-// 생성 과정은 이 패널이 인라인으로 실시간 렌더하므로 별도 로딩 화면을 띄우지 않는다.
-const canUseFlowActions = computed(
-  () => (pipeline.analysisStatus === "done" && hasSteps.value) || !!pipeline.recommendation,
-);
-
-async function openFlowView() {
-  if (pipeline.recommendStatus === "done") {
-    openFlowWindow();
-    return;
-  }
-  await pipeline.startRecommend();
-}
-
-// 인앱 모달 대신 진짜 별도 창으로 연다 — Fullscreen API 없이도 OS 창 컨트롤(최대화/최소화/
-// 이동/크기조절)을 자유롭게 쓸 수 있다. 세션당 창 이름을 고정해 두 번째 클릭은 새 창 대신
-// 기존 창을 포커스한다(브라우저 표준 동작, noopener라 JS 참조로 재사용하는 게 아니다).
-function openFlowWindow() {
-  const url = `/flow-window.html?session=${encodeURIComponent(pipeline.sessionId)}`;
-  window.open(url, `a360-flow-${pipeline.sessionId}`, "width=1280,height=860,resizable=yes,noopener");
-}
-
 // ── v3 품질 루프 진행 카드 (spec/candidates/verdict/scorecard 프레임) ──
 // v2 백엔드에선 이 값들이 항상 null이라 스트립 자체가 렌더되지 않는다(하위호환).
 const liveCandidates = computed(() => pipeline.liveCandidates);
@@ -536,7 +514,6 @@ onBeforeUnmount(() => {
         aria-hidden="true"
         >⠿</span
       >
-      <span class="panel__header-num" aria-hidden="true">2</span>
       <h2 id="analysis-panel-title" ref="titleRef">{{ t("recommendDetail.title") }}</h2>
       <div v-if="hasActiveSession" class="panel__header-actions">
         <span v-if="pipeline.recommendation" class="panel__header-version">
@@ -917,18 +894,6 @@ onBeforeUnmount(() => {
 
         <!-- ── 탭 6: 추천 흐름도 ── -->
         <div v-else-if="activeTab === 'flow'" class="tab-pane">
-          <div class="tab-pane__actions">
-            <button
-              v-if="canUseFlowActions"
-              type="button"
-              class="btn btn--outline"
-              :disabled="pipeline.recommendStatus === 'generating' || liveMode"
-              @click="openFlowView"
-            >
-              {{ pipeline.recommendStatus === "generating" || liveMode ? t("recommendDetail.generating") : t("recommendDetail.viewFlow") }}
-            </button>
-          </div>
-
           <!-- v3 품질 루프 진행 스트립 — 후보 카드(트리는 승자 확정 후에만) · 심판 · 검증 요약 -->
           <div v-if="liveMode && (liveCandidates || liveVerdict || liveScorecard)" class="flow-quality-strip">
             <div v-if="liveCandidates" class="flow-quality-strip__cands">

@@ -23,25 +23,11 @@ export default {
   },
 
   header: {
-    title: "A360 Task Recommendation AI",
-    subtitle: "A360 task recommendations from work definitions",
-    navLabel: "Main steps",
-    accountMenu: "Account menu",
-    nav: {
-      upload: "Upload",
-      analysis: "Analysis",
-      recommend: "Recommend",
-      chat: "Chat",
-      export: "Export",
-    },
     exportDisabledHint: "Generate the flow first to enable export.",
   },
 
   actionBar: {
-    prev: "Back (upload)",
-    download: "Download JSON",
     next: "Next (go to recommendation)",
-    openFlow: "Open flow window",
     generating: "Generating flow…",
   },
 
@@ -74,6 +60,7 @@ export default {
 
   sidebar: {
     logoAlt: "A360 logo",
+    brandTitle: "A360 Assistant",
     loadingSessions: "Loading session list…",
     mainNavLabel: "Main menu",
     historyTitle: "Session history",
@@ -198,7 +185,6 @@ export default {
     outputVars: "Output variables",
     recommendSectionTitle: "A360 flow recommendation",
     sessionLoadingHint: "Loading the flow…",
-    generating: "Generating…",
     viewFlow: "View flow",
     exportTitle: "Export",
     exportJson: "Export JSON",
