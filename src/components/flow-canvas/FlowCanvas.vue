@@ -532,7 +532,9 @@ function getImageCaptureTarget() {
   // getRectOfNodes는 store가 측정해 둔 computedPosition/dimensions가 있어야 하므로, 우리
   // 로컬 nodes(레이아웃 계산 직후의 원시 position/width/height)가 아니라 getNodes(store가
   // 실제로 렌더한 뒤 채워 넣는 값)를 넘겨야 한다 — 안 그러면 좌표가 비어 NaN 바운딩이 나온다.
-  const measuredNodes = getNodes.value;
+  // 미배치 카드(data.unplaced)는 트리에 편입되지 않은 임시 카드라 바운딩·캡처 대상에서 뺀다
+  // (Qodo 리뷰) — 안 빼면 캡처 이미지에 미배치 카드가 찍히거나 불필요한 여백이 생긴다.
+  const measuredNodes = getNodes.value.filter((n) => !n.data?.unplaced);
   if (!viewportEl || !measuredNodes.length) return null;
   const bounds = getRectOfNodes(measuredNodes);
   const scale = Math.min(EXPORT_SCALE, EXPORT_MAX_SIDE / Math.max(bounds.width, bounds.height, 1));
