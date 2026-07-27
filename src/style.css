@@ -2821,6 +2821,66 @@ input {
   font-weight: 700;
 }
 
+/* ── 2상 정밀화 배너·안내 (설계 §6.3) ──
+   초안은 이미 화면에 렌더돼 있고, 이 배너는 "그 위에서 더 다듬는 중"을 알린다.
+   flow-live-status와 같은 자리·같은 형태를 쓰되 강조색을 달리해 '진행'과 '잠김'을 구분한다. */
+.refine-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--accent-bg, var(--mid-bg));
+  border: 1px solid var(--border);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--mid);
+}
+
+.refine-banner__text {
+  flex: 1 1 auto;
+}
+
+.refine-banner__lock {
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+/* 탈출구는 눈에 띄어야 한다 — 잠금만 보이고 빠져나갈 길이 안 보이면 갇힌 느낌을 준다. */
+.refine-banner__cancel {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--accent-text);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.refine-banner__cancel:hover:not(:disabled) {
+  background: var(--mid-bg);
+}
+
+.refine-banner__cancel:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* 정상 완료가 아닐 때의 사유 — 조용히 초안을 주면 사용자는 다듬어진 결과로 오해한다. */
+.refine-notice {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--mid-bg);
+  border-left: 3px solid var(--danger);
+  font-size: 0.85rem;
+  color: var(--mid);
+}
+
+
 /* ── v3 품질 루프 진행 스트립 (후보 카드 · 심판 · 검증 요약) ── */
 .flow-quality-strip {
   margin: -6px 0 16px;

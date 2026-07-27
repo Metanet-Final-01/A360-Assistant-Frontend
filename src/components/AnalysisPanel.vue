@@ -83,6 +83,20 @@ const liveViolationCount = computed(() => pipeline.liveViolations?.length ?? 0);
 // 스크롤한다. 라이브 스트림 중에만 의미가 있다(최종본에선 null).
 const activeStep = computed(() => (liveMode.value ? pipeline.liveActiveStep : null));
 
+// 정밀화가 정상 완료가 아닐 때만 문구를 낸다. done·running·null은 알릴 것이 없다 —
+// "완료했습니다"를 매번 띄우면 소음이고, 사용자가 알아야 하는 건 **덜 다듬어졌다**는 사실뿐이다.
+const REFINE_NOTICE_KEYS = {
+  cancelled: "recommendDetail.refineCancelled",
+  timeout: "recommendDetail.refineTimeout",
+  failed: "recommendDetail.refineFailed",
+};
+const refineNotice = computed(() => {
+  const key = REFINE_NOTICE_KEYS[pipeline.refineStatus];
+  if (!key) return "";
+  // 서버가 준 사유가 더 구체적이면 그걸 쓴다(초안 생성이 오래 걸림 / 예산 소진 등).
+  return pipeline.refineReason || t(key);
+});
+
 // 수정 중인 단계가 바뀌면 그 단계로 부드럽게 스크롤한다 — 사용자가 "지금 어디를 고치는지"
 // 눈으로 따라가게. 프레임 반영(트리 재렌더) 후 DOM이 갱신되도록 nextTick을 기다린다.
 watch(activeStep, async (stepId) => {
@@ -315,6 +329,32 @@ async function submitCards() {
           {{ t("recommendDetail.violationCount", { count: liveViolationCount }) }}
         </span>
       </div>
+
+      <!-- 2상 정밀화 배너 (설계 §6.3) — 초안은 이미 화면에 있고, 그 위에서 다듬는 중임을
+           알린다. 잠금만 있고 탈출구가 없으면 갇힌 느낌을 주므로 중단 버튼을 함께 둔다.
+           liveMode와 독립이다: 스트림이 끝난 뒤 재접속해도(GET /refine 복원) 떠야 한다. -->
+      <div v-if="pipeline.draftPending" class="refine-banner">
+        <span class="analyzing-state__spinner" aria-hidden="true"></span>
+        <span class="refine-banner__text">
+          {{ t("recommendDetail.draftReady") }}
+          <span v-if="pipeline.refineLocked" class="refine-banner__lock">
+            · {{ t("recommendDetail.refineLockedHint") }}
+          </span>
+        </span>
+        <button
+          v-if="pipeline.refineLocked"
+          type="button"
+          class="refine-banner__cancel"
+          :disabled="pipeline.isCancellingRefine"
+          @click="pipeline.requestRefineCancel()"
+        >
+          {{ pipeline.isCancellingRefine ? t("recommendDetail.refineCancelling") : t("recommendDetail.refineCancel") }}
+        </button>
+      </div>
+
+      <!-- 정밀화가 정상 완료가 아니면 사유를 남긴다 — 조용히 초안을 주면 사용자는 다듬어진
+           결과를 받았다고 믿는다(백엔드도 답변에 같은 단서를 붙인다). -->
+      <div v-if="refineNotice" class="refine-notice">{{ refineNotice }}</div>
 
       <!-- v3 품질 루프 진행 스트립 — 후보 카드(트리는 승자 확정 후에만) · 심판 · 검증 요약 -->
       <div v-if="liveMode && (liveCandidates || liveVerdict || liveScorecard)" class="flow-quality-strip">

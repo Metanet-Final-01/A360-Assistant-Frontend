@@ -2,7 +2,13 @@ import { defineStore } from "pinia";
 import { computed, reactive, ref, watch } from "vue";
 import { uploadDocument, parseDocument, createDocumentFromText, enrichVision, getDocument } from "../api/documents";
 import { turnStream } from "../api/agent";
-import { listRecommendations, saveRecommendation, getLatestRecommendation } from "../api/recommend";
+import {
+  listRecommendations,
+  saveRecommendation,
+  getLatestRecommendation,
+  getRefineStatus,
+  cancelRefine,
+} from "../api/recommend";
 import { getLatestAnalysis, patchSession } from "../api/sessions";
 import { ApiError } from "../api/http";
 import { useChatStore } from "./chat";
@@ -129,6 +135,43 @@ export const usePipelineStore = defineStore("pipeline", () => {
   const liveVerdict = ref(null); // {winner, reason, scores[]} — 심판 점수판
   const liveScorecard = ref(null); // {must_coverage, blockers, sim_pass_rate, cards, flow_confidence}
 
+  // ----- 2상(초안 → 정밀화) 상태 (설계 §6.3) -----
+  // 백엔드는 흐름도를 두 단계로 낸다: 먼저 **초안**(kind:"draft")을 확정해 흘리고, 그다음
+  // 그 초안을 다듬는 **정밀화**(kind:"refine")를 돈다. 정밀화가 도는 동안 이 세션의 수정은
+  // 서버에서 잠기고(409 REFINE_IN_PROGRESS), 사용자는 "중단하고 지금 초안으로 수정하기"로
+  // 빠져나올 수 있다. 잠금만 있고 탈출구가 없으면 갇힌 느낌을 준다.
+  //
+  // 이 값들을 안 읽으면 프레임이 그냥 버려지고(예전 동작), 사용자는 정밀화 중인 줄 모른 채
+  // 저장을 눌렀다가 **처리되지 않은 409**를 에러로 맞는다.
+  const draftId = ref(null); // 이 턴 초안의 식별자 — 초안↔정밀화 결과를 잇는 키
+  const draftPending = ref(false); // 초안은 나왔는데 정밀화가 아직 안 끝났다
+  const refineStatus = ref(null); // running | done | cancelled | timeout | failed | superseded
+  const refineLocked = ref(false); // 지금 이 세션의 수정이 잠겨 있는가
+  const refineReason = ref(""); // 정상 완료가 아닐 때 사용자에게 보일 사유
+  const refineCancelPath = ref(null); // 409가 실어 준 탈출구 경로(있으면 그걸 쓴다)
+  const isCancellingRefine = ref(false);
+
+  function resetRefineState() {
+    draftId.value = null;
+    draftPending.value = false;
+    refineStatus.value = null;
+    refineLocked.value = false;
+    refineReason.value = "";
+    refineCancelPath.value = null;
+  }
+
+  // 서버가 준 refine 상태 dict를 그대로 반영한다 — SSE 프레임과 GET /refine이 같은 모양이라
+  // 한 함수로 받는다(두 경로가 갈리면 새로고침 후 상태가 미묘하게 달라진다).
+  function applyRefineState(payload) {
+    if (!payload) return;
+    refineStatus.value = payload.status ?? null;
+    refineLocked.value = !!payload.locked;
+    refineReason.value = payload.reason ?? "";
+    if (payload.draft_id) draftId.value = payload.draft_id;
+    // running이 아니면 초안 대기가 끝난 것 — 정상 완료든 중단이든 편집이 열린다.
+    draftPending.value = payload.status === "running";
+  }
+
   // partial 프레임 하나를 반영한다 — kind로 프레임 종류를 가른다. 프레임마다 패널이 다시 그린다.
   function applyLiveFrame(data) {
     if (!data) return;
@@ -158,6 +201,23 @@ export const usePipelineStore = defineStore("pipeline", () => {
       liveCaption.value = data.caption ?? "";
       return;
     }
+    if (data.kind === "draft") {
+      // 1상 종료 — 초안이 확정됐다. 흐름도를 바로 그려 사용자가 **정밀화를 기다리지 않고**
+      // 결과를 본다(제약 #6 "빠른 초안 + 느린 정밀화 분리"의 사용자 이득이 여기서 생긴다).
+      liveActive.value = true;
+      liveCandidates.value = null;
+      liveFlow.value = data.flow ?? { steps: [] };
+      liveViolations.value = data.violations ?? [];
+      liveCaption.value = data.caption ?? "";
+      draftId.value = data.draft_id ?? null;
+      draftPending.value = true;
+      return;
+    }
+    if (data.kind === "refine") {
+      applyRefineState(data);
+      if (data.caption) liveCaption.value = data.caption;
+      return;
+    }
     if (data.kind !== "flow") return;
     liveActive.value = true;
     liveCandidates.value = null; // 승자 확정 이후엔 후보 카드 대신 트리 라이브 렌더
@@ -178,6 +238,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     liveCandidates.value = null;
     liveVerdict.value = null;
     liveScorecard.value = null;
+    resetRefineState();
   }
 
   let timers = [];
@@ -770,11 +831,65 @@ export const usePipelineStore = defineStore("pipeline", () => {
       broadcastRecommendationUpdate(mySessionId, saved.version); // 열려 있는 흐름도 창에도 새 버전을 알린다
     } catch (err) {
       if (sessionId.value !== mySessionId || recommendGeneration !== myRecommendGeneration) return;
+      // 정밀화 잠금(409)은 **실패가 아니라 상태**다 — 그냥 에러로 띄우면 사용자는 저장이
+      // 깨진 줄 안다. 잠금으로 흡수하고 탈출구 경로를 챙겨 UI가 "중단하고 지금 수정하기"를
+      // 그릴 수 있게 한다. 서버가 detail에 cancel_path·refine을 실어 준다.
+      if (err instanceof ApiError && err.code === "REFINE_IN_PROGRESS") {
+        refineLocked.value = true;
+        refineStatus.value = err.detail?.refine?.status ?? "running";
+        refineCancelPath.value = err.detail?.cancel_path ?? null;
+        if (err.detail?.refine?.draft_id) draftId.value = err.detail.refine.draft_id;
+        draftPending.value = true;
+        recommendSaveError.value = "";
+        return;
+      }
       // recommendStatus는 그대로 "done"으로 둔다 — 여기서 "error"로 바꾸면 이미 만들어진
       // 흐름도 보기/실행 취소 화면이 사라지고 "다시 시도"가 전체 재생성 버튼으로 바뀐다.
       // 대신 recommendSaveError로만 실패를 알린다(과거엔 이 필드가 없어 실패가 조용히 묻혔다).
       recommendSaveError.value =
         err instanceof ApiError ? err.message : t("pipeline.errors.saveGeneric");
+    }
+  }
+
+  // ----- 2상 탈출구·상태 복원 (설계 §6.3) -----
+
+  // "정밀화 중단하고 지금 초안으로 수정하기". 중단해도 초안은 그대로 확정본이 되므로
+  // 잃는 것은 '더 다듬어진 결과'뿐이다.
+  async function requestRefineCancel() {
+    if (!sessionId.value || isCancellingRefine.value) return;
+    isCancellingRefine.value = true;
+    try {
+      const res = await cancelRefine(sessionId.value);
+      applyRefineState({ ...res, locked: false, status: res?.status ?? "cancelled" });
+      refineCancelPath.value = null;
+    } catch (err) {
+      // 중단 실패는 조용히 묻으면 안 된다 — 사용자는 계속 갇힌 채로 남는다.
+      recommendSaveError.value =
+        err instanceof ApiError ? err.message : t("pipeline.errors.saveGeneric");
+    } finally {
+      isCancellingRefine.value = false;
+    }
+  }
+
+  // 새로고침·재접속으로 SSE를 놓친 클라이언트의 잠금 상태 복원. 이게 없으면 편집 UI가
+  // 열린 채로 보이다가 저장할 때서야 409를 맞는다.
+  async function refreshRefineStatus() {
+    if (!sessionId.value) return;
+    const mySessionId = sessionId.value;
+    try {
+      const status = await getRefineStatus(mySessionId);
+      if (sessionId.value !== mySessionId) return; // 기다리는 동안 세션이 바뀌었다
+      const live = status?.refine;
+      if (status?.locked && live) {
+        applyRefineState({ ...live, locked: true });
+      } else if (status?.last) {
+        // 완료 **직후** 재접속 — locked=false만 보면 정상 완료인지 중단인지 모른다.
+        applyRefineState({ ...status.last, locked: false });
+      } else {
+        resetRefineState();
+      }
+    } catch {
+      // 상태 조회 실패로 편집을 막지 않는다 — 서버가 저장 시점에 다시 판정한다(409).
     }
   }
 
@@ -894,6 +1009,10 @@ export const usePipelineStore = defineStore("pipeline", () => {
         swallowNotFound(getLatestAnalysis(id)),
         swallowNotFound(getLatestRecommendation(id)),
         useChatStore().loadHistoryMessages(id, myGeneration),
+        // 정밀화 잠금 복원 — SSE를 놓친 재접속에서 편집 UI가 열린 채로 보이다가 저장할
+        // 때서야 409를 맞는 것을 막는다. 실패해도 조용히 넘어가므로(refreshRefineStatus
+        // 내부에서 흡수) 세션 로딩을 깨뜨리지 않는다.
+        refreshRefineStatus(),
       ]);
     } catch (err) {
       // 응답이 오기 전에 다른 세션으로 이동했거나(A→B) 같은 세션을 다시 불러왔으면(A→B→A)
@@ -1013,6 +1132,15 @@ export const usePipelineStore = defineStore("pipeline", () => {
     restoreLastSession,
     loadRecommendationHistory,
     saveRecommendationEdit,
+    // 2상(초안 → 정밀화) — 설계 §6.3
+    draftId,
+    draftPending,
+    refineStatus,
+    refineLocked,
+    refineReason,
+    isCancellingRefine,
+    requestRefineCancel,
+    refreshRefineStatus,
     undoRecommendationEdit,
     revertToRecommendationVersion,
     analysisEditsDirty,

@@ -162,6 +162,15 @@ export default {
     composingFlowDetail: "흐름도를 구성하는 중… 에이전트가 액션을 탐색하고 있습니다.",
     composingFlow: "흐름도 구성 중…",
     violationCount: "검수 위반 {count}건",
+    // 2상(초안 → 정밀화) — 설계 §6.3
+    draftReady: "초안 확정 · 더 다듬는 중",
+    refineLockedHint: "다듬는 동안 수정이 잠깁니다",
+    refineCancel: "중단하고 지금 수정하기",
+    refineCancelling: "중단하는 중…",
+    refineDone: "다듬기 완료",
+    refineCancelled: "다듬기를 중단했어요 — 초안 그대로 확정했습니다.",
+    refineTimeout: "다듬는 데 시간이 너무 걸려 중단했어요 — 초안 그대로 확정했습니다.",
+    refineFailed: "다듬는 중 오류가 생겨 초안 그대로 확정했어요.",
     candStatus: {
       composing: "설계 중…",
       verifying: "검증 중…",

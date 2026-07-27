@@ -162,6 +162,15 @@ export default {
     composingFlowDetail: "Composing the flow… the agent is exploring actions.",
     composingFlow: "Composing the flow…",
     violationCount: "Verification violations: {count}",
+    // Two-phase (draft -> refine) - design section 6.3
+    draftReady: "Draft ready - refining",
+    refineLockedHint: "Editing is locked while refining",
+    refineCancel: "Stop refining and edit now",
+    refineCancelling: "Stopping...",
+    refineDone: "Refinement complete",
+    refineCancelled: "Refinement stopped - the draft was kept as final.",
+    refineTimeout: "Refinement took too long and was stopped - the draft was kept as final.",
+    refineFailed: "Refinement hit an error - the draft was kept as final.",
     candStatus: {
       composing: "Designing…",
       verifying: "Verifying…",

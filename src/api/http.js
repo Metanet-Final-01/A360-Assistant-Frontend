@@ -18,12 +18,17 @@ export function clearToken() {
 // 백엔드는 4xx/5xx 응답에서 detail: {code, message} 형태로 내려준다 (API_명세.md 참고)
 // 모든 응답엔 X-Request-ID 헤더가 붙는다 — 에러 문의 시 서버 로그 추적용으로 함께 들고 다닌다.
 export class ApiError extends Error {
-  constructor(code, message, status, requestId) {
+  constructor(code, message, status, requestId, detail = null) {
     super(message);
     this.name = "ApiError";
     this.code = code;
     this.status = status;
     this.requestId = requestId ?? null;
+    // 서버가 detail에 실어 보낸 **구조화된 부가 정보** — code·message만 남기면 버려진다.
+    // 예: 409 REFINE_IN_PROGRESS는 cancel_path(탈출구 경로)와 refine(진행 상태)을 함께
+    // 주는데, 그걸 잃으면 프론트가 "정밀화 중입니다"만 띄우고 중단 버튼을 못 그린다
+    // — 사유 없는 거절은 잠금이 아니라 고장으로 보인다(백엔드 _assert_not_refining 주석).
+    this.detail = detail;
   }
 }
 
@@ -63,7 +68,7 @@ async function toApiError(response) {
         message += ` (${firstText}${rest > 0 ? ` +${rest}` : ""})`;
       }
     }
-    return new ApiError(detail.code ?? "UNKNOWN", message, response.status, requestId);
+    return new ApiError(detail.code ?? "UNKNOWN", message, response.status, requestId, detail);
   }
   return new ApiError(
     "UNKNOWN",
