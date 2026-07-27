@@ -51,7 +51,7 @@ onUnmounted(() => {
     </div>
 
     <div class="auth-brand__logo">
-      <img src="../assets/a360-mark.svg" alt="" class="auth-brand__logo-icon" />
+      <img src="../assets/a360-mark.png" alt="" class="auth-brand__logo-icon" width="30" height="30" />
       <span class="auth-brand__logo-text">A360 ASSISTANT</span>
     </div>
 
