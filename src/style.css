@@ -1,34 +1,60 @@
 :root {
-  --bg: #eef2f6;
+  --bg: #f2f5fa;
   --surface: #ffffff;
-  --border: #dbe3ea;
-  --text: #1f2733;
-  --text-muted: #66727e;
+  --border: #e3e8f0;
+  --text: #1e293b;
+  --text-muted: #64748b;
 
-  --brand-navy: #172026;
-  --brand-teal: #2f9ab2;
-  --brand-teal-dark: #1f6f8b;
-  --brand-teal-light: #e7f4f7;
+  /* ── 브랜드 팔레트 (인디고·블루) ──
+     --brand-primary       밝은 파랑 — 포커스 링·보더·아이콘 악센트
+     --brand-primary-strong 채색 배경(fill) — 기본 버튼·유저 말풍선·활성 탭 밑줄
+     --brand-primary-deep   그보다 한 단계 진한 값 — fill의 hover/active
+     --brand-primary-soft   아주 옅은 틴트 — 활성 항목 배경·hover 배경
+     --brand-ink            텍스트/아이콘용 잉크 네이비 — 제목·다크 서피스
+     --brand-gradient       인디고→블루 그라디언트 — 로고 마크·주요 CTA */
+  --brand-primary: #3b82f6;
+  --brand-primary-strong: #2563eb;
+  --brand-primary-deep: #1d4ed8;
+  --brand-primary-soft: #eef3ff;
+  --brand-ink: #1e293b;
+  --brand-gradient: linear-gradient(135deg, #4f46e5, #2563eb);
 
-  --success: #1f9d55;
-  --success-bg: #e8f8ee;
-  --mid: #2f6fa8;
-  --mid-bg: #eaf1fb;
-  --warning: #b7791f;
-  --warning-bg: #fdf3e2;
-  --warning-rgb: 183, 121, 31; /* --warning의 RGB — 반투명(rgba) 강조에 rgba(var(--warning-rgb), α)로 쓴다 */
-  --danger: #d84a3a;
-  --danger-bg: #fbeceb;
-  --danger-rgb: 216, 74, 58; /* --danger의 RGB — 반투명(rgba) 강조에 rgba(var(--danger-rgb), α)로 쓴다 */
+  /* 구 팔레트(틸) 변수명을 쓰는 기존 규칙이 그대로 동작하도록 남겨 둔 별칭.
+     :root에서 var()로 참조하므로 다크모드가 위 원본 값을 덮으면 별칭도 함께 따라간다.
+     새로 쓰는 규칙에서는 --brand-primary-* 쪽 이름을 쓴다. */
+  --brand-navy: var(--brand-ink);
+  --brand-teal: var(--brand-primary);
+  --brand-teal-dark: var(--brand-primary-strong);
+  --brand-teal-light: var(--brand-primary-soft);
 
-  --surface-sunken: #fbfcfd;
-  --surface-sunken-hover: #e7edf1;
+  --success: #16a34a;
+  --success-bg: #e8f7ee;
+  --mid: #2563eb;
+  --mid-bg: #eef3ff;
+  --warning: #b45309;
+  --warning-bg: #fdf3e3;
+  --warning-rgb: 180, 83, 9; /* --warning의 RGB — 반투명(rgba) 강조에 rgba(var(--warning-rgb), α)로 쓴다 */
+  --danger: #dc2626;
+  --danger-bg: #fdeceb;
+  --danger-rgb: 220, 38, 38; /* --danger의 RGB — 반투명(rgba) 강조에 rgba(var(--danger-rgb), α)로 쓴다 */
 
-  /* brand-teal-dark은 헤더/버튼 등 "고정 채색 배경(fill)" 용도 — 테마와 무관하게 흰 텍스트와의
-     대비를 유지해야 해서 다크모드에서도 값을 바꾸지 않는다. 반면 같은 색을 텍스트/아이콘/보더
-     악센트로 쓰는 곳(--accent-text)은 다크모드에서 어두운 배경 위에 놓이므로 밝게 바꿔야 한다. */
-  --accent-text: var(--brand-teal-dark);
-  --code-bg-subtle: rgba(0, 0, 0, 0.06);
+  --surface-sunken: #f8fafc;
+  --surface-sunken-hover: #eef2f8;
+
+  /* 채색 배경(fill) 위가 아니라 페이지 배경 위에 놓이는 텍스트/아이콘/보더 악센트 —
+     다크모드에서는 어두운 배경 대비를 위해 더 밝은 값으로 바뀐다. */
+  --accent-text: var(--brand-primary-strong);
+  --code-bg-subtle: rgba(15, 23, 42, 0.06);
+
+  /* 카드/팝오버 그림자와 셸 치수 — 라이트·다크가 서로 다른 값을 써야 해서 토큰으로 뽑았다.
+     --panel-height는 상단 헤더 높이와 .app-main 패딩(24+28)에 여유를 더한 값으로,
+     업로드·분석·챗 패널과 도킹 챗봇이 같은 높이로 맞춰지는 기준이다. */
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 10px 28px rgba(16, 24, 40, 0.06);
+  --shadow-pop: 0 12px 28px rgba(16, 24, 40, 0.14);
+  --app-header-h: 68px;
+  --action-bar-h: 64px;
+  /* 96px = .app-main 상하 패딩(24+28) + 액션 바 위 간격(16) + 여유(28) */
+  --panel-height: calc(100vh - var(--app-header-h) - var(--action-bar-h) - 96px);
 
   color: var(--text);
   background: var(--bg);
@@ -43,30 +69,40 @@
    로그인 전 화면의 브랜드 비주얼(AuthVisual.vue)은 이번 스코프에서 제외한다 — 로그인 폼
    자체(AuthCard.vue)는 시맨틱 변수를 쓰므로 자동으로 다크 대응된다. */
 :root[data-theme="dark"] {
-  --bg: #0c1114;
-  --surface: #1e2830;
-  --border: #3c4a55;
-  --text: #e6ebef;
-  --text-muted: #93a1ac;
+  --bg: #0b1120;
+  --surface: #151d2e;
+  --border: #2c3852;
+  --text: #e2e8f0;
+  --text-muted: #94a3b8;
 
-  --brand-teal: #4db8cf;
-  --brand-teal-light: #16333b;
-  --accent-text: #6fcadd;
+  /* 별칭(--brand-teal 등)은 :root에서 var()로 이 값들을 참조하므로 여기서 다시 선언하지
+     않는다 — 원본만 덮으면 별칭이 자동으로 따라온다. */
+  --brand-primary: #60a5fa;
+  --brand-primary-strong: #3b82f6;
+  --brand-primary-deep: #2563eb;
+  --brand-primary-soft: #1b2a48;
+  --brand-ink: #0f172a;
+  --brand-gradient: linear-gradient(135deg, #6366f1, #3b82f6);
+
+  --accent-text: #7cb2fb;
   --code-bg-subtle: rgba(255, 255, 255, 0.12);
 
-  --success: #3ecb7a;
-  --success-bg: #163826;
-  --mid: #5b9bd6;
-  --mid-bg: #17293c;
-  --warning: #e0a83f;
-  --warning-bg: #3a2e12;
-  --warning-rgb: 224, 168, 63;
-  --danger: #e8695a;
-  --danger-bg: #3a1e1c;
-  --danger-rgb: 232, 105, 90;
+  --success: #4ade80;
+  --success-bg: #14321f;
+  --mid: #7cb2fb;
+  --mid-bg: #172a44;
+  --warning: #fbbf24;
+  --warning-bg: #3a2d10;
+  --warning-rgb: 251, 191, 36;
+  --danger: #f87171;
+  --danger-bg: #3b1a1a;
+  --danger-rgb: 248, 113, 113;
 
-  --surface-sunken: #26313b;
-  --surface-sunken-hover: #303e49;
+  --surface-sunken: #1b2537;
+  --surface-sunken-hover: #24314a;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 28px rgba(0, 0, 0, 0.35);
+  --shadow-pop: 0 12px 28px rgba(0, 0, 0, 0.45);
 }
 
 * {
@@ -124,8 +160,30 @@ input {
 
 /* ---------- Layout shell ---------- */
 
+/* 셸은 세로 2단이다 — 상단 헤더(전체 폭)가 먼저 오고, 그 아래 가로 2단(사이드바 + 본문).
+   헤더를 사이드바 바깥 위쪽에 두면 브랜드·전역 액션이 화면 폭 전체를 기준으로 정렬된다. */
 .app-shell {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 시안의 화면 테두리 — 뷰포트를 두르는 브랜드색 링. 레이아웃에 관여하지 않도록 흐름 밖의
+   고정 오버레이로 그린다(요소에 border를 주면 폭 계산과 스크롤이 함께 흔들린다).
+   z-index는 사이드바 드로어(100)보다 위, 튜토리얼 스포트라이트(200)보다 아래. */
+.app-shell::before {
+  content: "";
+  position: fixed;
+  inset: 3px;
+  border: 2px solid var(--brand-primary-strong);
+  border-radius: 14px;
+  pointer-events: none;
+  z-index: 120;
+}
+
+.app-shell__body {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: row;
 }
@@ -161,73 +219,318 @@ input {
   padding: 24px;
 }
 
-/* ---------- Header ---------- */
+/* ---------- Header (AppHeader.vue) ----------
+   흰 배경 · 얇은 하단 보더 · 3분할(브랜드 / 단계 내비 / 전역 액션). 높이는 --app-header-h로
+   고정한다 — 사이드바의 sticky 오프셋과 패널 높이(--panel-height)가 같은 값을 참조한다. */
 
 .app-header {
+  position: sticky;
+  top: 0;
+  z-index: 45;
+  flex-shrink: 0;
+  height: var(--app-header-h);
   display: flex;
   align-items: center;
   gap: 20px;
-  padding: 14px 28px;
+  padding: 0 20px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  z-index: 20;
 }
 
 .app-header__brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 11px;
   min-width: 0;
+  flex: 0 1 auto;
 }
 
 .app-header__logo {
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   flex-shrink: 0;
+  border-radius: 10px;
 }
 
 .app-header__titles {
   display: flex;
   flex-direction: column;
+  gap: 1px;
   min-width: 0;
-}
-
-.app-header__eyebrow {
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  color: var(--accent-text);
 }
 
 .app-header__title {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 1.02rem;
   font-weight: 800;
-  color: var(--brand-navy);
+  letter-spacing: -0.01em;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* ---------- Sidebar ---------- */
+.app-header__subtitle {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 단계 내비 — 가운데 정렬. 활성 항목은 파란 글씨 + 2px 파란 밑줄(헤더 하단 보더 위에 겹친다). */
+.app-header__nav {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  height: 100%;
+  margin: 0 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.app-header__nav::-webkit-scrollbar {
+  display: none;
+}
+
+.app-header__nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  padding: 0 14px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.app-header__nav-item svg {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+}
+
+.app-header__nav-item:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.app-header__nav-item:disabled {
+  color: var(--border);
+  cursor: not-allowed;
+}
+
+.app-header__nav-item--active {
+  color: var(--accent-text);
+}
+
+/* 내보내기는 이동이 아니라 드롭다운이라, 내비 항목 모양만 빌려 쓰고 메뉴를 아래로 편다 */
+.app-header__export {
+  position: relative;
+  display: flex;
+}
+
+.app-header__menu--export {
+  right: auto;
+  left: 0;
+  min-width: 160px;
+}
+
+/* 내보내기 실패 문구 — 헤더 높이(--app-header-h)가 고정이라 흐름에 넣으면 레이아웃이
+   흔들린다. 헤더 아래에 겹쳐 띄운다. */
+.app-header__export-error {
+  position: absolute;
+  top: 100%;
+  right: 20px;
+  margin: 6px 0 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 0.78rem;
+  font-weight: 700;
+  box-shadow: var(--shadow-pop);
+  z-index: 50;
+}
+
+.app-header__nav-item--active::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--brand-primary-strong);
+}
+
+/* 전역 액션(기능 소개 · 설정 · 프로필) — 원형 아이콘 버튼 묶음 */
+.app-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.app-header__icon-btn {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.app-header__icon-btn svg {
+  width: 19px;
+  height: 19px;
+}
+
+.app-header__icon-btn:hover {
+  background: var(--surface-sunken-hover);
+  color: var(--accent-text);
+}
+
+.app-header__profile {
+  position: relative;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
+.app-header__avatar {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--brand-primary-soft);
+  color: var(--accent-text);
+  cursor: pointer;
+}
+
+.app-header__avatar svg {
+  width: 19px;
+  height: 19px;
+}
+
+.app-header__avatar:hover {
+  border-color: var(--brand-primary);
+}
+
+.app-header__menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 210px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-pop);
+  padding: 6px;
+  z-index: 50;
+}
+
+.app-header__menu-account {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+  min-width: 0;
+}
+
+.app-header__menu-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.app-header__menu-email {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-header__menu-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 9px 10px;
+  border-radius: 8px;
+  text-align: left;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.app-header__menu-item:hover {
+  background: var(--brand-primary-soft);
+}
+
+.app-header__menu-item--danger {
+  color: var(--danger);
+}
+
+.app-header__menu-item--danger:hover {
+  background: var(--danger-bg);
+}
+
+/* 좁은 화면 — 부제와 내비 라벨을 먼저 접어 브랜드·아이콘만 남긴다.
+   (사이드바가 오버레이로 바뀌는 900px 지점과 동일한 기준) */
+@media (max-width: 900px) {
+  .app-header {
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  .app-header__subtitle {
+    display: none;
+  }
+
+  .app-header__nav-item {
+    padding: 0 10px;
+  }
+
+  .app-header__nav-label {
+    display: none;
+  }
+}
+
+/* ---------- Sidebar ----------
+   세션 이력 전용 레일. 브랜드·기능 소개·설정·프로필은 상단 헤더(AppHeader.vue)로 옮겨졌다.
+   헤더가 화면 위를 차지하므로 sticky 기준점과 높이는 --app-header-h만큼 내려잡는다. */
 
 .app-sidebar {
   position: sticky;
-  top: 0;
+  top: var(--app-header-h);
   align-self: flex-start;
-  height: 100vh;
-  width: 240px;
+  height: calc(100vh - var(--app-header-h));
+  width: 248px;
   flex-shrink: 0;
-  background: linear-gradient(180deg, #1b2a33 0%, var(--brand-navy) 55%, #10181e 100%);
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
   z-index: 40;
   transition: width 0.22s ease;
 }
 
 .app-sidebar--collapsed {
-  width: 74px;
+  width: 64px;
 }
 
 .app-sidebar__inner {
@@ -235,31 +538,26 @@ input {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 18px 12px 16px;
+  padding: 14px 10px 16px;
 }
 
-.app-sidebar__brand {
+.app-sidebar__top {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 2px 4px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 8px;
+  padding: 0 4px 12px;
+  border-bottom: 1px solid var(--border);
   min-width: 0;
 }
 
-.app-sidebar__logo {
-  width: 34px;
-  height: 34px;
-  flex-shrink: 0;
-}
-
-.app-sidebar__brand-title {
+.app-sidebar__section-label {
   flex: 1;
   min-width: 0;
-  font-size: 0.86rem;
+  font-size: 0.7rem;
   font-weight: 800;
-  letter-spacing: 0.06em;
-  color: #e8f1f5;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -272,15 +570,15 @@ input {
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: #7d8f9b;
+  color: var(--text-muted);
   cursor: pointer;
   display: grid;
   place-items: center;
 }
 
 .app-sidebar__toggle:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #e3edf2;
+  background: var(--surface-sunken-hover);
+  color: var(--accent-text);
 }
 
 .app-sidebar__toggle svg {
@@ -310,11 +608,11 @@ input {
   border: 0;
   background: transparent;
   cursor: pointer;
-  padding: 11px 13px;
+  padding: 10px 12px;
   border-radius: 10px;
   font-weight: 700;
-  font-size: 0.92rem;
-  color: #93a5b1;
+  font-size: 0.9rem;
+  color: var(--text-muted);
   text-align: left;
   white-space: nowrap;
   min-width: 0;
@@ -357,16 +655,17 @@ input {
   padding: 4px 2px 8px;
 }
 
+/* "새 채팅" — 사이드바에서 유일하게 채색된 액션이라 옅은 브랜드 틴트로 눈에 띄게 둔다. */
 .app-sidebar__new-chat {
   display: flex;
   align-items: center;
   gap: 8px;
-  border: none;
+  border: 1px solid var(--border);
   border-radius: 10px;
-  background: transparent;
-  color: #cfe3ea;
+  background: var(--brand-primary-soft);
+  color: var(--accent-text);
   cursor: pointer;
-  padding: 13px 12px;
+  padding: 10px 12px;
   font-size: 0.84rem;
   font-weight: 700;
   flex-shrink: 0;
@@ -379,119 +678,40 @@ input {
 }
 
 .app-sidebar__new-chat:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #e3edf2;
+  border-color: var(--brand-primary);
+  background: var(--brand-primary-strong);
+  color: #ffffff;
 }
 
 .app-sidebar__nav-item svg {
-  width: 21px;
-  height: 21px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
 }
 
 .app-sidebar__nav-item:hover {
-  color: #e3edf2;
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--accent-text);
+  background: var(--surface-sunken-hover);
 }
 
 .app-sidebar__nav-item--active {
-  color: #8fd8e8;
-  background: rgba(47, 154, 178, 0.18);
-}
-
-.app-sidebar__footer {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding-top: 12px;
-}
-
-.app-sidebar__profile {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px;
-  border-radius: 12px;
-  min-width: 0;
-}
-
-.app-sidebar__avatar {
-  width: 36px;
-  height: 36px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  color: #aebfca;
-  display: grid;
-  place-items: center;
-}
-
-.app-sidebar__avatar svg {
-  width: 20px;
-  height: 20px;
-}
-
-.app-sidebar__profile-info {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-  flex: 1;
-}
-
-.app-sidebar__profile-name {
-  font-size: 0.68rem;
-  font-weight: 700;
-  color: #7d8f9b;
-  white-space: nowrap;
-}
-
-.app-sidebar__profile-email {
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: #dbe6ec;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.app-sidebar__logout {
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: #93a5b1;
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-}
-
-.app-sidebar__logout:hover {
-  color: #ff9d8f;
-  background: rgba(216, 74, 58, 0.16);
-}
-
-.app-sidebar__logout svg {
-  width: 18px;
-  height: 18px;
+  color: var(--accent-text);
+  background: var(--brand-primary-soft);
 }
 
 .app-sidebar--collapsed .app-sidebar__inner {
-  padding-left: 10px;
-  padding-right: 10px;
+  padding-left: 8px;
+  padding-right: 8px;
 }
 
-.app-sidebar--collapsed .app-sidebar__brand-title,
+.app-sidebar--collapsed .app-sidebar__section-label,
 .app-sidebar--collapsed .app-sidebar__nav-label,
-.app-sidebar--collapsed .app-sidebar__nav-chevron,
-.app-sidebar--collapsed .app-sidebar__profile-info {
+.app-sidebar--collapsed .app-sidebar__nav-chevron {
   display: none;
 }
 
-.app-sidebar--collapsed .app-sidebar__brand {
-  flex-direction: column;
+.app-sidebar--collapsed .app-sidebar__top {
   justify-content: center;
-  gap: 10px;
 }
 
 .app-sidebar--collapsed .app-sidebar__nav-item {
@@ -499,39 +719,28 @@ input {
   padding: 11px 0;
 }
 
-.app-sidebar--collapsed .app-sidebar__profile {
-  flex-direction: column;
-  gap: 8px;
-  padding: 6px 0;
-}
-
-.app-sidebar__help {
-  width: 100%;
-  margin-bottom: 8px;
-}
-
 /* ---------- 사이드바 반응형 (900px 이하 = 본문 그리드가 1열로 접히는 지점과 동일) ----------
    본문 폭을 잠식하지 않도록 사이드바를 flex 흐름에서 빼서 고정 오버레이로 띄운다.
    .app-shell의 padding-left만큼만 본문에 항상 여백을 주고(접힘 폭과 동일), 펼친 상태는
    그 위에 겹쳐 뜨는 드로어로 표시한다(AppSidebar.vue의 mobileOpen이 열림 여부를 담당). */
 @media (max-width: 900px) {
-  .app-shell {
-    padding-left: 74px;
+  .app-shell__body {
+    padding-left: 64px;
   }
 
   .app-sidebar {
     position: fixed;
-    top: 0;
+    top: var(--app-header-h);
     left: 0;
     align-self: auto;
     z-index: 100;
-    box-shadow: 0 20px 50px rgba(10, 16, 20, 0.35);
+    box-shadow: 0 20px 50px rgba(16, 24, 40, 0.18);
   }
 
   .app-sidebar__backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(16, 24, 30, 0.5);
+    background: rgba(15, 23, 42, 0.45);
     z-index: 90;
   }
 }
@@ -540,7 +749,7 @@ input {
 
 .app-main {
   flex: 1;
-  padding: 52px 28px 28px;
+  padding: 24px 28px 28px;
 }
 
 .app-main__grid {
@@ -666,7 +875,7 @@ input {
 
 .panel-drag-handle {
   flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--border);
   font-size: 0.95rem;
   line-height: 1;
   cursor: grab;
@@ -675,7 +884,7 @@ input {
 }
 
 .panel-drag-handle:hover {
-  color: #ffffff;
+  color: var(--text-muted);
 }
 
 .panel-drag-handle:active {
@@ -714,7 +923,7 @@ input {
   overflow: hidden;
   background: var(--surface);
   border-radius: 14px;
-  box-shadow: 0 30px 60px rgba(23, 32, 38, 0.35);
+  box-shadow: 0 30px 60px rgba(16, 24, 40, 0.28);
   z-index: 85;
 }
 
@@ -731,25 +940,44 @@ input {
   border: 1px solid var(--border);
   border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 18px 40px rgba(23, 32, 38, 0.06);
+  box-shadow: var(--shadow-card);
 }
 
+/* 패널 헤더 — 흰 배경 + 얇은 하단 보더 + 다크 텍스트. 왼쪽에 단계 번호 배지(①②③)가 붙는다. */
 .panel__header {
-  background: linear-gradient(135deg, var(--brand-teal-dark), var(--brand-navy));
-  padding: 16px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 18px;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
 }
 
+/* 단계 번호 — 업로드 1 · 분석 결과 2 · 챗봇 3. 패널 재배치와 무관한 "작업 순서" 표시라
+   현재 위치가 아니라 패널 종류에 고정된 값을 쓴다. */
+.panel__header-num {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--brand-primary-soft);
+  color: var(--accent-text);
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
 .panel__header h2 {
   margin: 0;
-  color: #ffffff;
+  color: var(--text);
   /* 헤더 폭보다 긴 타이틀(로케일 전환 등)은 useFitTitle이 --title-scale을 낮춰 줄바꿈 대신
      한 줄에 맞게 축소한다 — 값이 없으면(관측 전) 1배로 렌더. */
-  font-size: calc(1rem * var(--title-scale, 1));
+  font-size: calc(0.98rem * var(--title-scale, 1));
   font-weight: 800;
+  letter-spacing: -0.01em;
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -766,63 +994,703 @@ input {
 }
 
 /* .btn 기본 규칙(패딩 12px/폰트 0.9rem)이 소스 순서상 뒤에 나와 동률 우선순위에서 이겨버리므로,
-   클래스 두 개를 겹친 선택자로 우선순위를 올려 확실히 덮어쓴다.
-   헤더 배경(brand-teal-dark→brand-navy 그라디언트)은 테마와 무관하게 항상 어둡게 고정되므로,
-   .btn--outline의 라이트 배경(--surface)을 그대로 쓰면 라이트모드에서 흰 알약처럼 붕 뜬다.
-   버튼도 헤더처럼 테마와 무관한 반투명 흰색 스타일로 고정한다. */
+   클래스 두 개를 겹친 선택자로 우선순위를 올려 확실히 덮어쓴다. 헤더가 흰 배경이 되면서
+   본문 버튼과 같은 시맨틱 색을 쓸 수 있게 됐다 — 크기만 헤더용으로 줄인다. */
 .btn.panel__header-btn {
   padding: 5px 12px;
   font-size: 0.76rem;
   line-height: 1.3;
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.55);
-  color: #ffffff;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--accent-text);
 }
 
 .btn.panel__header-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.26);
+  background: var(--brand-primary-soft);
+  border-color: var(--brand-primary);
 }
 
 .btn.panel__header-btn:disabled {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.3);
-  color: rgba(255, 255, 255, 0.6);
+  background: var(--surface-sunken);
+  border-color: var(--border);
+  color: var(--text-muted);
   opacity: 1;
 }
 
 /* 내보내기 드롭다운 — 챗봇 에이전트 버전 드롭다운(.agent-version-dd)과 동일한 상호작용,
    다만 헤더 상단에 붙어 있어 메뉴는 아래로 펼친다. */
-.export-dd {
+
+.panel__header-version {
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--accent-text);
+  background: var(--brand-primary-soft);
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+.panel__body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+
+/* ---------- Panel tabs (분석 결과 패널) ----------
+   헤더 바로 아래 붙는 밑줄형 탭. 활성 항목만 브랜드색 글씨 + 2px 밑줄이고, 보여줄 게 없는
+   탭은 사라지는 대신 비활성으로 남는다 — 어떤 관점이 존재하는지는 항상 보여야 한다. */
+
+.panel-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  flex-shrink: 0;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.panel-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.panel-tabs__tab {
+  position: relative;
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  padding: 11px 12px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.panel-tabs__tab:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.panel-tabs__tab:disabled {
+  color: var(--border);
+  cursor: not-allowed;
+}
+
+.panel-tabs__tab--active {
+  color: var(--accent-text);
+}
+
+.panel-tabs__tab--active::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--brand-primary-strong);
+}
+
+/* ---------- Tab panes (공통 조판) ---------- */
+
+.tab-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.tab-pane__intro {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  font-size: 0.86rem;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.tab-pane__section-title {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tab-pane__count {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--brand-primary-soft);
+  color: var(--accent-text);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.tab-pane__note {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.tab-pane__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.bullet-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+/* ---------- 단계 흐름 칩 (업무 흐름 요약) ----------
+   좌→우로 이어지는 단계 요약. 폭이 모자라면 줄바꿈되며, 줄 끝 화살표도 함께 넘어간다. */
+
+.flow-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.flow-chips__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.flow-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.flow-chip__num {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--brand-primary-soft);
+  color: var(--accent-text);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.flow-chip__label {
+  min-width: 0;
+  max-width: 150px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.flow-chips__arrow {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* ---------- 데이터 표 (업무 단계 요약) ----------
+   좁은 패널에서는 표가 셀을 뭉개는 대신 가로로 스크롤된다 — 패널 자체는 절대 가로로
+   밀리지 않게 래퍼가 overflow를 가둔다. */
+
+.data-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  min-width: 620px;
+}
+
+.data-table th,
+.data-table td {
+  padding: 9px 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.5;
+}
+
+.data-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-weight: 800;
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.data-table tbody tr:hover td {
+  background: var(--surface-sunken);
+}
+
+.data-table__col-num {
+  width: 48px;
+  text-align: center !important;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.data-table__cell--strong {
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* ---------- 시스템 카드 · 입출력 목록 · 원문 근거 ---------- */
+
+.entity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.entity-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.entity-card__title {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 800;
+  color: var(--accent-text);
+  overflow-wrap: break-word;
+}
+
+.entity-card__meta {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+.entity-card__steps {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--text);
+}
+
+.entity-card__step-num {
+  display: inline-grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  margin-right: 6px;
+  border-radius: 5px;
+  background: var(--surface-sunken-hover);
+  color: var(--text-muted);
+  font-size: 0.64rem;
+  font-weight: 800;
+}
+
+.io-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.io-columns__col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.entity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.entity-list__item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.82rem;
+}
+
+.entity-list__item:last-child {
+  border-bottom: 0;
+}
+
+.entity-list__name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  overflow-wrap: break-word;
+}
+
+/* 이 항목이 등장하는 단계 번호 — 목록 오른쪽에 조용히 붙인다 */
+.entity-list__steps {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--surface-sunken-hover);
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.entity-list__empty {
+  padding: 14px 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.evidence-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.evidence-list__item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--surface);
+}
+
+.evidence-list__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.evidence-list__num {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--brand-primary-soft);
+  color: var(--accent-text);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.evidence-list__name {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.84rem;
+  font-weight: 700;
+  overflow-wrap: break-word;
+}
+
+.evidence-list__page {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.evidence-list__quote {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--brand-primary);
+  background: var(--surface-sunken);
+  border-radius: 0 8px 8px 0;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+/* ---------- 사이드 카드 (분석 진행 상태 · 분석 요약) ---------- */
+
+.side-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.side-card__title {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+/* ── 진행 상태 체크리스트 ── */
+
+.progress-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.progress-list__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.progress-list__icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  display: grid;
+  place-items: center;
+  color: var(--border);
+}
+
+.progress-list__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.progress-list__item--done .progress-list__icon {
+  color: var(--success);
+}
+
+.progress-list__item--error .progress-list__icon {
+  color: var(--danger);
+}
+
+/* 진행 중 — 채워진 점이 잔잔하게 맥동한다(스피너는 오른쪽 상태 칩이 맡는다) */
+.progress-list__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--brand-primary-strong);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.progress-list__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.progress-list__label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.progress-list__item--pending .progress-list__label {
+  color: var(--text-muted);
+}
+
+.progress-list__detail {
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+  overflow-wrap: break-word;
+}
+
+.progress-list__state {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+
+.progress-list__item--done .progress-list__state {
+  color: var(--success);
+}
+
+.progress-list__item--running .progress-list__state {
+  color: var(--accent-text);
+}
+
+.progress-list__item--error .progress-list__state {
+  color: var(--danger);
+}
+
+.progress-list__state-spinner {
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--border);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* ── 분석 요약 통계 ── */
+
+.stat-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-list__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+
+.stat-list__row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.stat-list__row:first-child {
+  padding-top: 0;
+}
+
+.stat-list dt {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.stat-list dd {
+  margin: 0;
+  min-width: 0;
+  font-size: 0.94rem;
+  font-weight: 800;
+  color: var(--text);
+  text-align: right;
+  overflow-wrap: break-word;
+}
+
+/* 모델명·토큰처럼 숫자가 아닌 값은 큰 굵은 글씨가 과하다 */
+.stat-list .stat-list__value--text {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+/* ---------- 하단 액션 바 ---------- */
+
+.action-bar {
+  max-width: 1760px;
+  margin: 16px auto 0;
+  min-height: var(--action-bar-h);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
+}
+
+.action-bar__right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+/* 화살표 글리프와 라벨이 붙지 않게 간격만 준다 — 색·배경은 .btn 변형이 맡는다 */
+.action-bar__prev,
+.action-bar__next {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.action-bar__error {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--danger);
+}
+
+.action-bar__code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8em;
+  opacity: 0.75;
+}
+
+.action-bar__export {
   position: relative;
 }
 
-.export-dd__btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.export-dd__chevron {
-  flex-shrink: 0;
-  width: 12px;
-  height: 12px;
-  transition: transform 0.15s ease;
-}
-
-.export-dd__btn--open .export-dd__chevron {
-  transform: rotate(180deg);
-}
-
-.export-dd__menu {
+.action-bar__menu {
   position: absolute;
-  top: calc(100% + 8px);
+  bottom: calc(100% + 8px);
   right: 0;
   width: max-content;
-  min-width: 140px;
+  min-width: 150px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
-  box-shadow: 0 12px 28px rgba(23, 32, 38, 0.14);
+  box-shadow: var(--shadow-pop);
   padding: 6px;
   z-index: 30;
   display: flex;
@@ -830,7 +1698,7 @@ input {
   gap: 2px;
 }
 
-.export-dd__item {
+.action-bar__menu-item {
   width: 100%;
   border: 0;
   background: transparent;
@@ -843,31 +1711,8 @@ input {
   cursor: pointer;
 }
 
-.export-dd__item:hover {
-  background: var(--brand-teal-light);
-}
-
-.panel__header-version {
-  font-size: 0.66rem;
-  font-weight: 800;
-  line-height: 1.3;
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.18);
-  padding: 3px 8px;
-  border-radius: 999px;
-}
-
-.panel__body {
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.analysis-results {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
+.action-bar__menu-item:hover {
+  background: var(--brand-primary-soft);
 }
 
 /* ---------- Upload mode toggle ---------- */
@@ -876,7 +1721,7 @@ input {
   display: flex;
   gap: 4px;
   padding: 4px;
-  background: var(--bg);
+  background: var(--surface-sunken-hover);
   border-radius: 10px;
 }
 
@@ -895,7 +1740,7 @@ input {
 .upload-mode-toggle__btn--active {
   background: var(--surface);
   color: var(--accent-text);
-  box-shadow: 0 1px 4px rgba(23, 32, 38, 0.1);
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.12);
 }
 
 .text-input-area {
@@ -971,7 +1816,7 @@ input {
   margin-top: 4px;
   padding: 8px 18px;
   border-radius: 8px;
-  background: var(--brand-teal-dark);
+  background: var(--brand-gradient);
   color: #ffffff;
   font-weight: 700;
   font-size: 0.86rem;
@@ -1003,14 +1848,31 @@ input {
   color: var(--text-muted);
 }
 
+/* 문서 카드 — 3줄: [아이콘 파일명 · 용량] / [상태] / [업로드 일시].
+   상태와 일시를 파일명 줄에 우겨넣으면 긴 파일명에서 전부 잘려 나가므로 줄을 나눈다. */
 .doc-card {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 10px 12px;
-  background: var(--surface-sunken);
+  padding: 12px;
+  background: var(--surface);
+}
+
+.doc-card__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.doc-card__row--status,
+.doc-card__row--meta {
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 0.78rem;
 }
 
 .doc-card__icon {
@@ -1020,20 +1882,15 @@ input {
   border-radius: 8px;
   background: var(--danger-bg);
   color: var(--danger);
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 800;
   display: grid;
   place-items: center;
 }
 
-.doc-card__info {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
 .doc-card__name {
+  flex: 1;
+  min-width: 0;
   font-size: 0.88rem;
   font-weight: 700;
   white-space: nowrap;
@@ -1042,46 +1899,54 @@ input {
 }
 
 .doc-card__size {
+  flex-shrink: 0;
   font-size: 0.76rem;
   color: var(--text-muted);
 }
 
-.doc-card__status {
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
+.doc-card__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-weight: 700;
 }
 
-.doc-card__status--loading {
-  border: 2.5px solid var(--border);
-  border-top-color: var(--accent-text);
+.doc-card__state--done {
+  color: var(--success);
+}
+
+.doc-card__state--running {
+  color: var(--accent-text);
+}
+
+.doc-card__state--error {
+  color: var(--danger);
+}
+
+.doc-card__spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border);
+  border-top-color: currentColor;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+}
+
+.doc-card__meta-label {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.doc-card__meta-value {
+  color: var(--text);
+  font-weight: 700;
 }
 
 @keyframes spin {
   to {
     transform: rotate(360deg);
   }
-}
-
-.extraction-meta {
-  margin: 0;
-  padding: 10px 12px;
-  list-style: none;
-  border-left: 3px solid var(--brand-teal);
-  background: var(--brand-teal-light);
-  border-radius: 0 8px 8px 0;
-  color: var(--accent-text);
-  font-size: 0.82rem;
-  font-weight: 700;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.extraction-meta__warning {
-  color: var(--danger);
 }
 
 .upload-actions {
@@ -1154,24 +2019,29 @@ input {
 .btn {
   border: 0;
   border-radius: 9px;
-  padding: 12px 16px;
+  padding: 11px 16px;
   font-weight: 800;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+/* 기본 CTA — 인디고→블루 그라디언트. hover에서는 그라디언트를 걷고 한 단계 진한 단색으로
+   눌러앉는 느낌을 준다(그라디언트끼리 보간하면 브라우저가 색을 튀게 계산한다). */
 .btn--primary {
-  background: var(--brand-teal-dark);
+  background: var(--brand-gradient);
   color: #ffffff;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.24);
 }
 
 .btn--primary:hover:not(:disabled) {
-  background: var(--brand-navy);
+  background: var(--brand-primary-deep);
 }
 
 .btn--primary:disabled {
   background: var(--border);
   color: var(--text-muted);
+  box-shadow: none;
   cursor: not-allowed;
 }
 
@@ -1184,12 +2054,13 @@ input {
 
 .btn--outline {
   background: var(--surface);
-  border: 1px solid var(--accent-text);
+  border: 1px solid var(--border);
   color: var(--accent-text);
 }
 
 .btn--outline:hover:not(:disabled) {
-  background: var(--brand-teal-light);
+  background: var(--brand-primary-soft);
+  border-color: var(--brand-primary);
 }
 
 .btn--outline:disabled {
@@ -1220,8 +2091,8 @@ input {
   position: relative; /* .panel__bottom-fade가 이 박스 바닥에 고정되는 기준 */
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 150px);
-  max-height: calc(100vh - 150px);
+  height: var(--panel-height);
+  max-height: var(--panel-height);
 }
 
 .panel--wide .panel__body {
@@ -1304,39 +2175,6 @@ input {
 }
 
 /* ── 비전 보강(FR-03) 버튼/상태 — 업로드 패널, 파싱 완료 메타 바로 아래 ── */
-.vision-enrich {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.vision-enrich__status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  font-size: 0.82rem;
-  color: var(--text-muted);
-}
-
-.vision-enrich__status--done {
-  color: var(--success, #16a34a);
-}
-
-.vision-enrich__status--error {
-  color: var(--danger);
-}
-
-.vision-enrich__spinner {
-  flex-shrink: 0;
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent-text);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
 
 .rec-card__description {
   margin: 0 0 12px;
@@ -1588,7 +2426,12 @@ input {
 .skeleton-line {
   height: 12px;
   border-radius: 6px;
-  background: linear-gradient(90deg, #eef1f4 25%, #e2e7eb 37%, #eef1f4 63%);
+  background: linear-gradient(
+    90deg,
+    var(--surface-sunken) 25%,
+    var(--surface-sunken-hover) 37%,
+    var(--surface-sunken) 63%
+  );
   background-size: 400% 100%;
   animation: shimmer 1.4s ease infinite;
 }
@@ -1647,7 +2490,7 @@ input {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(23, 32, 38, 0.45);
+  background: rgba(15, 23, 42, 0.5);
   display: grid;
   place-items: center;
   z-index: 60;
@@ -2317,7 +3160,7 @@ input {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
-  box-shadow: 0 12px 28px rgba(23, 32, 38, 0.14);
+  box-shadow: var(--shadow-pop);
   padding: 6px;
   z-index: 10;
 }
@@ -2672,11 +3515,11 @@ input {
   border-radius: 6px;
 }
 
-.flow-branch__role--try { background: #1f6f8b; }
-.flow-branch__role--catch { background: #b7791f; }
-.flow-branch__role--finally { background: #1f9d55; }
+.flow-branch__role--try { background: #2563eb; }
+.flow-branch__role--catch { background: #b45309; }
+.flow-branch__role--finally { background: #16a34a; }
 .flow-branch__role--throw { background: var(--danger); }
-.flow-branch__role--cond { background: #7c5cbf; }
+.flow-branch__role--cond { background: #7c3aed; }
 
 .flow-branch__body {
   width: 100%;
@@ -2880,7 +3723,6 @@ input {
   color: var(--mid);
 }
 
-
 /* ── v3 품질 루프 진행 스트립 (후보 카드 · 심판 · 검증 요약) ── */
 .flow-quality-strip {
   margin: -6px 0 16px;
@@ -3021,8 +3863,8 @@ input {
 }
 
 .flow-confidence--mid {
-  background: rgba(217, 119, 6, 0.12);
-  color: #d97706;
+  background: rgba(var(--warning-rgb), 0.14);
+  color: var(--warning);
 }
 
 .flow-confidence--low {
@@ -3071,8 +3913,8 @@ input {
 }
 
 .flow-box__confidence--mid {
-  background: rgba(217, 119, 6, 0.12);
-  color: #d97706;
+  background: rgba(var(--warning-rgb), 0.14);
+  color: var(--warning);
 }
 
 .flow-box__confidence--low {
@@ -3383,8 +4225,8 @@ input {
   height: 58px;
   border-radius: 50%;
   border: none;
-  background: linear-gradient(135deg, var(--brand-teal), var(--brand-teal-dark));
-  box-shadow: 0 12px 28px rgba(31, 111, 139, 0.4);
+  background: var(--brand-gradient);
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.36);
   cursor: pointer;
   display: grid;
   place-items: center;
@@ -3409,7 +4251,7 @@ input {
   background: var(--surface);
   border-radius: 14px;
   border: 1px solid var(--border);
-  box-shadow: 0 26px 60px rgba(23, 32, 38, 0.28);
+  box-shadow: 0 26px 60px rgba(16, 24, 40, 0.22);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -3418,8 +4260,8 @@ input {
 }
 
 .chat-popup--drop-ready {
-  border-color: var(--brand-teal);
-  box-shadow: 0 26px 60px rgba(31, 111, 139, 0.4);
+  border-color: var(--brand-primary);
+  box-shadow: 0 26px 60px rgba(37, 99, 235, 0.34);
 }
 
 /* 드래그 중에는 어디에 놓일지 미리 강조하는 대신(예전의 app-main--drop-active 전체
@@ -3433,21 +4275,24 @@ input {
   position: static;
   z-index: auto;
   width: 100%;
-  height: calc(100vh - 150px);
+  height: var(--panel-height);
   max-width: none;
-  max-height: calc(100vh - 150px);
+  max-height: var(--panel-height);
   align-self: stretch;
   min-height: 560px;
-  box-shadow: 0 18px 40px rgba(23, 32, 38, 0.06);
+  box-shadow: var(--shadow-card);
 }
 
+/* 도킹 상태에서는 업로드·분석 패널 헤더와 완전히 같은 흰 헤더로 보여야 한다. 플로팅
+   상태에서도 같은 스타일을 쓰되, 드래그 손잡이라는 점만 커서로 알린다. */
 .chat-popup__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   padding: 14px 16px;
-  background: linear-gradient(135deg, var(--brand-teal-dark), var(--brand-navy));
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
   cursor: grab;
   user-select: none;
   touch-action: none;
@@ -3466,10 +4311,15 @@ input {
 }
 
 .chat-popup__title {
-  color: #ffffff;
+  color: var(--text);
   font-weight: 800;
   font-size: 0.94rem;
+  letter-spacing: -0.01em;
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 타 솔루션 모드 배지 (RPA-286) — 세션이 A360이 아닌 어휘로 돌고 있음을 알린다.
@@ -3477,10 +4327,10 @@ input {
    차지하므로 배지는 줄어들지 않게 flex-shrink:0으로 고정한다. */
 .chat-popup__solution {
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: var(--warning-bg);
+  border: 1px solid rgba(var(--warning-rgb), 0.4);
   border-radius: 999px;
-  color: #ffffff;
+  color: var(--warning);
   font-size: 0.72rem;
   font-weight: 700;
   line-height: 1;
@@ -3494,7 +4344,7 @@ input {
 
 .chat-popup__solution:hover,
 .chat-popup__solution:focus-visible {
-  background: rgba(255, 255, 255, 0.32);
+  border-color: var(--warning);
 }
 
 /* 모드 되돌리기 실패 — 배지 바로 아래(실패한 조작 옆)에 띄운다. upload-error의 색/타이포를
@@ -3506,10 +4356,14 @@ input {
 .chat-popup__close {
   background: transparent;
   border: 0;
-  color: #ffffff;
+  color: var(--text-muted);
   font-size: 0.95rem;
   cursor: pointer;
   padding: 2px 6px;
+}
+
+.chat-popup__close:hover {
+  color: var(--text);
 }
 
 .chat-popup__footer {
@@ -3575,7 +4429,7 @@ input {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
-  box-shadow: 0 12px 28px rgba(23, 32, 38, 0.14);
+  box-shadow: var(--shadow-pop);
   padding: 6px;
   z-index: 30;
   display: flex;
@@ -3771,12 +4625,16 @@ input {
 .chat-popup__minimize {
   background: transparent;
   border: 0;
-  color: #ffffff;
+  color: var(--text-muted);
   font-size: 1.3rem;
   line-height: 1;
   font-weight: 800;
   cursor: pointer;
   padding: 2px 10px;
+}
+
+.chat-popup__minimize:hover {
+  color: var(--text);
 }
 
 .chat-popup__messages {
@@ -3915,18 +4773,17 @@ input {
   color: var(--text);
 }
 
+/* 내 말풍선 — 채색 배경(흰 글씨) 대신 옅은 브랜드 틴트에 본문색 글씨. 긴 마크다운 답변과
+   나란히 놓였을 때 대비가 과하지 않고, 다크모드에서도 같은 규칙이 그대로 성립한다. */
 .chat-message--user .chat-message__bubble {
-  background: var(--brand-teal-dark);
-  color: #ffffff;
+  background: var(--brand-primary-soft);
+  border: 1px solid rgba(59, 130, 246, 0.22);
+  color: var(--text);
   border-top-right-radius: 4px;
 }
 
 .chat-message--user .chat-message__bubble code {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.chat-message--user .chat-message__bubble a {
-  color: #ffffff;
+  background: rgba(37, 99, 235, 0.14);
 }
 
 .chat-message__bubble--pending {
@@ -4027,8 +4884,8 @@ input {
 
 .chat-popup__composer textarea:focus {
   outline: none;
-  border-color: var(--brand-teal);
-  box-shadow: 0 0 0 3px var(--brand-teal-light);
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
 }
 
 .chat-popup__composer textarea:disabled {
@@ -4047,11 +4904,15 @@ input {
   border: 0;
   border-radius: 8px;
   padding: 0 16px;
-  background: var(--brand-teal-dark);
+  background: var(--brand-gradient);
   color: #ffffff;
   font-weight: 800;
   font-size: 0.84rem;
   cursor: pointer;
+}
+
+.chat-popup__composer button:hover:not(:disabled) {
+  background: var(--brand-primary-deep);
 }
 
 /* ---------- Login page ---------- */
@@ -4117,8 +4978,8 @@ input {
   padding-bottom: 55%;
   bottom: -18%;
   right: -18%;
-  background: radial-gradient(circle at 60% 60%, #8fe0c8 0%, transparent 70%);
-  opacity: 0.4;
+  background: radial-gradient(circle at 60% 60%, #818cf8 0%, transparent 70%);
+  opacity: 0.45;
   animation: authBlobFloat2 28s ease-in-out infinite;
 }
 
@@ -4127,7 +4988,7 @@ input {
   padding-bottom: 32%;
   top: 4%;
   right: 4%;
-  background: radial-gradient(circle, #ffe08a 0%, transparent 70%);
+  background: radial-gradient(circle, #93c5fd 0%, transparent 70%);
   opacity: 0.45;
   animation: authBlobFloat4 21s ease-in-out infinite;
 }
@@ -4590,28 +5451,28 @@ input {
   transform: translateY(-50%);
   width: 16px;
   height: 16px;
-  color: #7d8f9b;
+  color: var(--text-muted);
   pointer-events: none;
 }
 
 .archive-chat__search input {
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 10px 8px 32px;
   font-size: 0.82rem;
-  background: rgba(255, 255, 255, 0.06);
-  color: #e3edf2;
+  background: var(--surface-sunken);
+  color: var(--text);
 }
 
 .archive-chat__search input::placeholder {
-  color: #7d8f9b;
+  color: var(--text-muted);
 }
 
 .archive-chat__search input:focus {
   outline: none;
-  border-color: var(--brand-teal);
-  box-shadow: 0 0 0 3px rgba(47, 154, 178, 0.25);
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
 }
 
 .archive-chat__list {
@@ -4625,7 +5486,7 @@ input {
   flex: 1;
   min-height: 0;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  scrollbar-color: var(--border) transparent;
 }
 
 .archive-chat__list::-webkit-scrollbar {
@@ -4637,12 +5498,12 @@ input {
 }
 
 .archive-chat__list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--border);
   border-radius: 3px;
 }
 
 .archive-chat__list::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.34);
+  background: var(--text-muted);
 }
 
 .archive-chat__show-more {
@@ -4653,7 +5514,7 @@ input {
   width: 100%;
   border: none;
   background: transparent;
-  color: #93a5b1;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 8px;
   border-radius: 8px;
@@ -4662,8 +5523,8 @@ input {
 }
 
 .archive-chat__show-more button:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #e3edf2;
+  background: var(--surface-sunken-hover);
+  color: var(--accent-text);
 }
 
 .archive-chat__item {
@@ -4672,7 +5533,8 @@ input {
 }
 
 .archive-chat__item--active {
-  background: rgba(47, 154, 178, 0.18);
+  background: var(--brand-primary-soft);
+  box-shadow: inset 2px 0 0 var(--brand-primary-strong);
 }
 
 .archive-chat__item-menu-wrap {
@@ -4684,7 +5546,7 @@ input {
 .archive-chat__item-menu-btn {
   border: 0;
   background: transparent;
-  color: #93a5b1;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 6px;
@@ -4693,8 +5555,8 @@ input {
 }
 
 .archive-chat__item-menu-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #e3edf2;
+  background: var(--surface-sunken-hover);
+  color: var(--text);
 }
 
 .archive-chat__item-menu {
@@ -4705,7 +5567,7 @@ input {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
-  box-shadow: 0 12px 28px rgba(23, 32, 38, 0.24);
+  box-shadow: var(--shadow-pop);
   padding: 6px;
   z-index: 10;
 }
@@ -4746,7 +5608,7 @@ input {
 .archive-chat__empty {
   padding: 20px 8px;
   text-align: center;
-  color: #7d8f9b;
+  color: var(--text-muted);
   font-size: 0.8rem;
 }
 
@@ -4764,7 +5626,7 @@ input {
 }
 
 .archive-chat__item:not(.archive-chat__item--active) .archive-results__item-main:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--surface-sunken-hover);
 }
 
 .archive-results__item-icon {
@@ -4780,8 +5642,8 @@ input {
 
 /* 세션 아이콘 — 파일 확장자 대신 세션의 솔루션 키(A360 등)를 표시한다 (P0-2 실연동) */
 .archive-results__item-icon--session {
-  background: rgba(47, 154, 178, 0.22);
-  color: #8fd8e8;
+  background: var(--brand-primary-soft);
+  color: var(--accent-text);
   font-size: 0.56rem;
 }
 
@@ -4799,8 +5661,8 @@ input {
   content: "";
   width: 14px;
   height: 14px;
-  border: 2px solid rgba(143, 216, 232, 0.35);
-  border-top-color: #8fd8e8;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent-text);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -4816,7 +5678,7 @@ input {
 .archive-results__item-title {
   font-size: 0.84rem;
   font-weight: 700;
-  color: #e3edf2;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4824,7 +5686,7 @@ input {
 
 .archive-results__item-date {
   font-size: 0.68rem;
-  color: #7d8f9b;
+  color: var(--text-muted);
   margin-top: 1px;
 }
 
@@ -4839,16 +5701,16 @@ input {
 .tour-overlay__backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(16, 24, 30, 0.62);
+  background: rgba(15, 23, 42, 0.62);
 }
 
 .tour-overlay__spotlight {
   position: fixed;
   border-radius: 16px;
-  border: 2px solid var(--brand-teal);
+  border: 2px solid var(--brand-primary);
   box-shadow:
-    0 0 0 9999px rgba(16, 24, 30, 0.62),
-    0 0 24px rgba(47, 154, 178, 0.55);
+    0 0 0 9999px rgba(15, 23, 42, 0.62),
+    0 0 24px rgba(59, 130, 246, 0.55);
   transition:
     top 0.3s ease,
     left 0.3s ease,
@@ -4864,7 +5726,7 @@ input {
   background: var(--surface);
   border-radius: 16px;
   padding: 20px 22px 16px;
-  box-shadow: 0 24px 60px rgba(16, 24, 30, 0.35);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.3);
   transition:
     top 0.3s ease,
     left 0.3s ease;

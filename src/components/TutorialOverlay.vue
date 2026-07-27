@@ -49,7 +49,7 @@ function findTarget(step) {
 }
 
 // 타겟이 자신은 스크롤 없이 전체 콘텐츠 높이만큼 늘어나고, 실제 스크롤은 조상 요소
-// (예: analysis-results는 늘어나기만 하고 panel__body가 overflow-y:auto로 스크롤됨)가
+// (예: 탭 콘텐츠는 늘어나기만 하고 panel__body가 overflow-y:auto로 스크롤됨)가
 // 담당하는 경우, getBoundingClientRect()는 화면에 실제로 보이는 범위를 넘어서는 값을
 // 돌려준다 — 스크롤되는 조상들의 가시 영역과 교집합을 구해 실제 보이는 범위로 잘라낸다.
 function getVisibleRect(el) {
