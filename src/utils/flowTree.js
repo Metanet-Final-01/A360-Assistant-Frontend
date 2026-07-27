@@ -72,6 +72,26 @@ export function assignUiIds(steps) {
   return steps;
 }
 
+function walkStripEmptyChildren(node) {
+  if (Array.isArray(node.children)) {
+    if (node.children.length === 0) delete node.children;
+    else node.children.forEach(walkStripEmptyChildren);
+  }
+}
+
+// 백엔드 RecommendedAction 스키마는 children을 항상 list(default_factory=list)로 내려보내
+// 리프 액션도 children: []을 갖는다. flowLayout/flowDrop은 (RPA-289로 빈 컨테이너를 프레임
+// 없는 리프로 오인하던 버그를 고치려고) children 길이가 아니라 Array.isArray(children)로
+// 컨테이너 여부를 판단하므로, 백엔드에서 막 불러온 트리를 그대로 넘기면 모든 리프 액션이
+// 컨테이너 프레임(점선 테두리)으로 잘못 렌더된다. 백엔드 트리를 로컬 편집 버퍼로 복제하는
+// 시점에 한 번, 실제로 비어 있는 children[]을 지워 진짜 컨테이너(children이 있었던 노드)만
+// 남긴다 — 카탈로그로 새로 만든 빈 컨테이너나 사용자가 편집 중 만든 children[]은 이 시점
+// 이후에 생기므로 영향받지 않는다.
+export function stripEmptyChildren(steps) {
+  (steps ?? []).forEach((step) => (step.actions ?? []).forEach(walkStripEmptyChildren));
+  return steps;
+}
+
 function stripNode({ __uid, children, ...rest }) {
   return children ? { ...rest, children: children.map(stripNode) } : rest;
 }
