@@ -82,10 +82,21 @@ export const useSettingsStore = defineStore("settings", () => {
   loadAgentVersions(); // 앱 부팅 시 1회 — 실패하면 챗 패널의 버전 드롭다운이 숨겨진다(새로고침 시 재시도)
 
   // data-theme 속성을 <html>에 반영 — style.css의 :root[data-theme="dark"] 오버라이드가 이걸 본다.
+  // 버튼·패널 등 곳곳의 hover용 transition(background/border-color 등)이 테마 전환에도 그대로
+  // 적용되면 전체 화면 색이 스멀스멀 번지듯 바뀐다 — 전환 직전 잠깐 모든 transition을 꺼서
+  // 테마만은 한 번에 바뀌게 하고, 다음 프레임에 다시 켜 hover 등 원래 동작은 그대로 둔다.
   watch(
     theme,
     (value) => {
-      document.documentElement.setAttribute("data-theme", value);
+      const root = document.documentElement;
+      root.classList.add("theme-transition-off");
+      root.setAttribute("data-theme", value);
+      void root.offsetHeight; // 강제 리플로우 — 위 두 줄이 transition 없이 반영되게 한다
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          root.classList.remove("theme-transition-off");
+        });
+      });
     },
     { immediate: true },
   );

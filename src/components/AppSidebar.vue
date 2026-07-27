@@ -1,10 +1,13 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { useAuthStore } from "../stores/auth";
 import { useArchiveStore } from "../stores/archive";
 
-// 브랜드 · 기능 소개 · 설정 · 계정(로그아웃)은 상단 헤더(AppHeader.vue)가 맡는다 —
-// 이 사이드바는 세션 이력(새 채팅 · 검색 · 목록)만 담당하는 레일이다.
+// 브랜드 · 세션 이력 · 기능 소개 · 설정 · 계정(로그아웃)까지 앱의 전역 메뉴/옵션을 전부 이
+// 좌측 사이드바가 담당한다 — 예전에는 별도의 상단 헤더(AppHeader.vue)가 있었지만 화면
+// 재구성(RPA-326)으로 옮겨졌던 것을 다시 사이드바로 합쳤다.
+const auth = useAuthStore();
 const archive = useArchiveStore();
 const { t } = useI18n();
 
@@ -20,7 +23,7 @@ const props = defineProps({
   activeSessionBusy: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(["select-session", "new-chat"]);
+const emit = defineEmits(["select-session", "new-chat", "logout", "tutorial", "open-settings"]);
 
 const COLLAPSE_KEY = "a360.sidebarCollapsed";
 const savedCollapsed = localStorage.getItem(COLLAPSE_KEY);
@@ -42,6 +45,32 @@ function handleMobileChange(event) {
 // 표시상 접힘 여부 — 모바일에서는 드로어 열림 상태, 데스크톱에서는 저장된 선호도를 따른다.
 const collapsedForDisplay = computed(() => (isMobile.value ? !mobileOpen.value : isCollapsed.value));
 
+function toggleCollapsed() {
+  if (isMobile.value) {
+    mobileOpen.value = !mobileOpen.value;
+    return;
+  }
+  isCollapsed.value = !isCollapsed.value;
+  localStorage.setItem(COLLAPSE_KEY, isCollapsed.value ? "1" : "0");
+}
+
+function closeMobileDrawer() {
+  if (isMobile.value) mobileOpen.value = false;
+}
+
+// 접힌 상태(아이콘 전용)에서 펼침이 필요한 항목(이력)을 누르면 먼저 사이드바 자체를 펼친다 —
+// 모바일이면 드로어를 열고, 데스크톱이면 저장된 선호도를 펼침으로 바꾼다.
+function ensureExpanded() {
+  if (!collapsedForDisplay.value) return;
+  if (isMobile.value) {
+    mobileOpen.value = true;
+    return;
+  }
+  isCollapsed.value = false;
+  localStorage.setItem(COLLAPSE_KEY, "0");
+}
+
+// ----- 세션 이력 -----
 const HISTORY_KEY = "a360.historyExpanded";
 const savedHistory = localStorage.getItem(HISTORY_KEY);
 const historyExpanded = ref(savedHistory !== null ? savedHistory === "1" : true);
@@ -58,40 +87,22 @@ const menuStyle = computed(() => ({
   right: `${menuPosition.value.right}px`,
 }));
 
-function toggleCollapsed() {
-  if (isMobile.value) {
-    mobileOpen.value = !mobileOpen.value;
-    return;
-  }
-  isCollapsed.value = !isCollapsed.value;
-  localStorage.setItem(COLLAPSE_KEY, isCollapsed.value ? "1" : "0");
-}
-
-function closeMobileDrawer() {
-  if (isMobile.value) mobileOpen.value = false;
-}
-
-function startNewChat() {
-  closeMobileDrawer();
-  emit("new-chat");
-}
-
-// "분석" 항목 클릭 — 사이드바가 접혀 있으면(아이콘 전용) 먼저 펼치고 이력도 함께 연다.
+// "세션 이력" 항목 클릭 — 사이드바가 접혀 있으면(아이콘 전용) 먼저 펼치고 이력도 함께 연다.
 // 이미 펼쳐진 상태라면 이력 서브메뉴만 접었다 편다.
 function toggleHistory() {
   if (collapsedForDisplay.value) {
-    if (isMobile.value) {
-      mobileOpen.value = true;
-    } else {
-      isCollapsed.value = false;
-      localStorage.setItem(COLLAPSE_KEY, "0");
-    }
+    ensureExpanded();
     historyExpanded.value = true;
     localStorage.setItem(HISTORY_KEY, "1");
     return;
   }
   historyExpanded.value = !historyExpanded.value;
   localStorage.setItem(HISTORY_KEY, historyExpanded.value ? "1" : "0");
+}
+
+function startNewChat() {
+  closeMobileDrawer();
+  emit("new-chat");
 }
 
 onMounted(() => {
@@ -191,6 +202,21 @@ async function removeSession(id, event) {
   openMenuId.value = null;
   if (removed && wasActive && !props.activeSessionBusy) startNewChat();
 }
+
+function runTutorial() {
+  closeMobileDrawer();
+  emit("tutorial");
+}
+
+function runOpenSettings() {
+  closeMobileDrawer();
+  emit("open-settings");
+}
+
+function runLogout() {
+  closeMobileDrawer();
+  emit("logout");
+}
 </script>
 
 <template>
@@ -203,7 +229,14 @@ async function removeSession(id, event) {
   <aside class="app-sidebar" :class="{ 'app-sidebar--collapsed': collapsedForDisplay }">
     <div class="app-sidebar__inner">
       <div class="app-sidebar__top">
-        <span class="app-sidebar__section-label">{{ t("sidebar.historyTitle") }}</span>
+        <img
+          src="../assets/a360-mark.png"
+          :alt="t('sidebar.logoAlt')"
+          class="app-sidebar__logo"
+          width="32"
+          height="32"
+        />
+        <span class="app-sidebar__brand-title">{{ t("sidebar.brandTitle") }}</span>
         <button
           type="button"
           class="app-sidebar__toggle"
@@ -236,7 +269,7 @@ async function removeSession(id, event) {
           type="button"
           class="app-sidebar__nav-item"
           :aria-expanded="historyExpanded && !collapsedForDisplay"
-          :title="t('sidebar.analysis')"
+          :title="t('sidebar.historyTitle')"
           @click="toggleHistory"
         >
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -252,7 +285,7 @@ async function removeSession(id, event) {
               stroke-linecap="round"
             />
           </svg>
-          <span class="app-sidebar__nav-label">{{ t("sidebar.analysis") }}</span>
+          <span class="app-sidebar__nav-label">{{ t("sidebar.historyTitle") }}</span>
           <svg
             class="app-sidebar__nav-chevron"
             :class="{ 'app-sidebar__nav-chevron--open': historyExpanded }"
@@ -340,7 +373,88 @@ async function removeSession(id, event) {
           </div>
         </div>
 
+        <button
+          type="button"
+          class="app-sidebar__nav-item"
+          :title="t('sidebar.tutorial')"
+          @click="runTutorial"
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7" />
+            <path
+              d="M9.6 9.4a2.4 2.4 0 1 1 3.4 2.8c-.7.4-1 .9-1 1.8"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+            />
+            <circle cx="12" cy="16.8" r="0.9" fill="currentColor" />
+          </svg>
+          <span class="app-sidebar__nav-label">{{ t("sidebar.tutorial") }}</span>
+        </button>
+
+        <button
+          type="button"
+          class="app-sidebar__nav-item"
+          :title="t('sidebar.settings')"
+          @click="runOpenSettings"
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" stroke="currentColor" stroke-width="1.7" />
+            <path
+              d="M19.4 13.5c.05-.33.08-.66.08-1s-.03-.67-.08-1l1.6-1.25a.7.7 0 0 0 .17-.9l-1.5-2.6a.7.7 0 0 0-.85-.3l-1.9.76a7.4 7.4 0 0 0-1.73-1l-.29-2.02a.7.7 0 0 0-.7-.6h-3a.7.7 0 0 0-.7.6l-.29 2.02c-.63.24-1.21.58-1.73 1l-1.9-.76a.7.7 0 0 0-.85.3l-1.5 2.6a.7.7 0 0 0 .17.9l1.6 1.25c-.05.33-.08.66-.08 1s.03.67.08 1l-1.6 1.25a.7.7 0 0 0-.17.9l1.5 2.6c.18.3.54.42.85.3l1.9-.76c.52.42 1.1.76 1.73 1l.29 2.02c.05.34.35.6.7.6h3c.35 0 .65-.26.7-.6l.29-2.02c.63-.24 1.21-.58 1.73-1l1.9.76c.31.12.67 0 .85-.3l1.5-2.6a.7.7 0 0 0-.17-.9l-1.6-1.25Z"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <span class="app-sidebar__nav-label">{{ t("sidebar.settings") }}</span>
+        </button>
       </nav>
+
+      <div class="app-sidebar__footer">
+        <div class="app-sidebar__profile">
+          <span class="app-sidebar__avatar" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="8.5" r="3.5" stroke="currentColor" stroke-width="1.6" />
+              <path
+                d="M4.5 20c1.4-3.4 4.4-5.2 7.5-5.2s6.1 1.8 7.5 5.2"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+              />
+            </svg>
+          </span>
+          <div class="app-sidebar__profile-info">
+            <span class="app-sidebar__profile-name">{{ t("sidebar.loginAccount") }}</span>
+            <span class="app-sidebar__profile-email" :title="auth.userEmail || ''">
+              {{ auth.userEmail || "-" }}
+            </span>
+          </div>
+          <button
+            type="button"
+            class="app-sidebar__logout"
+            :title="t('sidebar.logout')"
+            :aria-label="t('sidebar.logout')"
+            @click="runLogout"
+          >
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M14 7V5.5A1.5 1.5 0 0 0 12.5 4h-7A1.5 1.5 0 0 0 4 5.5v13A1.5 1.5 0 0 0 5.5 20h7a1.5 1.5 0 0 0 1.5-1.5V17"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+              />
+              <path
+                d="M9.5 12H20m0 0-3-3m3 3-3 3"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
     </div>
   </aside>
 

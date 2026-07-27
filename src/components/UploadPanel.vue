@@ -256,7 +256,6 @@ const tokenLabel = computed(() => {
         aria-hidden="true"
         >⠿</span
       >
-      <span class="panel__header-num" aria-hidden="true">1</span>
       <h2 id="upload-panel-title" ref="titleRef">{{ t("upload.title") }}</h2>
     </header>
 

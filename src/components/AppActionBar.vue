@@ -5,8 +5,8 @@ import { usePipelineStore } from "../stores/pipeline";
 import { useUiStore } from "../stores/ui";
 import { useRecommendationExport } from "../composables/useRecommendationExport";
 
-// 본문 그리드 아래 전체 폭 액션 바 — 왼쪽은 업로드로 되돌아가기, 오른쪽은 결과물에 대한
-// 두 가지 마무리 동작(내려받기 / 추천 흐름도로 진행)이다.
+// 본문 그리드 아래 전체 폭 액션 바 — 결과물에 대한 두 가지 마무리 동작(내보내기 / 추천
+// 흐름도로 진행)을 담당한다.
 const pipeline = usePipelineStore();
 const ui = useUiStore();
 const { t } = useI18n();
@@ -28,14 +28,8 @@ const isGenerating = computed(
 
 const nextLabel = computed(() => {
   if (isGenerating.value) return t("actionBar.generating");
-  return pipeline.recommendStatus === "done" ? t("actionBar.openFlow") : t("actionBar.next");
+  return pipeline.recommendStatus === "done" ? t("recommendDetail.viewFlow") : t("actionBar.next");
 });
-
-function goPrev() {
-  document
-    .querySelector('[data-panel-key="upload"]')
-    ?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
-}
 
 async function goNext() {
   ui.setAnalysisTab("flow");
@@ -78,10 +72,6 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="action-bar">
-    <button type="button" class="btn btn--outline action-bar__prev" @click="goPrev">
-      <span aria-hidden="true">←</span> {{ t("actionBar.prev") }}
-    </button>
-
     <p v-if="exportError" class="action-bar__error" role="alert">{{ exportError }}</p>
 
     <div class="action-bar__right">
@@ -90,12 +80,15 @@ onBeforeUnmount(() => {
           type="button"
           class="btn btn--outline"
           :disabled="!canExport"
-          :title="canExport ? t('actionBar.download') : t('header.exportDisabledHint')"
+          :title="canExport ? t('recommendDetail.exportTitle') : t('header.exportDisabledHint')"
           :aria-expanded="exportMenuOpen"
           aria-haspopup="menu"
           @click="exportMenuOpen = !exportMenuOpen"
         >
-          <span class="action-bar__code" aria-hidden="true">&lt;/&gt;</span> {{ t("actionBar.download") }}
+          {{ t("recommendDetail.exportTitle") }}
+          <svg class="action-bar__chevron" :class="{ 'action-bar__chevron--open': exportMenuOpen }" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 9.5 12 14l5-4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
         </button>
         <Transition name="fade-up">
           <div v-if="exportMenuOpen" class="action-bar__menu" role="menu">

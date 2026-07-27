@@ -23,25 +23,11 @@ export default {
   },
 
   header: {
-    title: "A360 작업 추천 AI 플랫폼",
-    subtitle: "업무정의서 기반 A360 작업 추천",
-    navLabel: "주요 단계",
-    accountMenu: "계정 메뉴",
-    nav: {
-      upload: "업로드",
-      analysis: "분석 결과",
-      recommend: "추천",
-      chat: "챗봇",
-      export: "내보내기",
-    },
     exportDisabledHint: "흐름도를 먼저 생성해야 내보낼 수 있습니다.",
   },
 
   actionBar: {
-    prev: "이전 (업로드)",
-    download: "JSON 다운로드",
     next: "다음 (추천 단계로 이동)",
-    openFlow: "흐름도 창 열기",
     generating: "흐름도 생성 중…",
   },
 
@@ -74,6 +60,7 @@ export default {
 
   sidebar: {
     logoAlt: "A360 로고",
+    brandTitle: "A360 Assistant",
     loadingSessions: "세션 목록을 불러오는 중…",
     mainNavLabel: "주요 메뉴",
     historyTitle: "세션 이력",
@@ -198,7 +185,6 @@ export default {
     outputVars: "출력 변수",
     recommendSectionTitle: "A360 흐름도 추천",
     sessionLoadingHint: "흐름도를 불러오는 중…",
-    generating: "생성 중…",
     viewFlow: "흐름도 보기",
     exportTitle: "내보내기",
     exportJson: "JSON 내보내기",
