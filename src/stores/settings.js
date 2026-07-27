@@ -85,15 +85,21 @@ export const useSettingsStore = defineStore("settings", () => {
   // 버튼·패널 등 곳곳의 hover용 transition(background/border-color 등)이 테마 전환에도 그대로
   // 적용되면 전체 화면 색이 스멀스멀 번지듯 바뀐다 — 전환 직전 잠깐 모든 transition을 꺼서
   // 테마만은 한 번에 바뀌게 하고, 다음 프레임에 다시 켜 hover 등 원래 동작은 그대로 둔다.
+  // 세대(themeTransitionGeneration) 토큰으로 오래된 예약을 무효화한다 — 없으면 테마를 빠르게
+  // 연속 전환할 때, 이전 토글의 RAF 콜백이 뒤늦게 실행되며 최신 전환의 억제 구간을 조기에
+  // 끝내버릴 수 있다(Qodo 리뷰).
+  let themeTransitionGeneration = 0;
   watch(
     theme,
     (value) => {
+      const generation = ++themeTransitionGeneration;
       const root = document.documentElement;
       root.classList.add("theme-transition-off");
       root.setAttribute("data-theme", value);
       void root.offsetHeight; // 강제 리플로우 — 위 두 줄이 transition 없이 반영되게 한다
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
+          if (generation !== themeTransitionGeneration) return; // 그 사이 새 전환이 시작됨 — 이 예약은 낡았다
           root.classList.remove("theme-transition-off");
         });
       });
