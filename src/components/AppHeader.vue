@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
 import { useChatStore } from "../stores/chat";
@@ -37,6 +37,13 @@ const derivedNav = computed(() => {
 });
 const manualNav = ref(null);
 const activeNav = computed(() => manualNav.value ?? derivedNav.value);
+
+// "챗봇"을 눌러 둔 수동 선택은 화면 구성이 실제로 바뀌는 순간(분석 시작, 탭 자동 전환,
+// 세션 전환 등 derivedNav가 달라지는 시점) 놓아 준다. 이 watcher가 없으면 한 번 누른 뒤로는
+// 내비가 'chat'에 고정돼 실제로 보고 있는 화면과 어긋난 채 굳는다.
+watch(derivedNav, () => {
+  manualNav.value = null;
+});
 
 function scrollToPanel(key) {
   // 챗봇은 도킹 해제 시 그리드에서 빠지고 떠 있는 팝업(또는 fab 버튼)만 남으므로 별도로 찾는다.

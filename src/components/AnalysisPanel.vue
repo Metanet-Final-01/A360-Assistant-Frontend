@@ -345,7 +345,12 @@ function runDragFrame() {
     if (dragStartSlots && dragIndex.value !== null) {
       const pointerContentY = lastPointerY - rect.top + el.scrollTop;
       let targetIndex = dragStartSlots.findIndex((slot) => pointerContentY < slot.mid);
-      if (targetIndex === -1) targetIndex = dragStartSlots.length - 1;
+      // 포인터가 남은 카드들의 중심보다 모두 아래면 맨 끝에 놓겠다는 뜻이다. dragStartSlots는
+      // 드래그 중인 카드를 뺀 배열(길이 = steps.length - 1)이라, 끝 자리의 삽입 인덱스는
+      // length - 1이 아니라 length다 — 빼면 항상 끝에서 두 번째로 들어가 마지막으로는
+      // 옮길 수 없다. 카드가 하나뿐이면 length가 0이라 그대로 0이 되어(= 제자리) 무의미한
+      // 재배치도 일어나지 않는다.
+      if (targetIndex === -1) targetIndex = dragStartSlots.length;
       if (targetIndex !== dragIndex.value) {
         const list = steps.value;
         const [moved] = list.splice(dragIndex.value, 1);
