@@ -19,7 +19,7 @@ import BranchSetNode from "./BranchSetNode.vue";
 import BranchColumnNode from "./BranchColumnNode.vue";
 import LabelNode from "./LabelNode.vue";
 
-import { buildFlowGraph, LAYOUT } from "../../utils/flowLayout";
+import { buildFlowGraph, LAYOUT, Z_FLOATING } from "../../utils/flowLayout";
 import {
   assignUiIds,
   stripUiIds,
@@ -150,7 +150,7 @@ function toFloatingFlowNode(entry) {
     width: LAYOUT.NODE_W,
     height: LAYOUT.NODE_H,
     draggable: props.editable,
-    zIndex: 5,
+    zIndex: Z_FLOATING,
     data: {
       label: node.label || node.action,
       prefix: "",
