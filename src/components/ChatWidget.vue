@@ -390,6 +390,7 @@ onBeforeUnmount(() => {
           aria-hidden="true"
           >⠿</span
         >
+        <span v-if="docked" class="panel__header-num" aria-hidden="true">3</span>
         <span class="chat-popup__title">
           {{ docked ? dockedTitleDisplay : floatingTitleDisplay }}
         </span>

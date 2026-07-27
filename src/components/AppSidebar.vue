@@ -1,10 +1,10 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { useAuthStore } from "../stores/auth";
 import { useArchiveStore } from "../stores/archive";
 
-const auth = useAuthStore();
+// 브랜드 · 기능 소개 · 설정 · 계정(로그아웃)은 상단 헤더(AppHeader.vue)가 맡는다 —
+// 이 사이드바는 세션 이력(새 채팅 · 검색 · 목록)만 담당하는 레일이다.
 const archive = useArchiveStore();
 const { t } = useI18n();
 
@@ -20,7 +20,7 @@ const props = defineProps({
   activeSessionBusy: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(["logout", "tutorial", "open-settings", "select-session", "new-chat"]);
+const emit = defineEmits(["select-session", "new-chat"]);
 
 const COLLAPSE_KEY = "a360.sidebarCollapsed";
 const savedCollapsed = localStorage.getItem(COLLAPSE_KEY);
@@ -202,9 +202,8 @@ async function removeSession(id, event) {
   ></div>
   <aside class="app-sidebar" :class="{ 'app-sidebar--collapsed': collapsedForDisplay }">
     <div class="app-sidebar__inner">
-      <div class="app-sidebar__brand">
-        <img src="../assets/a360-mark.svg" :alt="t('sidebar.logoAlt')" class="app-sidebar__logo" />
-        <span class="app-sidebar__brand-title">A360 ASSISTANT</span>
+      <div class="app-sidebar__top">
+        <span class="app-sidebar__section-label">{{ t("sidebar.historyTitle") }}</span>
         <button
           type="button"
           class="app-sidebar__toggle"
@@ -341,91 +340,7 @@ async function removeSession(id, event) {
           </div>
         </div>
 
-        <button
-          type="button"
-          class="app-sidebar__nav-item app-sidebar__help"
-          :title="t('sidebar.tutorial')"
-          @click="emit('tutorial')"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7" />
-            <path
-              d="M9.6 9.4a2.4 2.4 0 1 1 3.4 2.8c-.7.4-1 .9-1 1.8"
-              stroke="currentColor"
-              stroke-width="1.7"
-              stroke-linecap="round"
-            />
-            <circle cx="12" cy="16.8" r="0.9" fill="currentColor" />
-          </svg>
-          <span class="app-sidebar__nav-label">{{ t("sidebar.tutorial") }}</span>
-        </button>
-        <button
-          type="button"
-          class="app-sidebar__nav-item app-sidebar__help"
-          :title="t('sidebar.settings')"
-          @click="emit('open-settings')"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"
-              stroke="currentColor"
-              stroke-width="1.7"
-            />
-            <path
-              d="M19.4 13.5c.05-.33.08-.66.08-1s-.03-.67-.08-1l1.6-1.25a.7.7 0 0 0 .17-.9l-1.5-2.6a.7.7 0 0 0-.85-.3l-1.9.76a7.4 7.4 0 0 0-1.73-1l-.29-2.02a.7.7 0 0 0-.7-.6h-3a.7.7 0 0 0-.7.6l-.29 2.02c-.63.24-1.21.58-1.73 1l-1.9-.76a.7.7 0 0 0-.85.3l-1.5 2.6a.7.7 0 0 0 .17.9l1.6 1.25c-.05.33-.08.66-.08 1s.03.67.08 1l-1.6 1.25a.7.7 0 0 0-.17.9l1.5 2.6c.18.3.54.42.85.3l1.9-.76c.52.42 1.1.76 1.73 1l.29 2.02c.05.34.35.6.7.6h3c.35 0 .65-.26.7-.6l.29-2.02c.63-.24 1.21-.58 1.73-1l1.9.76c.31.12.67 0 .85-.3l1.5-2.6a.7.7 0 0 0-.17-.9l-1.6-1.25Z"
-              stroke="currentColor"
-              stroke-width="1.4"
-              stroke-linejoin="round"
-            />
-          </svg>
-          <span class="app-sidebar__nav-label">{{ t("sidebar.settings") }}</span>
-        </button>
       </nav>
-
-      <div class="app-sidebar__footer">
-        <div class="app-sidebar__profile">
-          <span class="app-sidebar__avatar" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="8.5" r="3.5" stroke="currentColor" stroke-width="1.6" />
-              <path
-                d="M4.5 20c1.4-3.4 4.4-5.2 7.5-5.2s6.1 1.8 7.5 5.2"
-                stroke="currentColor"
-                stroke-width="1.6"
-                stroke-linecap="round"
-              />
-            </svg>
-          </span>
-          <div class="app-sidebar__profile-info">
-            <span class="app-sidebar__profile-name">{{ t("sidebar.loginAccount") }}</span>
-            <span class="app-sidebar__profile-email" :title="auth.userEmail || ''">
-              {{ auth.userEmail || "-" }}
-            </span>
-          </div>
-          <button
-            type="button"
-            class="app-sidebar__logout"
-            :title="t('sidebar.logout')"
-            :aria-label="t('sidebar.logout')"
-            @click="emit('logout')"
-          >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M14 7V5.5A1.5 1.5 0 0 0 12.5 4h-7A1.5 1.5 0 0 0 4 5.5v13A1.5 1.5 0 0 0 5.5 20h7a1.5 1.5 0 0 0 1.5-1.5V17"
-                stroke="currentColor"
-                stroke-width="1.7"
-                stroke-linecap="round"
-              />
-              <path
-                d="M9.5 12H20m0 0-3-3m3 3-3 3"
-                stroke="currentColor"
-                stroke-width="1.7"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </button>
-        </div>
-      </div>
     </div>
   </aside>
 
