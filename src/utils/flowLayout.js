@@ -42,6 +42,45 @@ function makeEdge(source, target) {
   };
 }
 
+// ── z축 계약: 프레임은 자기 내용 **아래에** 깔린다 ────────────────────────────
+//
+// 🔴 왜 깊이를 쓰나 (실측 결함, 2026-07-27). 예전에는 역할별 고정값이었다
+// (branchSet -1 · branchColumn 1 · container 0 · action 2). 그런데 `.flow-canvas-col`은
+// 배경이 불투명해서(`--surface-sunken`), **컨테이너(0)가 자기를 담은 분기 칸(1)보다
+// 아래**가 된다 — Try 칸 안의 액션 7개가 칸의 배경에 통째로 덮여 보이지 않았다.
+// 프레임 크기는 자식을 세어 잡혀 있으니 "빈 프레임이 크게 뚫려 있는" 모습이 된다.
+//
+// 액션이 언제부터 container 타입이 됐나: `layoutNodeSegment`가 컨테이너 여부를
+// `Array.isArray(children)`로 판정하는데(RPA-289), 백엔드는 리프 액션에도 `children: []`을
+// 실어 보낸다 — 즉 **분기 칸 안의 모든 액션**이 이 경로를 탔다. 최상위 액션은 위를 덮는
+// 불투명 프레임이 없어 멀쩡히 보였고, 그래서 분기 안에서만 사라졌다.
+// (RPA-329에서 FlowCanvas가 `stripEmptyChildren`으로 그 빈 배열을 걷어내 리프는 더 이상
+// 컨테이너로 오인되지 않는다. 그래도 진짜 중첩 — Try 칸 안의 Loop 같은 — 은 그대로 남으므로
+// 역할별 고정값으로는 여전히 못 고친다.)
+//
+// 역할별 고정값으로는 못 고친다: Loop(컨테이너) 안에 Try/Catch(분기 세트)가 들어가면
+// 이번엔 컨테이너가 분기 세트를 덮는다. 겹침은 **포함 관계**에서 오므로 z도 포함 깊이를
+// 따라야 한다. 깊이가 한 단계 깊어지면 그 안의 무엇이든 바깥 프레임보다 위로 온다.
+const Z_DEPTH_STEP = 10; // 깊이 1단계당 간격 — 아래 역할 오프셋 최댓값보다 크게 잡는다
+const Z_ROLE = { branchSet: 0, branchColumn: 1, container: 2, action: 3 };
+
+// 깊이 z는 depth에 비례해 끝없이 커지므로, "라벨·미배치 카드는 항상 최상위"를 큼직한 상수에
+// 맡기면 언젠가 트리가 그 위로 올라선다(예전 미배치 카드 5가 정확히 그렇게 깨졌다). 깊이를
+// 여기서 잘라 트리 z의 상한을 못박고, 라벨·카드를 그 상한에서 파생시켜 순서를 구조적으로 보장한다.
+// 상한을 넘는 중첩은 z가 같아져 포함 불변식이 깨지지만, 그 깊이면 가로 폭만 수만 px라 이미
+// 읽을 수 없는 그림이다 — 무한히 열린 구멍 대신 도달 불가능한 경계를 두는 쪽을 택했다.
+const MAX_Z_DEPTH = 500;
+const Z_TREE_MAX = MAX_Z_DEPTH * Z_DEPTH_STEP + Math.max(...Object.values(Z_ROLE));
+// 스텝 타이틀·시작/완료 알약 — 항상 최상위(어떤 프레임과도 겹치지 않지만, 겹쳐도 가려지면 안 된다).
+export const Z_LABEL = Z_TREE_MAX + 1;
+// 미배치 카드(FlowCanvas.toFloatingFlowNode) — 트리 바깥에 자유 좌표로 떠 있어 어떤 프레임 위로도
+// 끌어다 놓을 수 있다. 트리·라벨을 통틀어 항상 위에 오도록 여기서 함께 정의한다.
+export const Z_FLOATING = Z_LABEL + 1;
+
+function zOf(role, depth) {
+  return Math.min(depth, MAX_Z_DEPTH) * Z_DEPTH_STEP + Z_ROLE[role];
+}
+
 // 라벨이 잘리지 않도록 노드 헤더(번호+라벨+패키지 태그+수정버튼)가 한 줄에 다 들어가는 폭을
 // canvas 2D context의 measureText로 실측한다 — DOM에 실제로 그려보지 않고도(2-pass 리플로우 없이)
 // 정확한 텍스트 폭을 얻을 수 있어, "고정 크기 박스" 단순화를 유지하면서도 말줄임을 없앨 수 있다.
@@ -87,7 +126,7 @@ function estimateNodeWidth(node) {
 
 // items: [{ node, nodePath }] — 형제 액션 목록 하나를 centerX에 중앙정렬해 세로로 쌓는다.
 // 반환: 이 리스트 전체의 크기, 노드/엣지, 진입점(topId, 첫 세그먼트로 연결용), 진출점들(exitIds).
-function layoutList(items, centerX, y, ctx) {
+function layoutList(items, centerX, y, ctx, depth = 0) {
   const segments = buildSegments(items.map((it) => ({ node: it.node, path: it.nodePath.join("."), nodePath: it.nodePath })));
   let cy = y;
   let width = LAYOUT.NODE_W;
@@ -97,7 +136,10 @@ function layoutList(items, centerX, y, ctx) {
   let prevExitIds = null;
 
   segments.forEach((seg) => {
-    const result = seg.type === "node" ? layoutNodeSegment(seg.item, centerX, cy, ctx) : layoutBranchSegment(seg, centerX, cy, ctx);
+    const result =
+      seg.type === "node"
+        ? layoutNodeSegment(seg.item, centerX, cy, ctx, depth)
+        : layoutBranchSegment(seg, centerX, cy, ctx, depth);
     nodes.push(...result.nodes);
     edges.push(...result.edges);
     width = Math.max(width, result.width);
@@ -115,7 +157,7 @@ function layoutList(items, centerX, y, ctx) {
 // 컨테이너 여부는 children 배열의 길이가 아니라 존재(Array.isArray) 자체로 판단한다 — 카탈로그
 // 피커로 막 추가한 컨테이너 액션은 children: []으로 시작해서(RPA-289), length 기준이면 리프로
 // 오인되어 프레임 없이 렌더되고 그 안으로 드롭도 받을 수 없었다.
-function layoutNodeSegment(item, centerX, y, ctx) {
+function layoutNodeSegment(item, centerX, y, ctx, depth = 0) {
   const node = item.node;
   const uid = node.__uid;
   const isContainer = Array.isArray(node.children);
@@ -138,7 +180,7 @@ function layoutNodeSegment(item, centerX, y, ctx) {
     return {
       width: w,
       height: LAYOUT.NODE_H,
-      nodes: [{ id: uid, type: "action", position: { x, y }, width: w, height: LAYOUT.NODE_H, data, draggable: true, zIndex: 2 }],
+      nodes: [{ id: uid, type: "action", position: { x, y }, width: w, height: LAYOUT.NODE_H, data, draggable: true, zIndex: zOf("action", depth) }],
       edges: [],
       topId: uid,
       exitIds: [uid],
@@ -146,13 +188,13 @@ function layoutNodeSegment(item, centerX, y, ctx) {
   }
 
   const childItems = node.children.map((c, i) => ({ node: c, nodePath: [...item.nodePath, "children", i] }));
-  const childLayout = layoutList(childItems, centerX, y + LAYOUT.NODE_H + LAYOUT.PAD, ctx);
+  const childLayout = layoutList(childItems, centerX, y + LAYOUT.NODE_H + LAYOUT.PAD, ctx, depth + 1);
   const frameW = Math.max(estimateNodeWidth(node), childLayout.width) + LAYOUT.PAD * 2;
   const frameH = LAYOUT.NODE_H + LAYOUT.PAD + childLayout.height + LAYOUT.PAD;
   const frameX = centerX - frameW / 2;
 
   const nodes = [
-    { id: uid, type: "container", position: { x: frameX, y }, width: frameW, height: frameH, data, draggable: true, zIndex: 0 },
+    { id: uid, type: "container", position: { x: frameX, y }, width: frameW, height: frameH, data, draggable: true, zIndex: zOf("container", depth) },
     ...childLayout.nodes,
   ];
   const edges = [...childLayout.edges];
@@ -174,10 +216,14 @@ function layoutNodeSegment(item, centerX, y, ctx) {
 // 기준으로 한 번만 계산해 캐싱해 두고, 실제 위치가 필요할 때는 그 결과를 델타만큼 평행이동해
 // 재사용한다 — 버려질 그래프를 두 번 만들지 않는다. col.node.__uid로 캐시해 두 함수가 같은
 // 컬럼의 자식 목록에 대해 항상 같은 결과를 공유한다.
-function layoutListCached(items, uid, ctx) {
-  if (ctx.listCache.has(uid)) return ctx.listCache.get(uid);
-  const result = layoutList(items, 0, 0, ctx);
-  ctx.listCache.set(uid, result);
+// 캐시 키에 depth를 넣는 이유: 결과에 zIndex(깊이 함수)가 박혀 있어 같은 uid라도 깊이가
+// 다르면 재사용하면 안 된다. 실제로는 한 uid가 한 깊이에만 오지만, measure/layout 두 경로가
+// 같은 깊이를 넘긴다는 전제를 키에 드러내 둔다(어긋나면 캐시 미스로 드러난다).
+function layoutListCached(items, uid, ctx, depth) {
+  const key = `${uid}@${depth}`;
+  if (ctx.listCache.has(key)) return ctx.listCache.get(key);
+  const result = layoutList(items, 0, 0, ctx, depth);
+  ctx.listCache.set(key, result);
   return result;
 }
 
@@ -187,21 +233,21 @@ function translateLayout(layout, dx, dy) {
 
 // 분기 컬럼 하나(Try/Catch/Finally 또는 If/ElseIf/Else 중 하나)의 프레임 크기만 먼저 잰다
 // (좌우로 나란히 놓기 전에 각 컬럼 폭을 알아야 하는 2-pass 중 1pass).
-function measureColumnSize(col, ctx) {
+function measureColumnSize(col, ctx, depth) {
   const hasChildren = (col.node.children?.length ?? 0) > 0;
   const headerW = estimateNodeWidth(col.node);
   if (!hasChildren) {
     return { width: headerW + LAYOUT.PAD * 2, height: LAYOUT.ROLE_BADGE_H + LAYOUT.NODE_H + LAYOUT.PAD * 2 };
   }
   const childItems = col.node.children.map((c, i) => ({ node: c, nodePath: [...col.nodePath, "children", i] }));
-  const childSize = layoutListCached(childItems, col.node.__uid, ctx); // 위치는 버리고 크기만 쓴다
+  const childSize = layoutListCached(childItems, col.node.__uid, ctx, depth + 1); // 위치는 버리고 크기만 쓴다
   return {
     width: Math.max(headerW, childSize.width) + LAYOUT.PAD * 2,
     height: LAYOUT.ROLE_BADGE_H + LAYOUT.NODE_H + LAYOUT.PAD + childSize.height + LAYOUT.PAD * 2,
   };
 }
 
-function layoutColumn(col, colCenterX, y, size, exits, ctx) {
+function layoutColumn(col, colCenterX, y, size, exits, ctx, depth) {
   const node = col.node;
   const uid = node.__uid;
   const hasChildren = (node.children?.length ?? 0) > 0;
@@ -219,14 +265,14 @@ function layoutColumn(col, colCenterX, y, size, exits, ctx) {
     sources: node.sources ?? [],
     confidence: node.confidence ?? null,
   };
-  const nodes = [{ id: uid, type: "branchColumn", position: { x: frameX, y }, width: size.width, height: size.height, data, draggable: false, zIndex: 1 }];
+  const nodes = [{ id: uid, type: "branchColumn", position: { x: frameX, y }, width: size.width, height: size.height, data, draggable: false, zIndex: zOf("branchColumn", depth) }];
   const edges = [];
   let exitIds = [uid];
 
   if (hasChildren) {
     const childItems = node.children.map((c, i) => ({ node: c, nodePath: [...col.nodePath, "children", i] }));
     const headerBottom = y + LAYOUT.ROLE_BADGE_H + LAYOUT.NODE_H + LAYOUT.PAD;
-    const cached = layoutListCached(childItems, uid, ctx);
+    const cached = layoutListCached(childItems, uid, ctx, depth + 1);
     const childLayout = translateLayout(cached, colCenterX, headerBottom);
     nodes.push(...childLayout.nodes);
     edges.push(...childLayout.edges);
@@ -238,9 +284,9 @@ function layoutColumn(col, colCenterX, y, size, exits, ctx) {
 }
 
 // 분기 세트(Try+Catch+Finally 또는 If+ElseIf+Else) 하나를 배치한다 — 컬럼들을 좌우로 나란히.
-function layoutBranchSegment(seg, centerX, y, ctx) {
+function layoutBranchSegment(seg, centerX, y, ctx, depth = 0) {
   const cols = seg.items;
-  const sizes = cols.map((col) => measureColumnSize(col, ctx));
+  const sizes = cols.map((col) => measureColumnSize(col, ctx, depth));
   const colsWidth = sizes.reduce((sum, s) => sum + s.width, 0) + LAYOUT.H_GAP * (cols.length - 1);
   const maxColHeight = Math.max(...sizes.map((s) => s.height));
   const frameW = colsWidth + LAYOUT.BRANCH_PAD * 2;
@@ -261,7 +307,7 @@ function layoutBranchSegment(seg, centerX, y, ctx) {
         segment: { listPath: branchListPath, startIndex: cols[0].nodePath[cols[0].nodePath.length - 1], count: cols.length },
       },
       draggable: true,
-      zIndex: -1,
+      zIndex: zOf("branchSet", depth),
     },
   ];
   const edges = [];
@@ -273,7 +319,7 @@ function layoutBranchSegment(seg, centerX, y, ctx) {
     const size = sizes[i];
     const colCenterX = cx + size.width / 2;
     const exits = branchColumnExits(seg.pkg, col.node, cols);
-    const colResult = layoutColumn(col, colCenterX, colTopY, size, exits, ctx);
+    const colResult = layoutColumn(col, colCenterX, colTopY, size, exits, ctx, depth);
     nodes.push(...colResult.nodes);
     edges.push(...colResult.edges);
     exitIds.push(...colResult.exitIds);
@@ -290,7 +336,7 @@ export function stepTitleId(stepIdx) {
 }
 
 function labelNode(id, label, centerX, y, w, h, variant) {
-  return { id, type: "label", position: { x: centerX - w / 2, y }, width: w, height: h, data: { label, variant }, draggable: false, selectable: false, zIndex: 3 };
+  return { id, type: "label", position: { x: centerX - w / 2, y }, width: w, height: h, data: { label, variant }, draggable: false, selectable: false, zIndex: Z_LABEL };
 }
 
 // steps[].actions[] 안의 모든 노드에 순번(1, 2, 3… / 4.1, 4.2…)을 매긴다 — numberFlowSteps와
@@ -346,7 +392,7 @@ export function buildFlowGraph(steps) {
       return;
     }
 
-    const result = layoutList(items, centerX, cy, ctx);
+    const result = layoutList(items, centerX, cy, ctx, 0); // 스텝 직속 액션 = 깊이 0
     nodes.push(...result.nodes);
     edges.push(...result.edges);
     if (result.topId) edges.push(makeEdge(titleId, result.topId));
