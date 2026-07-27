@@ -49,15 +49,22 @@ function makeEdge(source, target) {
 // 따라야 한다. 깊이가 한 단계 깊어지면 그 안의 무엇이든 바깥 프레임보다 위로 온다.
 const Z_DEPTH_STEP = 10; // 깊이 1단계당 간격 — 아래 역할 오프셋 최댓값보다 크게 잡는다
 const Z_ROLE = { branchSet: 0, branchColumn: 1, container: 2, action: 3 };
+
+// 깊이 z는 depth에 비례해 끝없이 커지므로, "라벨·미배치 카드는 항상 최상위"를 큼직한 상수에
+// 맡기면 언젠가 트리가 그 위로 올라선다(예전 미배치 카드 5가 정확히 그렇게 깨졌다). 깊이를
+// 여기서 잘라 트리 z의 상한을 못박고, 라벨·카드를 그 상한에서 파생시켜 순서를 구조적으로 보장한다.
+// 상한을 넘는 중첩은 z가 같아져 포함 불변식이 깨지지만, 그 깊이면 가로 폭만 수만 px라 이미
+// 읽을 수 없는 그림이다 — 무한히 열린 구멍 대신 도달 불가능한 경계를 두는 쪽을 택했다.
+const MAX_Z_DEPTH = 500;
+const Z_TREE_MAX = MAX_Z_DEPTH * Z_DEPTH_STEP + Math.max(...Object.values(Z_ROLE));
 // 스텝 타이틀·시작/완료 알약 — 항상 최상위(어떤 프레임과도 겹치지 않지만, 겹쳐도 가려지면 안 된다).
-export const Z_LABEL = 1000;
+export const Z_LABEL = Z_TREE_MAX + 1;
 // 미배치 카드(FlowCanvas.toFloatingFlowNode) — 트리 바깥에 자유 좌표로 떠 있어 어떤 프레임 위로도
-// 끌어다 놓을 수 있다. 깊이 기반 z는 중첩이 깊어질수록 커지므로 고정 소수(예전 값 5)로는
-// 금세 트리 밑으로 깔린다. 트리·라벨을 통틀어 항상 위에 오도록 여기서 함께 정의한다.
-export const Z_FLOATING = 1100;
+// 끌어다 놓을 수 있다. 트리·라벨을 통틀어 항상 위에 오도록 여기서 함께 정의한다.
+export const Z_FLOATING = Z_LABEL + 1;
 
 function zOf(role, depth) {
-  return depth * Z_DEPTH_STEP + Z_ROLE[role];
+  return Math.min(depth, MAX_Z_DEPTH) * Z_DEPTH_STEP + Z_ROLE[role];
 }
 
 // 라벨이 잘리지 않도록 노드 헤더(번호+라벨+패키지 태그+수정버튼)가 한 줄에 다 들어가는 폭을
