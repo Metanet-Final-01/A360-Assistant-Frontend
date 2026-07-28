@@ -1,11 +1,11 @@
 import { defineStore } from "pinia";
 import { reactive, ref, watch } from "vue";
-import { turnStream } from "../api/agent";
+import { resumeTurnStream, turnStream } from "../api/agent";
 import { createSession, listChatMessages } from "../api/sessions";
 import { createInitialChatMessages, getChatGreeting, timeLabel } from "../utils/chatMessages";
 import { formatTime } from "../utils/dateFormat";
 import { createTypewriter } from "../utils/typewriter";
-import { usePipelineStore } from "./pipeline";
+import { activeTurnKey, forgetActiveTurn, usePipelineStore, withTurnTracking } from "./pipeline";
 import { useSettingsStore } from "./settings";
 import { i18n, t } from "../i18n";
 
@@ -131,7 +131,7 @@ export const useChatStore = defineStore("chat", () => {
       // 잠깐 null이라 첫 턴이 저장된 선택을 무시하고 백엔드 기본값으로 나갈 수 있다 — 기다린다.
       await useSettingsStore().loadAgentVersions();
 
-      await turnStream(sessionId, trimmed, {
+      await turnStream(sessionId, trimmed, withTurnTracking(sessionId, {
         operation,
         agentVersion: useSettingsStore().agentVersion, // 설정에서 고른 버전 — null이면 필드 생략(백엔드 기본)
         signal,
@@ -183,7 +183,7 @@ export const useChatStore = defineStore("chat", () => {
             assistantMessage.stagesDone = true;
           }
         },
-      });
+      }));
     } finally {
       isSending.value = false;
     }
@@ -211,6 +211,82 @@ export const useChatStore = defineStore("chat", () => {
     chatMessages.value = history.length
       ? history
       : [{ role: "assistant", text: getChatGreeting(), time: formatTime() }];
+  }
+
+  // FRONTEND_TASK_턴_재개_SSE — 새로고침(또는 다른 탭)으로 놓친 답변 스트림을 이어받는다.
+  // pipeline.loadSession()이 세션 하이드레이션 마지막 단계에서 호출한다. 진행 중이던 턴의
+  // 사용자 메시지는 턴이 끝나야 저장되므로 chat-messages 이력에도 없다 — 그 사용자 말풍선을
+  // 되살리지는 않고(원문을 프론트가 들고 있지 않다), 이어지는 답변 말풍선만 새로 그린다.
+  async function resumeActiveTurnIfNeeded(sessionId) {
+    const pipeline = usePipelineStore();
+    if (pipeline.sessionId !== sessionId || isSending.value) return;
+    const turnId = sessionStorage.getItem(activeTurnKey(sessionId));
+    if (!turnId) return;
+
+    isSending.value = true;
+    isPristineGreeting.value = false;
+    const assistantMessage = reactive({
+      role: "assistant",
+      text: "",
+      stages: [],
+      stagesOpen: false,
+      stagesDone: false,
+      sources: [],
+      sourcesOpen: false,
+      time: formatTime(),
+    });
+    chatMessages.value.push(assistantMessage);
+    const typewriter = createTypewriter(assistantMessage);
+    const signal = pipeline.startTurnController();
+
+    try {
+      await resumeTurnStream(sessionId, turnId, {
+        signal,
+        onStage: (message) => {
+          if (signal.aborted) return;
+          if (message?.trim()) assistantMessage.stages.push(message.trim());
+        },
+        onPartial: (data) => {
+          if (signal.aborted) return;
+          pipeline.applyLiveFrame(data);
+        },
+        onToken: (token) => {
+          if (signal.aborted) return;
+          typewriter.push(token);
+        },
+        onDone: (data) => {
+          forgetActiveTurn(sessionId);
+          if (signal.aborted) return;
+          if (typewriter.started) {
+            typewriter.finish();
+          } else {
+            assistantMessage.text = data?.answer || t("chat.errors.noAnswer");
+          }
+          if (assistantMessage.stages.length) {
+            assistantMessage.stages.push(t("chat.stageDone"));
+            assistantMessage.stagesDone = true;
+          }
+          if (Array.isArray(data?.sources) && data.sources.length) {
+            assistantMessage.sources = data.sources;
+          }
+          if (data?.type === "compact" && data.compact) {
+            lastCompact.value = data.compact;
+          }
+          pipeline.applyTurnArtifacts(data);
+          pipeline.resetLiveFlow();
+        },
+        onUnavailable: () => {
+          forgetActiveTurn(sessionId);
+          if (signal.aborted) return;
+          // 재개 실패(만료·버퍼 장애 등) — 방금 그린 임시 말풍선을 포함해 서버에 저장된
+          // 이력으로 통째로 다시 맞춘다. 턴이 실제로 끝나 저장까지 됐다면 그 결과가 보이고,
+          // 끝내 저장되지 못했다면(만료) 조용히 사라지는 게 맞다 — 서버 상태가 진실이다.
+          loadHistoryMessages(sessionId, pipeline.sessionGeneration).catch(() => {});
+        },
+      });
+    } finally {
+      isSending.value = false;
+    }
   }
 
   // "+ 새 채팅" — 대화창을 인사말만 남은 초기 상태로 되돌린다
@@ -250,6 +326,7 @@ export const useChatStore = defineStore("chat", () => {
     sendChatMessage,
     compactConversation,
     loadHistoryMessages,
+    resumeActiveTurnIfNeeded,
     newChat,
     resetForLogout,
   };
