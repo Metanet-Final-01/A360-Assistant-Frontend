@@ -92,6 +92,16 @@ export async function resumeTurnStream(
     onUnavailable?.();
     return;
   }
+  if (response.status === 401) {
+    try {
+      onUnavailable?.();
+    } finally {
+      notifyUnauthorized(); // 토큰 만료 — 재개 요청도 turnStream()과 동일하게 강제 로그아웃해야
+      // 앱이 만료된 로그인 상태로 남지 않는다(Qodo 리뷰). onUnavailable이 먼저 폴백을 그려야
+      // 하므로 로그아웃(상태 초기화)은 마지막에 실행한다.
+    }
+    return;
+  }
   if (!response.ok || !response.body) {
     onUnavailable?.();
     return;

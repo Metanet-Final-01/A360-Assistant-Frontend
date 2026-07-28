@@ -1107,7 +1107,10 @@ export const usePipelineStore = defineStore("pipeline", () => {
     // 최종 상태(idle)로 그려진 뒤라 UI를 막지 않도록 await하지 않는다 — 스트림은
     // 백그라운드에서 이어지고, 도중 다른 세션으로 다시 이동하면 startTurnController가
     // 다음 턴을 시작할 때 자연히 끊긴다.
-    useChatStore().resumeActiveTurnIfNeeded(id);
+    // .catch: 위 주석처럼 의도적으로 fire-and-forget이라 await하지 않는다 — 다만 그렇다고
+    // 예외 처리까지 생략하면(sessionStorage 접근 실패 등) unhandled promise rejection이 된다
+    // (Qodo 리뷰).
+    useChatStore().resumeActiveTurnIfNeeded(id).catch(() => {});
   }
 
   // 앱 부팅(새로고침 포함) 시 1회 호출 — localStorage에 마지막 세션 id가 있으면 그대로
