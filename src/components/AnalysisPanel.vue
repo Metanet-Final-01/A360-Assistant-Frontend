@@ -7,6 +7,7 @@ import { buildPackageColorMap, numberFlowSteps, violationSetByStep } from "../ut
 import { analysisStats, evidenceItems, ioUsage, systemUsage } from "../utils/analysisSummary";
 import { evidenceLabel } from "../utils/format";
 import { useFitTitle } from "../composables/useFitTitle";
+import { useRecommendationExport } from "../composables/useRecommendationExport";
 import FlowSequence from "./FlowSequence.vue";
 
 defineOptions({ inheritAttrs: false });
@@ -118,6 +119,50 @@ watch(
 // ── 헤더 배지 ──
 const hasActiveSession = computed(() => !!pipeline.sessionId);
 const flowConfidence = computed(() => activeRec.value?.flow_confidence ?? null);
+
+// ── 헤더 액션(내보내기 · 흐름도 보기) — 예전엔 본문 아래 별도 액션 바(AppActionBar)에
+// 있었으나, 신뢰도 배지 옆 헤더로 옮겨 붙였다. 그만큼 아래 패널들의 세로 공간이 남아
+// --panel-height(style.css)를 키워 채운다.
+const { canExport, exportError, downloadJson, downloadMarkdown, downloadDocx } =
+  useRecommendationExport();
+
+const canGoNext = computed(
+  () => (pipeline.analysisStatus === "done" && hasSteps.value) || !!pipeline.recommendation,
+);
+const isGenerating = computed(
+  () => pipeline.recommendStatus === "generating" || pipeline.liveActive,
+);
+const nextLabel = computed(() =>
+  isGenerating.value ? t("actionBar.generating") : t("recommendDetail.viewFlow"),
+);
+
+async function goNext() {
+  ui.setAnalysisTab("flow");
+  if (pipeline.recommendStatus === "done") {
+    const url = `/flow-window.html?session=${encodeURIComponent(pipeline.sessionId)}`;
+    window.open(url, `a360-flow-${pipeline.sessionId}`, "width=1280,height=860,resizable=yes,noopener");
+    return;
+  }
+  await pipeline.startRecommend();
+}
+
+const exportMenuOpen = ref(false);
+
+async function runExport(fn) {
+  exportMenuOpen.value = false;
+  await fn();
+}
+
+function closeExportMenu(event) {
+  if (!exportMenuOpen.value) return;
+  if (!(event.target instanceof Element) || !event.target.closest(".panel__header-export")) {
+    exportMenuOpen.value = false;
+  }
+}
+
+function closeExportMenuOnEscape(event) {
+  if (exportMenuOpen.value && event.key === "Escape") exportMenuOpen.value = false;
+}
 
 // 분석/생성/스트리밍 중이면 "작업 중" — 아직 그릴 것이 없어도 빈 화면 대신 스피너를 보여준다.
 const working = computed(
@@ -492,9 +537,13 @@ function startAddStep() {
 onBeforeUnmount(stopDragTracking);
 onMounted(() => {
   window.addEventListener("pointerdown", closeMenuOnOutsideClick);
+  window.addEventListener("pointerdown", closeExportMenu);
+  window.addEventListener("keydown", closeExportMenuOnEscape);
 });
 onBeforeUnmount(() => {
   window.removeEventListener("pointerdown", closeMenuOnOutsideClick);
+  window.removeEventListener("pointerdown", closeExportMenu);
+  window.removeEventListener("keydown", closeExportMenuOnEscape);
 });
 </script>
 
@@ -527,6 +576,51 @@ onBeforeUnmount(() => {
         >
           {{ t("recommendDetail.confidenceLabel") }} {{ Math.round(flowConfidence * 100) }}%
         </span>
+
+        <div class="panel__header-export">
+          <button
+            type="button"
+            class="btn panel__header-btn"
+            :disabled="!canExport"
+            :title="canExport ? t('recommendDetail.exportTitle') : t('header.exportDisabledHint')"
+            :aria-expanded="exportMenuOpen"
+            aria-haspopup="menu"
+            @click="exportMenuOpen = !exportMenuOpen"
+          >
+            {{ t("recommendDetail.exportTitle") }}
+            <svg
+              class="panel__header-chevron"
+              :class="{ 'panel__header-chevron--open': exportMenuOpen }"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path d="M7 9.5 12 14l5-4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </button>
+          <Transition name="fade-down">
+            <div v-if="exportMenuOpen" class="panel__header-menu" role="menu">
+              <button type="button" role="menuitem" class="panel__header-menu-item" @click="runExport(downloadJson)">
+                {{ t("recommendDetail.exportJson") }}
+              </button>
+              <button type="button" role="menuitem" class="panel__header-menu-item" @click="runExport(downloadMarkdown)">
+                {{ t("recommendDetail.exportMarkdown") }}
+              </button>
+              <button type="button" role="menuitem" class="panel__header-menu-item" @click="runExport(downloadDocx)">
+                {{ t("recommendDetail.exportDocx") }}
+              </button>
+            </div>
+          </Transition>
+        </div>
+
+        <button
+          type="button"
+          class="btn panel__header-btn panel__header-btn--primary"
+          :disabled="!canGoNext || isGenerating"
+          @click="goNext"
+        >
+          {{ nextLabel }}
+        </button>
       </div>
     </header>
 
@@ -549,6 +643,8 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="panel__body" ref="scrollBodyRef">
+      <p v-if="exportError" class="export-error-banner" role="alert">{{ exportError }}</p>
+
       <!-- 실시간 생성/수정 상태 배너 — 어느 탭에 있든 보여야 하므로 탭 콘텐츠 바깥에 둔다 -->
       <div v-if="liveMode" class="flow-live-status">
         <span class="analyzing-state__spinner" aria-hidden="true"></span>

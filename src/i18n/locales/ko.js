@@ -27,7 +27,6 @@ export default {
   },
 
   actionBar: {
-    next: "다음 (추천 단계로 이동)",
     generating: "흐름도 생성 중…",
   },
 
