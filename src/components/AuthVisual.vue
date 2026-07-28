@@ -30,17 +30,48 @@ function slideClass(index) {
   return "auth-slide--next";
 }
 
-onMounted(() => {
+function startSlideTimer() {
+  if (timer) return;
   timer = setInterval(next, SLIDE_INTERVAL);
+}
+
+function stopSlideTimer() {
+  clearInterval(timer);
+  timer = null;
+}
+
+// 탭이 백그라운드로 가면(다른 창/탭 전환) blob/sheen/sparkle 애니메이션과 슬라이드 전환 타이머를
+// 멈춘다 — 아무도 보고 있지 않은 로그인 화면이 계속 컴포지팅되며 CPU/GPU/배터리를 낭비하지
+// 않게 한다. 다시 보이면 즉시 재개하므로(탭 전환 자체가 흔한 조작) 화면에 보이는 동안에는
+// 이 로직이 전혀 개입하지 않아 시각적 차이가 없다.
+const pageHidden = ref(document.hidden);
+
+function handleVisibilityChange() {
+  pageHidden.value = document.hidden;
+  if (document.hidden) {
+    stopSlideTimer();
+  } else {
+    startSlideTimer();
+  }
+}
+
+onMounted(() => {
+  // 이미 백그라운드 탭/창에서 마운트되는 경우(예: 로그인 화면이 새 탭으로 열렸지만 포커스는
+  // 다른 탭에 있는 경우) 무조건 타이머부터 켜면, 이후 visibilitychange가 한 번도 안 와서
+  // (지금 상태 그대로 유지되는 한 이벤트가 안 뜬다) 꺼줄 계기가 없다 — 처음부터 현재 가시성을
+  // 반영해 시작한다.
+  if (!document.hidden) startSlideTimer();
+  document.addEventListener("visibilitychange", handleVisibilityChange);
 });
 
 onUnmounted(() => {
-  clearInterval(timer);
+  stopSlideTimer();
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
 </script>
 
 <template>
-  <aside class="auth-card__brand">
+  <aside class="auth-card__brand" :class="{ 'auth-card__brand--paused': pageHidden }">
     <div class="auth-brand__blob auth-brand__blob--1" aria-hidden="true"></div>
     <div class="auth-brand__blob auth-brand__blob--2" aria-hidden="true"></div>
     <div class="auth-brand__blob auth-brand__blob--4" aria-hidden="true"></div>
@@ -51,7 +82,7 @@ onUnmounted(() => {
     </div>
 
     <div class="auth-brand__logo">
-      <img src="../assets/a360-mark.svg" alt="" class="auth-brand__logo-icon" />
+      <img src="../assets/a360-mark.png" alt="" class="auth-brand__logo-icon" width="30" height="30" />
       <span class="auth-brand__logo-text">A360 ASSISTANT</span>
     </div>
 

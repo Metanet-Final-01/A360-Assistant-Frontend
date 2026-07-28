@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>A360 Assistant</title>
+    <!-- 브라우저 탭 아이콘 — 32px를 먼저 두어 대부분의 데스크톱 브라우저가 이걸 집게 하고,
+         16px는 저해상도 폴백이다. apple-touch-icon은 iOS 홈 화면 추가용. -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <!-- 로그인 확인(/api/auth/me)·세션 목록 등 첫 화면부터 쓰는 API가 다른 오리진(백엔드)에
          있어 커넥션 설정(DNS+TCP+TLS)이 요청 시점에야 시작된다 — 미리 연결해 그 왕복시간을
          숨긴다. -->
