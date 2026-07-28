@@ -27,6 +27,7 @@ export default {
   },
 
   actionBar: {
+    next: "Next (go to recommendation)",
     generating: "Generating flow…",
   },
 

@@ -132,9 +132,14 @@ const canGoNext = computed(
 const isGenerating = computed(
   () => pipeline.recommendStatus === "generating" || pipeline.liveActive,
 );
-const nextLabel = computed(() =>
-  isGenerating.value ? t("actionBar.generating") : t("recommendDetail.viewFlow"),
-);
+// generating이면 진행 문구, 이미 흐름도가 있으면(done) "흐름도 보기", 그 외(아직 생성 전)는
+// "다음"(goNext가 실제로 startRecommend()를 호출하는 상태) — recommendStatus를 안 보고 늘
+// "흐름도 보기"로 고정하면, 아직 생성 전인데도 버튼 라벨과 실제 클릭 동작(생성 시작)이
+// 어긋난다(Qodo 리뷰).
+const nextLabel = computed(() => {
+  if (isGenerating.value) return t("actionBar.generating");
+  return pipeline.recommendStatus === "done" ? t("recommendDetail.viewFlow") : t("actionBar.next");
+});
 
 async function goNext() {
   ui.setAnalysisTab("flow");
