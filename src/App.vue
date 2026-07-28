@@ -7,7 +7,6 @@ import { usePipelineStore } from "./stores/pipeline";
 import { useArchiveStore } from "./stores/archive";
 import { useSettingsStore } from "./stores/settings";
 import LoginPage from "./components/LoginPage.vue";
-import AppActionBar from "./components/AppActionBar.vue";
 import { ANALYSIS_PANEL_ORDER_KEY, usePanelReorder } from "./composables/usePanelReorder";
 
 // 로그인 전 방문(비로그인 최초 진입)이 가장 흔한 콜드 스타트 경로다 — LoginPage는 위처럼
@@ -288,8 +287,6 @@ function handleNewChat() {
           tabindex="-1"
           aria-hidden="true"
         ></div>
-
-        <AppActionBar />
         </main>
       </div>
     </div>

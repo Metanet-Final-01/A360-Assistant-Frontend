@@ -51,9 +51,9 @@
      도킹 챗봇이 같은 높이로 맞춰지는 기준이다. */
   --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 10px 28px rgba(16, 24, 40, 0.06);
   --shadow-pop: 0 12px 28px rgba(16, 24, 40, 0.14);
-  --action-bar-h: 64px;
-  /* 96px = .app-main 상하 패딩(24+28) + 액션 바 위 간격(16) + 여유(28) */
-  --panel-height: calc(100vh - var(--action-bar-h) - 96px);
+  /* 내보내기/다음 버튼이 하단 액션 바에서 패널 헤더로 옮겨가며 액션 바 자체가 없어졌다 —
+     80px = .app-main 상하 패딩(24+28) + 여유(28)만 남기고, 그만큼 패널이 더 채운다. */
+  --panel-height: calc(100vh - 80px);
 
   color: var(--text);
   background: var(--bg);
@@ -788,9 +788,13 @@ input {
    클래스 두 개를 겹친 선택자로 우선순위를 올려 확실히 덮어쓴다. 헤더가 흰 배경이 되면서
    본문 버튼과 같은 시맨틱 색을 쓸 수 있게 됐다 — 크기만 헤더용으로 줄인다. */
 .btn.panel__header-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 5px 12px;
   font-size: 0.76rem;
   line-height: 1.3;
+  white-space: nowrap;
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--accent-text);
@@ -808,8 +812,87 @@ input {
   opacity: 1;
 }
 
+/* "흐름도 보기/다음" — 헤더의 유일한 강조(CTA) 버튼이라 본문의 .btn--primary와 같은
+   그라디언트를 쓰되, .btn.panel__header-btn보다 시맨틱 순서가 뒤라 별도 선택자로 덮어쓴다. */
+.btn.panel__header-btn--primary {
+  background: var(--brand-gradient);
+  border-color: transparent;
+  color: #ffffff;
+}
+
+.btn.panel__header-btn--primary:hover:not(:disabled) {
+  background: var(--brand-primary-deep);
+}
+
+.btn.panel__header-btn--primary:disabled {
+  background: var(--border);
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
 /* 내보내기 드롭다운 — 챗봇 에이전트 버전 드롭다운(.agent-version-dd)과 동일한 상호작용,
    다만 헤더 상단에 붙어 있어 메뉴는 아래로 펼친다. */
+.panel__header-export {
+  position: relative;
+}
+
+.panel__header-chevron {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  transition: transform 0.18s ease;
+}
+
+.panel__header-chevron--open {
+  transform: rotate(180deg);
+}
+
+.panel__header-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: max-content;
+  min-width: 150px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-pop);
+  padding: 6px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.panel__header-menu-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 7px;
+  text-align: left;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.panel__header-menu-item:hover {
+  background: var(--brand-primary-soft);
+}
+
+/* 내보내기 실패 안내 — 헤더가 아니라 본문 맨 위에 둔다(헤더 높이는 고정해야 해서 배너가
+   들어갈 자리가 없다). refine-notice와 같은 좌측 강조선 배너꼴에 danger 색만 입힌다. */
+.export-error-banner {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--danger-bg);
+  border-left: 3px solid var(--danger);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--danger);
+}
 
 .panel__header-version {
   font-size: 0.66rem;
@@ -1413,101 +1496,6 @@ input {
 .stat-list .stat-list__value--text {
   font-size: 0.8rem;
   font-weight: 700;
-}
-
-/* ---------- 하단 액션 바 ---------- */
-
-.action-bar {
-  max-width: 1760px;
-  margin: 16px auto 0;
-  min-height: var(--action-bar-h);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 12px 18px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  box-shadow: var(--shadow-card);
-}
-
-.action-bar__right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-left: auto;
-  flex-wrap: wrap;
-}
-
-/* 화살표 글리프와 라벨이 붙지 않게 간격만 준다 — 색·배경은 .btn 변형이 맡는다 */
-.action-bar__next {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  white-space: nowrap;
-}
-
-.action-bar__error {
-  margin: 0;
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--danger);
-}
-
-.action-bar__export {
-  position: relative;
-}
-
-.action-bar__export > button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.action-bar__chevron {
-  width: 15px;
-  height: 15px;
-  flex-shrink: 0;
-  transition: transform 0.18s ease;
-}
-
-.action-bar__chevron--open {
-  transform: rotate(180deg);
-}
-
-.action-bar__menu {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  right: 0;
-  width: max-content;
-  min-width: 150px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: var(--shadow-pop);
-  padding: 6px;
-  z-index: 30;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.action-bar__menu-item {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  padding: 8px 10px;
-  border-radius: 7px;
-  text-align: left;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--text);
-  cursor: pointer;
-}
-
-.action-bar__menu-item:hover {
-  background: var(--brand-primary-soft);
 }
 
 /* ---------- Upload mode toggle ---------- */
@@ -2277,6 +2265,22 @@ input {
 }
 
 .fade-up-leave-to {
+  opacity: 0;
+}
+
+/* fade-up과 같되 아래로 펼쳐지는 드롭다운(패널 헤더 내보내기 메뉴)용 — 시작점이 위가 아니라
+   -8px(위에서 내려온다)다. */
+.fade-down-enter-active,
+.fade-down-leave-active {
+  transition: all 0.28s ease;
+}
+
+.fade-down-enter-from {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.fade-down-leave-to {
   opacity: 0;
 }
 
