@@ -4,6 +4,7 @@
 // 세그먼트 단위로 비교한다 — 문자열 접두어 비교는 "actions[1]"이 "actions[10]"의 접두어로
 // 잘못 매칭되는 버그가 있어 피한다.
 import { isBranchNode } from "./recommendation";
+import { isKnownContainerAction } from "./actionCatalog";
 
 // path/listPath 둘 다 steps 배열 루트에서 시작하는 동일한 세그먼트 배열이다 — path가 배열이 나오면
 // "리스트 경로", 액션 객체가 나오면 "노드 경로"일 뿐 함수는 구분하지 않는다.
@@ -80,9 +81,13 @@ function walkStripEmptyChildren(node) {
     // 없는 Else 분기) flowDrop.collectDropLists가 그 children[] 경로를 항상 드롭 가능 리스트로
     // 내놓는다(분기 컬럼은 children 유무와 무관하게 항상 프레임으로 보여야 하므로) — 여기서
     // children 자체를 지워버리면 그 경로가 undefined가 되어, 드롭 시 insertAt()의
-    // list.splice()가 예외를 던진다(Qodo 리뷰). 진짜로 스키마 기본값일 뿐인 리프 액션의
-    // children[]만 지우고, 분기 노드는 빈 배열이어도 그대로 둔다.
-    if (!isBranchNode(node)) delete node.children;
+    // list.splice()가 예외를 던진다(Qodo 리뷰).
+    // 분기 노드가 아니어도, 카탈로그에 컨테이너로 등록된 액션(예: Loop/Step)이면 실제로 비어
+    // 있는 컨테이너일 수 있다 — 저장 시점엔 하위 액션이 없었을 뿐 리프로 바뀐 게 아니다(Qodo
+    // 리뷰: 안 지우면 재로드 후 프레임·드롭 대상 자격을 잃어 다시 채울 수 없게 된다). 카탈로그가
+    // 컨테이너로 알고 있는 액션과 분기 노드만 남기고, 그 외(백엔드 스키마 기본값일 뿐인 진짜
+    // 리프)의 children[]만 지운다.
+    if (!isBranchNode(node) && !isKnownContainerAction(node.package, node.action)) delete node.children;
     return;
   }
   node.children.forEach(walkStripEmptyChildren);

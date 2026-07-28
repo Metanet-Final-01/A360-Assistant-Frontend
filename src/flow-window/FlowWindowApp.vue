@@ -10,6 +10,7 @@ import { formatDateShort } from "../utils/dateFormat";
 import { triggerBlobDownload } from "../utils/download";
 import FlowCanvas from "../components/flow-canvas/FlowCanvas.vue";
 import ActionCatalogPanel from "../components/flow-canvas/ActionCatalogPanel.vue";
+import { loadActionCatalog } from "../utils/actionCatalog";
 
 // 추천 흐름도를 인앱 모달 대신 진짜 별도 브라우저 창(window.open)으로 띄운 페이지 — OS 창
 // 컨트롤(최대화/최소화/이동/크기조절)을 그대로 쓸 수 있어, Fullscreen API가 강제로 띄우던
@@ -38,7 +39,11 @@ onMounted(async () => {
     bootStatus.value = "not-found";
     return;
   }
-  await pipeline.loadSession(sessionId);
+  // loadActionCatalog()를 세션 로딩과 병렬로 미리 기다려 둔다 — FlowCanvas가 마운트되며
+  // stripEmptyChildren으로 트리를 정규화할 때 카탈로그의 isContainer 정보가 이미 있어야
+  // 빈 컨테이너 액션을 리프로 오인하지 않는다(Qodo 리뷰, flowTree.js/actionCatalog.js 참고).
+  // 카탈로그 로딩 실패는 이 화면 전체를 막을 이유가 아니라 조용히 무시한다(폴백 동작으로 처리됨).
+  await Promise.all([pipeline.loadSession(sessionId), loadActionCatalog().catch(() => {})]);
   // loadSession()은 실패해도 예외를 던지지 않고 sessionLoadStatus="error"만 남긴 채 return한다
   // (Qodo 리뷰) — 이 상태를 먼저 확인하지 않으면 네트워크·API 오류까지 "세션 없음"으로
   // 오분류해 uploadError에 담긴 실제 오류 메시지가 사라진다.
