@@ -6,3 +6,6 @@ dist/
 .vercel/
 npm-debug.log*
 .vite.*.log
+
+# 백엔드 RAG 로그가 도커 바인드 마운트로 이 리포에 생성된다 — 소스가 아니므로 추적하지 않는다
+app/rag/logs/

@@ -41,6 +41,48 @@ export async function downloadRecommendationExport(sessionId, version) {
   triggerBlobDownload(blob, filename);
 }
 
+// POST /api/sessions/{id}/recommendations/{version}/export/docx — 서식 있는 .docx로 내보낸다
+// (RPA-296, FR-17). 흐름도는 프론트만 렌더하므로(FR-18) 백엔드가 서버에서 캡처할 수 없다 —
+// 흐름도 캡처가 가능한 화면(flow-window)에서만 flowImageBlobs를 넘겨 문서에 임베드하고, 캡처가
+// 불가능하거나 실패한 화면(AnalysisPanel)에서는 생략해도 문서 자체는 그대로 나온다.
+// flowImageBlobs: 페이지 단위로 잘라 캡처한 PNG blob 배열(순서대로) — 백엔드가 같은 필드명
+// (flow_images)을 반복 전송된 파트로 모아 받아, 장마다 페이지 나눔을 넣어 순서대로 삽입한다
+// (RPA-296 후속). 한 장짜리 배열도 그대로 동작한다.
+export async function downloadRecommendationDocx(sessionId, version, flowImageBlobs) {
+  // FormData를 항상 만들면, 이미지가 없을 때도 fetch가 Content-Type: multipart/form-data를
+  // 붙이고 파트가 0개인(닫는 경계만 있는) 바디를 보낸다 — 백엔드의 python-multipart 0.0.9가
+  // 이 빈 멀티파트를 못 읽고 400 "There was an error parsing the body"로 거부한다. 이미지가
+  // 한 장도 없으면 아예 body 없이 POST해야 flow_images가 빈 리스트로 깨끗이 넘어간다.
+  let body;
+  if (flowImageBlobs?.length) {
+    const fd = new FormData();
+    flowImageBlobs.forEach((blob, i) => fd.append("flow_images", blob, `flow-page-${i + 1}.png`));
+    body = fd;
+  }
+
+  let response;
+  try {
+    response = await fetchWithAuth(`/api/sessions/${sessionId}/recommendations/${version}/export/docx`, {
+      method: "POST",
+      body,
+    });
+  } catch {
+    throw new ApiError("NETWORK_ERROR", t("api.errors.networkUnreachable"), 0);
+  }
+  if (response.status === 401) {
+    notifyUnauthorized();
+  }
+  if (!response.ok) {
+    throw new ApiError("EXPORT_FAILED", t("api.errors.exportFailed"), response.status);
+  }
+
+  // Content-Disposition의 파일명을 그대로 쓴다 (예: recommendation-{session}-v{n}.docx)
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const filename = /filename="?([^";]+)"?/.exec(disposition)?.[1] ?? `recommendation-${sessionId}-v${version}.docx`;
+  const blob = await response.blob();
+  triggerBlobDownload(blob, filename);
+}
+
 // POST /api/sessions/{id}/recommendations — 편집된 트리를 새 버전으로 저장 (undo도 이걸로: 이전 트리를 다시 저장)
 export function saveRecommendation(sessionId, { recommendation, parentVersion, source = "drag", changeSummary }) {
   return apiRequest(`/api/sessions/${sessionId}/recommendations`, {
@@ -53,4 +95,25 @@ export function saveRecommendation(sessionId, { recommendation, parentVersion, s
       change_summary: changeSummary ?? null,
     }),
   });
+}
+
+// GET /api/sessions/{id}/refine — 이 세션이 정밀화로 잠겨 있는지 (설계 §6.3)
+//
+// SSE partial(kind="refine")을 **놓친** 클라이언트가 물어볼 곳이다. 새로고침·재접속하면
+// 스트림이 끊겨 잠금 상태를 알 수 없는데, 그때 편집 UI를 열어 두면 사용자가 저장을
+// 눌렀다가 409를 맞는다. 세션을 열 때 한 번 물어 UI 상태를 복원한다.
+//
+// 반환: { locked, refine: {status, draft_id, elapsed_ms, ...} | null, last: {...} | null }
+// last에는 **마지막 정밀화 결과**가 잠시 남는다 — 완료 직후 locked=false만 보면
+// 정상 완료인지 중단·타임아웃인지 구분할 수 없다.
+export function getRefineStatus(sessionId) {
+  return apiRequest(`/api/sessions/${sessionId}/refine`);
+}
+
+// POST /api/sessions/{id}/refine/cancel — 탈출구: "정밀화 중단하고 지금 초안으로 수정하기"
+//
+// 잠금만 있고 탈출구가 없으면 사용자는 갇힌 느낌을 받는다(설계 §6.3). 중단해도 초안은
+// 그대로 확정본이 되므로 잃는 것은 '더 다듬어진 결과'뿐이다.
+export function cancelRefine(sessionId) {
+  return apiRequest(`/api/sessions/${sessionId}/refine/cancel`, { method: "POST" });
 }

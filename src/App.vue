@@ -7,6 +7,7 @@ import { usePipelineStore } from "./stores/pipeline";
 import { useArchiveStore } from "./stores/archive";
 import { useSettingsStore } from "./stores/settings";
 import LoginPage from "./components/LoginPage.vue";
+import AppActionBar from "./components/AppActionBar.vue";
 import { ANALYSIS_PANEL_ORDER_KEY, usePanelReorder } from "./composables/usePanelReorder";
 
 // 로그인 전 방문(비로그인 최초 진입)이 가장 흔한 콜드 스타트 경로다 — LoginPage는 위처럼
@@ -204,19 +205,20 @@ function handleNewChat() {
   </template>
 
   <div v-else class="app-shell">
-    <AppSidebar
-      :active-session-id="pipeline.sessionId"
-      :active-session-loading="pipeline.sessionLoadStatus === 'loading'"
-      :active-session-busy="chatBlocked"
-      @select-session="pipeline.loadSession"
-      @new-chat="handleNewChat"
-      @logout="handleLogout"
-      @tutorial="startTutorial"
-      @open-settings="showSettings = true"
-    />
+    <div class="app-shell__body">
+      <AppSidebar
+        :active-session-id="pipeline.sessionId"
+        :active-session-loading="pipeline.sessionLoadStatus === 'loading'"
+        :active-session-busy="chatBlocked"
+        @select-session="pipeline.loadSession"
+        @new-chat="handleNewChat"
+        @logout="handleLogout"
+        @tutorial="startTutorial"
+        @open-settings="showSettings = true"
+      />
 
-    <div class="app-content">
-      <main class="app-main" id="analysis">
+      <div class="app-content">
+        <main class="app-main" id="analysis">
         <TransitionGroup
           tag="div"
           name="panel-move"
@@ -286,7 +288,10 @@ function handleNewChat() {
           tabindex="-1"
           aria-hidden="true"
         ></div>
-      </main>
+
+        <AppActionBar />
+        </main>
+      </div>
     </div>
 
     <TutorialOverlay v-if="showTutorial" @close="closeTutorial" />

@@ -4,7 +4,7 @@
 // 트루스는 항상 로컬 편집 버퍼(editableTree)고, 화면(nodes/edges)은 매번 그 트리로부터
 // buildFlowGraph로 다시 계산한다 — 드롭이 무효면 다음 렌더에서 트리 기준 위치로 자연히
 // 스냅백된다.
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { VueFlow, useVueFlow, getRectOfNodes, getTransformForBounds } from "@vue-flow/core";
 import { Controls } from "@vue-flow/controls";
@@ -19,10 +19,11 @@ import BranchSetNode from "./BranchSetNode.vue";
 import BranchColumnNode from "./BranchColumnNode.vue";
 import LabelNode from "./LabelNode.vue";
 
-import { buildFlowGraph, LAYOUT } from "../../utils/flowLayout";
+import { buildFlowGraph, buildFlowGraphPages, LAYOUT, Z_FLOATING } from "../../utils/flowLayout";
 import {
   assignUiIds,
   stripUiIds,
+  stripEmptyChildren,
   getAt,
   insertAt,
   removeAt,
@@ -43,8 +44,10 @@ const props = defineProps({
 const emit = defineEmits(["update:dirty", "update:saving", "update:unplaced-count"]);
 const { t } = useI18n();
 
+// 백엔드가 내려준 steps를 로컬 편집 버퍼로 복제한다 — 딥카피 직후 stripEmptyChildren으로
+// 리프 액션의 빈 children[](백엔드 스키마 기본값)을 지운다(자세한 이유는 flowTree.js 참고).
 function cloneTree(steps) {
-  return JSON.parse(JSON.stringify(steps ?? []));
+  return stripEmptyChildren(JSON.parse(JSON.stringify(steps ?? [])));
 }
 
 const editableTree = ref(assignUiIds(cloneTree(props.steps)));
@@ -109,7 +112,15 @@ function markDirty(summaryKey) {
   if (!pendingSummaries.value.includes(summaryKey)) pendingSummaries.value.push(summaryKey);
 }
 
-const graph = computed(() => buildFlowGraph(editableTree.value));
+// DOCX 다중 페이지 내보내기가 캡처하는 동안만 채워지는 페이지 배열 — null이면 평소처럼
+// buildFlowGraph(세로 한 줄, 편집 가능)를 그린다. 값이 있으면 exportPageIndex번째 페이지 조각
+// (buildFlowGraphPages, RPA-296 후속)만 그린다. 자세한 이유는 flowLayout.js의
+// buildFlowGraphPages 주석 참고 — 백엔드가 이미지를 고정 폭으로만 삽입하고, Word는 페이지보다
+// 큰 인라인 그림을 다음 페이지로 이어주지 않고 그냥 잘라버려서, 스텝 경계에서 여러 장으로
+// 나눠 캡처한 뒤 백엔드가 장마다 페이지 나눔을 넣어 삽입한다.
+const exportPages = ref(null);
+const exportPageIndex = ref(0);
+const graph = computed(() => exportPages.value?.[exportPageIndex.value] ?? buildFlowGraph(editableTree.value));
 
 function enrich(node) {
   // node.draggable은 flowLayout이 세그먼트 루트(action/container/branchSet)에만 true로 표시해 둔
@@ -157,7 +168,7 @@ function toFloatingFlowNode(entry) {
     width: LAYOUT.NODE_W,
     height: LAYOUT.NODE_H,
     draggable: props.editable,
-    zIndex: 5,
+    zIndex: Z_FLOATING,
     data: {
       label: node.label || node.action,
       prefix: "",
@@ -529,7 +540,9 @@ function getImageCaptureTarget() {
   // getRectOfNodes는 store가 측정해 둔 computedPosition/dimensions가 있어야 하므로, 우리
   // 로컬 nodes(레이아웃 계산 직후의 원시 position/width/height)가 아니라 getNodes(store가
   // 실제로 렌더한 뒤 채워 넣는 값)를 넘겨야 한다 — 안 그러면 좌표가 비어 NaN 바운딩이 나온다.
-  const measuredNodes = getNodes.value;
+  // 미배치 카드(data.unplaced)는 트리에 편입되지 않은 임시 카드라 바운딩·캡처 대상에서 뺀다
+  // (Qodo 리뷰) — 안 빼면 캡처 이미지에 미배치 카드가 찍히거나 불필요한 여백이 생긴다.
+  const measuredNodes = getNodes.value.filter((n) => !n.data?.unplaced);
   if (!viewportEl || !measuredNodes.length) return null;
   const bounds = getRectOfNodes(measuredNodes);
   const scale = Math.min(EXPORT_SCALE, EXPORT_MAX_SIDE / Math.max(bounds.width, bounds.height, 1));
@@ -562,7 +575,44 @@ function getImageCaptureTarget() {
   };
 }
 
-defineExpose({ dirty, saving, save, discard, getImageCaptureTarget, addUnplacedAction });
+// "DOCX로 내보내기" 전용 — 캡처 직전 스텝을 페이지 단위로 잘라 exportPages를 채운다. 페이지
+// 수만 반환하고 그리지는 않는다(각 페이지는 captureExportPage로 순서대로 그려 캡처).
+function prepareExportPages() {
+  const pages = buildFlowGraphPages(editableTree.value);
+  exportPages.value = pages;
+  exportPageIndex.value = 0;
+  return pages.length;
+}
+
+// index번째 페이지로 화면을 바꾸고 캡처 대상을 계산한다. nextTick 두 번은 nodes/edges 갱신과
+// vue-flow store 반영까지만 보장한다 — 페이지가 바뀔 때마다 노드 id 집합이 통째로 새로
+// 마운트되는데(이전 페이지 노드와 겹치지 않음), vue-flow는 ResizeObserver로 실제 렌더 크기를
+// 재기 전까지 새 노드를 visibility:hidden으로 그린다(node.dimensions가 아직 0이라
+// isInit=false). 그 측정은 Vue의 리액티브 큐가 아니라 브라우저 페인트 주기에 걸려 nextTick만
+// 으론 안 끝난다 — rAF를 두 번 겹쳐 기다려 측정이 끝난 뒤에 캡처해야 페이지 내용이 안 빠진다.
+async function captureExportPage(index) {
+  exportPageIndex.value = index;
+  await nextTick();
+  await nextTick();
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  return getImageCaptureTarget();
+}
+
+function endExportCapture() {
+  exportPages.value = null;
+}
+
+defineExpose({
+  dirty,
+  saving,
+  save,
+  discard,
+  getImageCaptureTarget,
+  prepareExportPages,
+  captureExportPage,
+  endExportCapture,
+  addUnplacedAction,
+});
 </script>
 
 <template>

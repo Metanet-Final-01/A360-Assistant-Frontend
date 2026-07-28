@@ -2,10 +2,14 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { usePipelineStore } from "../stores/pipeline";
-import { evidenceLabel, formatBytes } from "../utils/format";
+import { useSettingsStore } from "../stores/settings";
+import { formatBytes } from "../utils/format";
+import { formatDateLabel } from "../utils/dateFormat";
+import { analysisStats } from "../utils/analysisSummary";
 import { useFitTitle } from "../composables/useFitTitle";
 
 const pipeline = usePipelineStore();
+const settings = useSettingsStore();
 const { t } = useI18n();
 
 const titleRef = ref(null);
@@ -15,9 +19,9 @@ const isDragging = ref(false);
 const fileInputRef = ref(null);
 const inputMode = ref("file"); // file | text
 const textDraft = ref("");
-// 분석이 끝나면 업로드 상태(탭·문서 카드·분석 버튼)는 더 볼 일이 없는데도 화면을 차지해
-// 아래 분석 결과가 좁아 보인다 — 패널 자체 높이는 고정(.panel--wide)이라 접어도 패널 크기는
-// 그대로고, 접힌 만큼 분석 결과 영역이 넓어 보이는 효과만 낸다.
+// 분석이 끝나면 업로드 입력(탭·드롭존)은 더 볼 일이 없는데도 화면을 차지해 아래 진행 상태·
+// 요약이 밀린다 — 패널 자체 높이는 고정(.panel--wide)이라 접어도 패널 크기는 그대로고,
+// 접힌 만큼 진행 상태·요약이 위로 올라오는 효과만 낸다.
 const uploadSectionCollapsed = ref(false);
 
 // 텍스트 입력은 store가 아니라 이 컴포넌트가 로컬로 들고 있어서, 세션 전환(loadSession)이나
@@ -39,9 +43,8 @@ watch(
   },
 );
 
-const fileSizeLabel = computed(() =>
-  pipeline.file ? formatBytes(pipeline.file.size) : "",
-);
+const fileSizeLabel = computed(() => (pipeline.file ? formatBytes(pipeline.file.size) : ""));
+const uploadedAtLabel = computed(() => formatDateLabel(pipeline.document?.created_at));
 
 // 비전 보강이 parsed_content를 갱신하는 도중에 분석이 먼저 시작되면 보강 결과가 반영되지
 // 않은 채로 분석이 진행될 수 있어(RPA-264), 보강이 끝날 때까지는 분석 시작을 막는다.
@@ -101,274 +104,146 @@ function resetUploadSection() {
   pipeline.resetUpload();
 }
 
-// ----- 분석 결과(WorkStep, schemas/analysis.py) 확인·편집 -----
-// steps는 pipeline.analysis.steps와 동일한 참조 — splice/push로 직접 수정하면 그대로 반영된다.
-// 편집(드래그/수정/삭제/추가)은 우선 메모리에서만 일어나고, 흐름도가 이미 생성돼 있으면
-// 아래 "흐름도에 저장" 버튼이 편집 내용을 추천 트리에 투영해 새 버전으로 저장한다
-// (pipeline.applyAnalysisEditsToFlow — 제스처마다 저장하면 버전이 폭증하므로 명시 버튼 1회 = 1버전).
-// 각 편집 지점은 markAnalysisEdited()로 종류만 기록해 두고, 저장 시 change_summary로 묶인다.
-const steps = computed(() => pipeline.analysis?.steps ?? []);
-const hasSteps = computed(() => steps.value.length > 0);
+// ----- 분석 진행 상태 (파이프라인 실제 상태를 그대로 비춘다) -----
+// 각 행의 state는 done | running | pending | error 넷 중 하나이며, 오른쪽 상태 칩과
+// 왼쪽 아이콘(체크/점/빈 원/느낌표) 색을 함께 결정한다. 임의로 만들어 낸 단계는 없고
+// 전부 store가 실제로 들고 있는 상태값에서 파생된다.
+const stepCount = computed(() => pipeline.analysis?.steps?.length ?? 0);
 
-// 분석 스트리밍(RPA — 분석도 실시간) — 백엔드가 분석을 요약→단계 순으로 흘려보내는 라이브
-// 스냅샷. 분석이 끝나기 전(analyzing)에 이걸 읽기 전용으로 렌더해 결과가 채워지는 걸 보여준다.
-// 완료(done) 시엔 pipeline.analysis(편집 가능본)로 교체된다.
-const liveAnalysis = computed(() => pipeline.liveAnalysis);
-const liveAnalysisSteps = computed(() => pipeline.liveAnalysis?.steps ?? []);
-
-const analysisBodyRef = ref(null);
-const dragIndex = ref(null);
-const dragVisualHidden = ref(false);
-const openMenuId = ref(null);
-const editingStepId = ref(null);
-// "+ 업무 단계 추가"로 막 만든, 아직 한 번도 저장되지 않은 단계의 id — 취소 시 이 id와
-// 일치할 때만 지운다(필드 값으로 "빈 초안"을 추측하면, 이름을 안 바꾼 실제 저장된 단계를
-// 취소만 눌러도 지워버릴 수 있다).
-const draftStepId = ref(null);
-const stepForm = ref({
-  name: "",
-  description: "",
-  inputs: "",
-  outputs: "",
-  systems: "",
-  branching: "",
-  evidenceSnippet: "",
-  evidencePage: null,
+const fileCheckState = computed(() => {
+  if (pipeline.uploadStatus === "error") return "error";
+  if (pipeline.uploadStatus === "uploading") return "running";
+  return pipeline.file ? "done" : "pending";
 });
 
-function toCsv(arr) {
-  return (arr ?? []).join(", ");
-}
+const extractState = computed(() => {
+  const status = pipeline.document?.status;
+  if (status === "failed") return "error";
+  if (status === "parsed") return "done";
+  if (pipeline.uploadStatus === "uploading") return "running";
+  return "pending";
+});
 
-function fromCsv(str) {
-  return str
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
+const visionState = computed(() => {
+  const status = pipeline.visionStatus;
+  if (status === "enriching") return "running";
+  if (status === "done") return "done";
+  if (status === "error") return "error";
+  return "pending";
+});
 
-function renumber() {
-  steps.value.forEach((s, idx) => {
-    s.order = idx + 1;
-  });
-}
+const analyzeState = computed(() => {
+  const status = pipeline.analysisStatus;
+  if (status === "analyzing") return "running";
+  if (status === "done") return "done";
+  if (status === "error") return "error";
+  return "pending";
+});
 
-// 드래그 중 포인터 Y좌표를 추적해 자동 스크롤과 순서 미리보기 계산에 사용한다.
-// 네이티브 드래그가 진행되는 동안 브라우저(특히 Chromium)는 requestAnimationFrame을
-// 거의 멈춰 버려서(위쪽 스크롤이 유독 버벅였던 원인) rAF 대신 setInterval로 주기적으로 돌린다.
-let lastPointerY = null;
-let dragIntervalId = null;
-const AUTO_SCROLL_ZONE = 60;
-const AUTO_SCROLL_MAX_SPEED = 18;
-const DRAG_TICK_MS = 16;
+const flowState = computed(() => {
+  if (pipeline.liveActive || pipeline.recommendStatus === "generating") return "running";
+  if (pipeline.recommendStatus === "error") return "error";
+  return pipeline.recommendation ? "done" : "pending";
+});
 
-// 드래그 시작 시점의 각 카드 위치(패널 콘텐츠 기준 좌표)를 스냅샷으로 고정해 둔다.
-// 매 프레임 실제 DOM 위치를 다시 재는 대신 이 고정된 위치와 포인터 좌표만 비교해서
-// 목표 인덱스를 계산하기 때문에, 카드가 이미 옮겨져 포인터 아래 다른 카드가 들어와도
-// 연쇄적으로 계속 재배치되지 않고 "지나간 카드 하나만" 자리를 바꾸는 식으로 동작한다.
-let dragStartSlots = null; // [{ mid }] — 원래 순서 기준, 콘텐츠 좌표계
+const progressRows = computed(() => {
+  const rows = [
+    {
+      key: "validate",
+      label: t("upload.progress.validate"),
+      state: fileCheckState.value,
+      detail: pipeline.uploadStatus === "error" ? pipeline.uploadError : "",
+    },
+    {
+      key: "extract",
+      label: t("upload.progress.extract"),
+      state: extractState.value,
+      detail:
+        extractState.value === "done"
+          ? pipeline.document?.page_count != null
+            ? t("upload.progress.extractDone", { page: pipeline.document.page_count })
+            : t("upload.status.processedDone")
+          : "",
+    },
+  ];
 
-function captureDragStartSlots() {
-  const container = analysisBodyRef.value;
-  if (!container) {
-    dragStartSlots = null;
-    return;
+  // 비전 보강은 PDF/PPT/PPTX에서만 도는 선택 단계라, 실제로 시작된 세션에서만 줄을 낸다 —
+  // 해당 없는 문서에서 "대기"로 영영 남아 있으면 멈춘 것처럼 보인다.
+  if (pipeline.visionStatus !== "idle") {
+    rows.push({
+      key: "vision",
+      label: t("upload.progress.vision"),
+      state: visionState.value,
+      detail:
+        visionState.value === "running"
+          ? pipeline.visionStage || ""
+          : visionState.value === "error"
+            ? pipeline.visionError
+            : pipeline.enrichedPages?.length
+              ? t("upload.vision.done", { count: pipeline.enrichedPages.length }, pipeline.enrichedPages.length)
+              : t("upload.vision.noneNeeded"),
+    });
   }
-  const containerRect = container.getBoundingClientRect();
-  const cards = container.querySelectorAll(".rec-card");
-  const slots = Array.from(cards).map((el) => {
-    const r = el.getBoundingClientRect();
-    const top = r.top - containerRect.top + container.scrollTop;
-    return { mid: top + r.height / 2 };
-  });
-  // 드래그 중인 카드 자신의 원래 슬롯은 목표 인덱스 계산에서 제외한다 — 포함된 채로 두면
-  // splice로 카드를 뺀 뒤의 배열 인덱스와 어긋나, 아래로 옮길 때 의도한 자리보다 한 칸
-  // 더 내려가 버린다.
-  if (dragIndex.value !== null) slots.splice(dragIndex.value, 1);
-  dragStartSlots = slots;
+
+  rows.push(
+    {
+      key: "analyze",
+      label: t("upload.progress.analyze"),
+      state: analyzeState.value,
+      detail:
+        analyzeState.value === "running"
+          ? pipeline.liveCaption || pipeline.analysisStage || t("upload.progress.analyzeHint")
+          : analyzeState.value === "error"
+            ? pipeline.analysisError
+            : analyzeState.value === "done"
+              ? t("upload.progress.analyzeDone", { count: stepCount.value })
+              : "",
+    },
+    {
+      key: "flow",
+      label: t("upload.progress.flow"),
+      state: flowState.value,
+      detail:
+        flowState.value === "running"
+          ? pipeline.liveCaption || pipeline.recommendStage || ""
+          : flowState.value === "error"
+            ? pipeline.recommendError
+            : flowState.value === "done"
+              ? t("upload.progress.flowDone", { version: pipeline.recommendation.version })
+              : "",
+    },
+  );
+
+  return rows;
+});
+
+const PROGRESS_STATE_LABELS = {
+  done: "upload.progress.stateDone",
+  running: "upload.progress.stateRunning",
+  pending: "upload.progress.statePending",
+  error: "upload.progress.stateError",
+};
+
+function stateLabel(state) {
+  return t(PROGRESS_STATE_LABELS[state]);
 }
 
-function trackPointer(event) {
-  lastPointerY = event.clientY;
-}
+// ----- 분석 요약 -----
+// 분석이 끝나야 의미가 있는 수치라 analysis가 채워진 뒤에만 보여준다. 모델/토큰은
+// 단계 수처럼 문서에서 나온 값이 아니라 이번 세션의 실행 메타라, 값이 있을 때만 줄을 낸다.
+const stats = computed(() => analysisStats(pipeline.analysis?.steps));
+const hasAnalysis = computed(() => !!pipeline.analysis?.steps);
 
-function runDragFrame() {
-  const el = analysisBodyRef.value;
-  if (el && lastPointerY !== null) {
-    const rect = el.getBoundingClientRect();
+const modelLabel = computed(() => {
+  const id = settings.agentVersion;
+  if (!id) return "";
+  return settings.agentVersions.find((v) => v.id === id)?.label ?? id;
+});
 
-    const distFromTop = lastPointerY - rect.top;
-    const distFromBottom = rect.bottom - lastPointerY;
-    if (distFromTop < AUTO_SCROLL_ZONE) {
-      const intensity = Math.min(1, (AUTO_SCROLL_ZONE - distFromTop) / AUTO_SCROLL_ZONE);
-      el.scrollTop -= AUTO_SCROLL_MAX_SPEED * intensity;
-    } else if (distFromBottom < AUTO_SCROLL_ZONE) {
-      const intensity = Math.min(1, (AUTO_SCROLL_ZONE - distFromBottom) / AUTO_SCROLL_ZONE);
-      el.scrollTop += AUTO_SCROLL_MAX_SPEED * intensity;
-    }
-
-    if (dragStartSlots && dragIndex.value !== null) {
-      const pointerContentY = lastPointerY - rect.top + el.scrollTop;
-      let targetIndex = dragStartSlots.findIndex((slot) => pointerContentY < slot.mid);
-      if (targetIndex === -1) targetIndex = dragStartSlots.length - 1;
-      if (targetIndex !== dragIndex.value) {
-        const list = steps.value;
-        const [moved] = list.splice(dragIndex.value, 1);
-        list.splice(targetIndex, 0, moved);
-        dragIndex.value = targetIndex;
-      }
-    }
-  }
-}
-
-function startDragTracking() {
-  lastPointerY = null;
-  window.addEventListener("dragover", trackPointer);
-  if (dragIntervalId === null) {
-    dragIntervalId = setInterval(runDragFrame, DRAG_TICK_MS);
-  }
-}
-
-function stopDragTracking() {
-  window.removeEventListener("dragover", trackPointer);
-  if (dragIntervalId !== null) {
-    clearInterval(dragIntervalId);
-    dragIntervalId = null;
-  }
-  lastPointerY = null;
-  dragStartSlots = null;
-}
-
-// 드래그 시작 인덱스 — 제자리에 놓은 드래그(순서 불변)를 편집으로 오인하지 않기 위해 기록한다.
-let dragStartIndex = null;
-
-function onStepDragStart(idx, event) {
-  dragIndex.value = idx;
-  dragStartIndex = idx;
-  event.dataTransfer.effectAllowed = "move";
-  captureDragStartSlots();
-  startDragTracking();
-  // 브라우저가 커서를 따라다니는 기본 드래그 고스트 이미지를 dragstart 시점의 카드
-  // 모습으로 이미 캡처해 둔 뒤라야 하므로, 리스트 안 카드를 숨기는 건 한 틱 늦춰서
-  // 적용한다 — 동기적으로(또는 Vue의 다음 tick으로) 바로 숨기면 고스트 이미지까지
-  // 투명해져 버려서 드래그 중 아무 것도 안 보이는 것처럼 느껴진다.
-  setTimeout(() => {
-    dragVisualHidden.value = true;
-  }, 0);
-}
-
-function onStepDrop(event) {
-  event.preventDefault();
-}
-
-function onStepDragEnd() {
-  if (dragIndex.value !== null && dragStartIndex !== null && dragIndex.value !== dragStartIndex) {
-    pipeline.markAnalysisEdited(t("upload.changeSummary.reorder"));
-  }
-  dragIndex.value = null;
-  dragStartIndex = null;
-  dragVisualHidden.value = false;
-  stopDragTracking();
-  renumber();
-}
-
-function toggleMenu(stepId, event) {
-  event.stopPropagation();
-  openMenuId.value = openMenuId.value === stepId ? null : stepId;
-}
-
-function closeMenuOnOutsideClick(event) {
-  if (openMenuId.value !== null && !event.target.closest(".flow-card__menu-wrap")) {
-    openMenuId.value = null;
-  }
-}
-
-function startEditStep(step) {
-  // 다른 단계를 편집하는 중이면 무시한다 — 그대로 두면 stepForm이 통째로 교체돼
-  // 저장하지 않은 입력이 조용히 사라진다.
-  if (editingStepId.value !== null) return;
-  openMenuId.value = null;
-  editingStepId.value = step.step_id;
-  stepForm.value = {
-    name: step.name ?? "",
-    description: step.description ?? "",
-    inputs: toCsv(step.inputs),
-    outputs: toCsv(step.outputs),
-    systems: toCsv(step.systems),
-    branching: step.branching ?? "",
-    evidenceSnippet: step.evidence?.snippet ?? "",
-    evidencePage: step.evidence?.page ?? null,
-  };
-}
-
-function cancelEditStep() {
-  // 방금 "+ 업무 단계 추가"로 만든, 아직 한 번도 저장되지 않은 카드일 때만 취소 시 지운다.
-  if (editingStepId.value !== null && editingStepId.value === draftStepId.value) {
-    const idx = steps.value.findIndex((s) => s.step_id === editingStepId.value);
-    if (idx !== -1) {
-      steps.value.splice(idx, 1);
-      renumber();
-    }
-  }
-  editingStepId.value = null;
-}
-
-function saveEditStep() {
-  const step = steps.value.find((s) => s.step_id === editingStepId.value);
-  if (!step) return;
-  step.name = stepForm.value.name.trim() || t("upload.unnamedStep");
-  step.description = stepForm.value.description.trim();
-  step.inputs = fromCsv(stepForm.value.inputs);
-  step.outputs = fromCsv(stepForm.value.outputs);
-  step.systems = fromCsv(stepForm.value.systems);
-  step.branching = stepForm.value.branching.trim() || null;
-  const snippet = stepForm.value.evidenceSnippet.trim();
-  const page = stepForm.value.evidencePage;
-  // 근거 텍스트를 지워도 페이지 번호(편집 UI에 없는 필드)는 남겨 둔다 — 스니펫만 비우려고
-  // 저장했는데 페이지 참조까지 통째로 날아가면 안 된다.
-  step.evidence = snippet || page != null ? { page, snippet: snippet || null } : null;
-  if (draftStepId.value === editingStepId.value) {
-    draftStepId.value = null;
-    // 새 단계의 첫 저장 = "단계 추가" — 흐름도 투영 시 이 step은 actions: []로 들어간다
-    pipeline.markAnalysisEdited(t("upload.changeSummary.add"));
-  } else {
-    pipeline.markAnalysisEdited(t("upload.changeSummary.edit"));
-  }
-  editingStepId.value = null;
-}
-
-function removeStep(stepId) {
-  openMenuId.value = null;
-  if (editingStepId.value === stepId) editingStepId.value = null;
-  const idx = steps.value.findIndex((s) => s.step_id === stepId);
-  if (idx !== -1) steps.value.splice(idx, 1);
-  renumber();
-  if (stepId === draftStepId.value) {
-    draftStepId.value = null; // 저장된 적 없는 초안 삭제는 편집 전후가 동일 — 더티로 안 잡는다
-    return;
-  }
-  pipeline.markAnalysisEdited(t("upload.changeSummary.remove"));
-}
-
-function startAddStep() {
-  // 다른 단계를 편집하는 중이면 무시한다 — startEditStep과 동일한 이유.
-  if (editingStepId.value !== null) return;
-  const list = steps.value;
-  const newStep = {
-    step_id: crypto.randomUUID(),
-    order: list.length + 1,
-    name: t("upload.newStepDefaultName"),
-    description: "",
-    inputs: [],
-    outputs: [],
-    systems: [],
-    branching: null,
-    evidence: null,
-  };
-  list.push(newStep);
-  draftStepId.value = newStep.step_id;
-  startEditStep(newStep);
-}
+const tokenLabel = computed(() => {
+  const used = pipeline.usageGauge?.intake_tokens;
+  return used == null ? "" : t("upload.summary.tokenValue", { tokens: used.toLocaleString() });
+});
 </script>
 
 <template>
@@ -474,79 +349,33 @@ function startAddStep() {
           <h3 class="uploaded-doc__label">{{ inputMode === "text" ? t("upload.inputRequestLabel") : t("upload.uploadedDocLabel") }}</h3>
 
           <div class="doc-card">
-            <span class="doc-card__icon">{{ pipeline.file.ext.toUpperCase() }}</span>
-            <div class="doc-card__info">
-              <span class="doc-card__name">{{ pipeline.file.name }}</span>
+            <div class="doc-card__row">
+              <span class="doc-card__icon">{{ pipeline.file.ext.toUpperCase() }}</span>
+              <span class="doc-card__name" :title="pipeline.file.name">{{ pipeline.file.name }}</span>
               <span class="doc-card__size">{{ fileSizeLabel }}</span>
             </div>
-            <span
-              v-if="pipeline.uploadStatus === 'uploading'"
-              class="doc-card__status doc-card__status--loading"
-              :aria-label="t('upload.status.uploading')"
-            ></span>
-            <svg
-              v-else-if="pipeline.uploadStatus === 'error'"
-              class="doc-card__status doc-card__status--done"
-              viewBox="0 0 24 24"
-              fill="none"
-              :aria-label="t('upload.status.failed')"
-            >
-              <circle cx="12" cy="12" r="10" fill="var(--danger-bg)" />
-              <path
-                d="M9 9l6 6m0-6-6 6"
-                stroke="var(--danger)"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-            <svg
-              v-else
-              class="doc-card__status doc-card__status--done"
-              viewBox="0 0 24 24"
-              fill="none"
-              :aria-label="t('upload.status.done')"
-            >
-              <circle cx="12" cy="12" r="10" fill="var(--success-bg)" />
-              <path
-                d="M8 12.5l2.5 2.5L16 9.5"
-                stroke="var(--success)"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </div>
-
-          <Transition name="fade-up">
-            <ul class="extraction-meta" v-if="pipeline.document?.status === 'parsed'">
-              <li v-if="pipeline.document.page_count != null">
-                {{ t("upload.status.parsedWithPage", { page: pipeline.document.page_count }) }}
-              </li>
-              <li v-else>{{ t("upload.status.processedDone") }}</li>
-              <li v-for="(warning, idx) in pipeline.document.warnings" :key="idx" class="extraction-meta__warning">
-                ⚠ {{ warning }}
-              </li>
-            </ul>
-          </Transition>
-
-          <!-- 비전 보강(FR-03) — 스캔본 등 텍스트가 부족한 페이지를 vision LLM으로 다시 읽는다.
-               지원 포맷(PDF/PPT/PPTX)이면 파싱 완료 직후 자동 실행되며, 여기서는 진행 상태만 보여준다. -->
-          <div v-if="pipeline.visionStatus !== 'idle'" class="vision-enrich">
-            <p v-if="pipeline.visionStatus === 'enriching'" class="vision-enrich__status">
-              <span class="vision-enrich__spinner" aria-hidden="true"></span>
-              {{ pipeline.visionStage || t("upload.vision.enriching") }}
-            </p>
-            <p v-if="pipeline.visionStatus === 'done'" class="vision-enrich__status vision-enrich__status--done">
-              {{
-                pipeline.enrichedPages?.length
-                  ? t("upload.vision.done", { count: pipeline.enrichedPages.length }, pipeline.enrichedPages.length)
-                  : t("upload.vision.noneNeeded")
-              }}
-            </p>
-            <p v-if="pipeline.visionStatus === 'error'" class="vision-enrich__status vision-enrich__status--error">
-              {{ pipeline.visionError || t("upload.vision.failed") }}
-            </p>
+            <div class="doc-card__row doc-card__row--status">
+              <span
+                v-if="pipeline.uploadStatus === 'uploading'"
+                class="doc-card__state doc-card__state--running"
+              >
+                <span class="doc-card__spinner" aria-hidden="true"></span>
+                {{ t("upload.status.uploading") }}
+              </span>
+              <span
+                v-else-if="pipeline.uploadStatus === 'error'"
+                class="doc-card__state doc-card__state--error"
+              >
+                {{ t("upload.status.failed") }}
+              </span>
+              <span v-else class="doc-card__state doc-card__state--done">
+                {{ t("upload.status.uploadDone") }}
+              </span>
+            </div>
+            <div v-if="uploadedAtLabel" class="doc-card__row doc-card__row--meta">
+              <span class="doc-card__meta-label">{{ t("upload.uploadedAt") }}</span>
+              <span class="doc-card__meta-value">{{ uploadedAtLabel }}</span>
+            </div>
           </div>
 
           <div class="upload-actions">
@@ -589,201 +418,79 @@ function startAddStep() {
         </button>
       </div>
 
-      <div
-        v-if="pipeline.sessionLoadStatus === 'loading' || pipeline.analysisStatus !== 'idle'"
-        class="analysis-results"
-        data-tour="analysis"
-        ref="analysisBodyRef"
-      >
-        <div v-if="pipeline.sessionLoadStatus === 'loading'" class="analyzing-state">
-          <span class="analyzing-state__spinner" aria-hidden="true"></span>
-          <p>{{ t("upload.sessionLoadingHint") }}</p>
-        </div>
-
-        <!-- 분석 중: 스트리밍 렌더(요약 → 단계 하나씩). 첫 프레임 전엔 스피너 -->
-        <template v-else-if="pipeline.analysisStatus === 'analyzing'">
-          <div v-if="liveAnalysis" class="analysis-live">
-            <div class="flow-live-status">
-              <span class="analyzing-state__spinner" aria-hidden="true"></span>
-              <span class="flow-live-status__caption">{{ pipeline.liveCaption || t("upload.analyzingHint") }}</span>
-            </div>
-            <TransitionGroup name="rec-list" tag="div" class="rec-list">
-              <article
-                v-for="(step, idx) in liveAnalysisSteps"
-                :key="step.step_id ?? idx"
-                class="rec-card rec-card--live"
-              >
-                <header class="rec-card__header">
-                  <div class="rec-card__header-left">
-                    <h3>{{ step.order ?? idx + 1 }}. {{ step.name }}</h3>
-                  </div>
-                </header>
-                <p v-if="step.description" class="rec-card__description">{{ step.description }}</p>
-              </article>
-            </TransitionGroup>
-          </div>
-          <div v-else class="analyzing-state">
-            <span class="analyzing-state__spinner" aria-hidden="true"></span>
-            <p>{{ t("upload.analyzingHint") }}</p>
-          </div>
-        </template>
-
-        <div v-else-if="pipeline.analysisStatus === 'error'" class="analyzing-state analyzing-state--error">
-          <p class="upload-error">{{ pipeline.analysisError }}</p>
-          <button type="button" class="btn btn--outline" @click="pipeline.startAnalysis">{{ t("upload.retry") }}</button>
-        </div>
-
-        <template v-else-if="pipeline.analysisStatus === 'done'">
-          <div v-if="!hasSteps" class="empty-state">
-            <p>{{ t("upload.noStepsFound") }}</p>
-          </div>
-
-          <TransitionGroup
-            name="rec-list"
-            tag="div"
-            class="rec-list"
-            @dragover.prevent
-            @drop="onStepDrop"
+      <!-- 분석 진행 상태 — 업로드부터 흐름도 생성까지 파이프라인 각 단계의 실제 상태 -->
+      <section v-if="pipeline.file" class="side-card" aria-labelledby="upload-progress-title">
+        <h3 id="upload-progress-title" class="side-card__title">{{ t("upload.progress.title") }}</h3>
+        <ul class="progress-list">
+          <li
+            v-for="row in progressRows"
+            :key="row.key"
+            class="progress-list__item"
+            :class="`progress-list__item--${row.state}`"
           >
-            <article
-              v-for="(step, idx) in steps"
-              :key="step.step_id"
-              class="rec-card"
-              :class="{ 'rec-card--dragging': dragVisualHidden && dragIndex === idx }"
-              draggable="true"
-              @dragstart="onStepDragStart(idx, $event)"
-              @dragend="onStepDragEnd"
-              @click="closeMenuOnOutsideClick"
-            >
-              <template v-if="editingStepId === step.step_id">
-                <div class="flow-card__edit-grid">
-                  <label class="flow-card__edit-wide">
-                    <span>{{ t("upload.form.title") }}</span>
-                    <input v-model="stepForm.name" type="text" />
-                  </label>
-                  <label class="flow-card__edit-wide">
-                    <span>{{ t("upload.form.description") }}</span>
-                    <input v-model="stepForm.description" type="text" />
-                  </label>
-                  <label>
-                    <span>{{ t("upload.form.inputsCsv") }}</span>
-                    <input v-model="stepForm.inputs" type="text" />
-                  </label>
-                  <label>
-                    <span>{{ t("upload.form.outputsCsv") }}</span>
-                    <input v-model="stepForm.outputs" type="text" />
-                  </label>
-                  <label>
-                    <span>{{ t("upload.form.systemsCsv") }}</span>
-                    <input v-model="stepForm.systems" type="text" />
-                  </label>
-                  <label>
-                    <span>{{ t("upload.form.branching") }}</span>
-                    <input v-model="stepForm.branching" type="text" />
-                  </label>
-                  <label class="flow-card__edit-wide">
-                    <span>{{ t("upload.form.evidence") }}</span>
-                    <input v-model="stepForm.evidenceSnippet" type="text" />
-                  </label>
-                </div>
-                <div class="flow-card__actions">
-                  <button type="button" class="btn btn--outline" @click="cancelEditStep">{{ t("common.cancel") }}</button>
-                  <button type="button" class="btn btn--primary" @click="saveEditStep">{{ t("common.save") }}</button>
-                </div>
-              </template>
-
-              <template v-else>
-                <header class="rec-card__header">
-                  <div class="rec-card__header-left">
-                    <span class="flow-card__handle" aria-hidden="true" :title="t('upload.reorderTitle')">⠿</span>
-                    <h3>{{ step.order }}. {{ step.name }}</h3>
-                  </div>
-                  <div class="flow-card__menu-wrap">
-                    <button
-                      type="button"
-                      class="flow-card__menu-btn"
-                      :aria-label="t('upload.stepOptionsAria')"
-                      @click="toggleMenu(step.step_id, $event)"
-                    >
-                      &#8942;
-                    </button>
-                    <Transition name="fade-up">
-                      <div v-if="openMenuId === step.step_id" class="flow-card__menu" role="menu">
-                        <button
-                          type="button"
-                          role="menuitem"
-                          :disabled="editingStepId !== null"
-                          @click="startEditStep(step)"
-                        >
-                          {{ t("common.edit") }}
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          class="flow-card__menu-danger"
-                          @click="removeStep(step.step_id)"
-                        >
-                          {{ t("common.delete") }}
-                        </button>
-                      </div>
-                    </Transition>
-                  </div>
-                </header>
-
-                <p class="rec-card__description">{{ step.description }}</p>
-
-                <div class="rec-card__grid">
-                  <div class="rec-card__field">
-                    <span class="rec-card__field-label">{{ t("upload.field.inputs") }}</span>
-                    <span class="rec-card__field-value">{{ step.inputs?.join(", ") || t("common.none") }}</span>
-                  </div>
-                  <div class="rec-card__field">
-                    <span class="rec-card__field-label">{{ t("upload.field.outputs") }}</span>
-                    <span class="rec-card__field-value">{{ step.outputs?.join(", ") || t("common.none") }}</span>
-                  </div>
-                  <div class="rec-card__field">
-                    <span class="rec-card__field-label">{{ t("upload.field.systems") }}</span>
-                    <span class="rec-card__field-value">{{ step.systems?.join(", ") || t("common.none") }}</span>
-                  </div>
-                  <div class="rec-card__field" v-if="step.branching">
-                    <span class="rec-card__field-label">{{ t("upload.field.branching") }}</span>
-                    <span class="rec-card__field-value">{{ step.branching }}</span>
-                  </div>
-                </div>
-
-                <footer v-if="step.evidence" class="rec-card__footer">{{ t("upload.evidencePrefix", { evidence: evidenceLabel(step.evidence) }) }}</footer>
-              </template>
-            </article>
-          </TransitionGroup>
-
-          <button
-            type="button"
-            class="flow-add-btn"
-            :disabled="editingStepId !== null"
-            @click="startAddStep"
-          >
-            {{ t("upload.addStep") }}
-          </button>
-
-          <!-- 편집을 흐름도 새 버전으로 저장 — 흐름도가 이미 생성된 뒤에만 의미가 있다.
-               제스처마다 자동 저장하지 않고 명시 버튼 1회 = 1버전 (버전 이력이 의도 단위로 남는다) -->
-          <div v-if="pipeline.recommendation" class="apply-flow-bar">
-            <button
-              type="button"
-              class="btn btn--primary"
-              :disabled="!pipeline.analysisEditsDirty || pipeline.isSavingAnalysisEdits || editingStepId !== null"
-              :title="pipeline.analysisEditsDirty ? '' : t('upload.applyToFlowDisabledHint')"
-              @click="pipeline.applyAnalysisEditsToFlow"
-            >
-              {{ pipeline.isSavingAnalysisEdits ? t("upload.applyingToFlow") : t("upload.applyToFlow") }}
-            </button>
-            <span v-if="pipeline.analysisEditsDirty" class="apply-flow-bar__hint">
-              {{ t("upload.unsavedEditsHint") }}
+            <span class="progress-list__icon" aria-hidden="true">
+              <svg v-if="row.state === 'done'" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="9" fill="currentColor" />
+                <path
+                  d="M8 12.4l2.6 2.6L16 9.6"
+                  stroke="var(--surface)"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              <svg v-else-if="row.state === 'error'" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="9" fill="currentColor" />
+                <path d="M12 7.5v5.5" stroke="var(--surface)" stroke-width="2" stroke-linecap="round" />
+                <circle cx="12" cy="16.4" r="1.1" fill="var(--surface)" />
+              </svg>
+              <span v-else-if="row.state === 'running'" class="progress-list__dot"></span>
+              <svg v-else viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" />
+              </svg>
             </span>
+            <span class="progress-list__body">
+              <span class="progress-list__label">{{ row.label }}</span>
+              <span v-if="row.detail" class="progress-list__detail">{{ row.detail }}</span>
+            </span>
+            <span class="progress-list__state">
+              <span v-if="row.state === 'running'" class="progress-list__state-spinner" aria-hidden="true"></span>
+              {{ stateLabel(row.state) }}
+            </span>
+          </li>
+        </ul>
+      </section>
+
+      <!-- 분석 요약 — 분석 결과에서 파생한 수치와 이번 세션의 실행 메타 -->
+      <section v-if="hasAnalysis" class="side-card" aria-labelledby="upload-summary-title">
+        <h3 id="upload-summary-title" class="side-card__title">{{ t("upload.summary.title") }}</h3>
+        <dl class="stat-list">
+          <div class="stat-list__row">
+            <dt>{{ t("upload.summary.steps") }}</dt>
+            <dd>{{ stats.stepCount }}</dd>
           </div>
-          <p v-if="pipeline.recommendSaveError" class="upload-error">{{ pipeline.recommendSaveError }}</p>
-        </template>
-      </div>
+          <div class="stat-list__row">
+            <dt>{{ t("upload.summary.systems") }}</dt>
+            <dd>{{ stats.systemCount }}</dd>
+          </div>
+          <div class="stat-list__row">
+            <dt>{{ t("upload.summary.inputs") }}</dt>
+            <dd>{{ stats.inputCount }}</dd>
+          </div>
+          <div class="stat-list__row">
+            <dt>{{ t("upload.summary.outputs") }}</dt>
+            <dd>{{ stats.outputCount }}</dd>
+          </div>
+          <div v-if="modelLabel" class="stat-list__row">
+            <dt>{{ t("upload.summary.model") }}</dt>
+            <dd class="stat-list__value--text">{{ modelLabel }}</dd>
+          </div>
+          <div v-if="tokenLabel" class="stat-list__row">
+            <dt>{{ t("upload.summary.tokens") }}</dt>
+            <dd class="stat-list__value--text">{{ tokenLabel }}</dd>
+          </div>
+        </dl>
+      </section>
     </div>
 
     <div class="panel__bottom-fade" aria-hidden="true"></div>
