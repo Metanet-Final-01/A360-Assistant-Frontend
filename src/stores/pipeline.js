@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { computed, reactive, ref, watch } from "vue";
 import { uploadDocument, parseDocument, createDocumentFromText, enrichVision, getDocument } from "../api/documents";
-import { turnStream } from "../api/agent";
+import { turnStream, STREAM_INTERRUPTED } from "../api/agent";
 import {
   listRecommendations,
   saveRecommendation,
@@ -48,6 +48,43 @@ function readStoredSession() {
   } catch {
     return null; // 이전 포맷(순수 문자열 sessionId) — 계정 정보가 없어 복원하지 않는다
   }
+}
+
+// FRONTEND_TASK_턴_재개_SSE — 진행 중인 /turn 스트림의 turn_id를 세션별로 기억해 뒀다가
+// 새로고침 후 GET .../stream으로 이어받는다. 탭 종료 시 자동으로 지워지도록 sessionStorage를
+// 쓴다(localStorage였다면 다른 탭·다음 방문에서도 남아 있는 turn_id로 재구독을 시도하게 된다).
+const ACTIVE_TURN_KEY_PREFIX = "a360:activeTurn:";
+export function activeTurnKey(sessionId) {
+  return `${ACTIVE_TURN_KEY_PREFIX}${sessionId}`;
+}
+export function rememberActiveTurn(sessionId, turnId) {
+  if (sessionId && turnId) sessionStorage.setItem(activeTurnKey(sessionId), turnId);
+}
+export function forgetActiveTurn(sessionId) {
+  if (sessionId) sessionStorage.removeItem(activeTurnKey(sessionId));
+}
+// turnStream() 호출 지점 공통 래퍼 — turn_started(resumable)를 받으면 기억해 두고, 턴이
+// done/error 어느 쪽으로 끝나든 지운다. 4개 호출 지점(챗·분석·추천·질문카드)이 전부 같은
+// 계약을 쓰므로 각자 중복 구현하지 않고 여기서 한 번만 처리한다.
+export function withTurnTracking(sessionId, { onDone, onError, ...rest }) {
+  return {
+    ...rest,
+    onTurnStarted: (turnId, resumable) => {
+      if (resumable) rememberActiveTurn(sessionId, turnId);
+    },
+    onDone: (data) => {
+      forgetActiveTurn(sessionId);
+      onDone?.(data);
+    },
+    // STREAM_INTERRUPTED(연결만 끊긴 전송 계층 실패)면 백엔드 턴은 여전히 진행·재개 가능할 수
+    // 있어 커서를 지우지 않는다(Qodo 리뷰) — 지우면 정작 재개가 필요한 그 상황에서 다음
+    // 새로고침이 재개를 시도조차 못 한다. done이나 서버가 확정한 error(event.event==="error"),
+    // 그 외 요청 자체가 거부된 경우(예: TURN_IN_PROGRESS)만 커서를 지운다.
+    onError: (code, message, turnId) => {
+      if (code !== STREAM_INTERRUPTED) forgetActiveTurn(sessionId);
+      onError?.(code, message, turnId);
+    },
+  };
 }
 
 export const usePipelineStore = defineStore("pipeline", () => {
@@ -636,7 +673,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     // 저장된 선택 대신 백엔드 기본값으로 보내진다.
     await useSettingsStore().loadAgentVersions();
 
-    await turnStream(sessionId.value, ANALYZE_MESSAGE, {
+    await turnStream(sessionId.value, ANALYZE_MESSAGE, withTurnTracking(sessionId.value, {
       agentVersion: useSettingsStore().agentVersion, // 설정에서 고른 버전 — null이면 필드 생략(백엔드 기본)
       signal,
       onStage: (message) => {
@@ -690,7 +727,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
           assistantMessage.stagesDone = true;
         }
       },
-    });
+    }));
   }
 
   // 흐름도(추천안) 생성 버튼 — 합성 메시지 턴. 생성본은 백엔드가 새 버전으로 저장까지 한다.
@@ -714,7 +751,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     // startAnalysis()와 동일한 이유 — 버전 복원이 끝나기 전에 나가지 않도록 기다린다.
     await useSettingsStore().loadAgentVersions();
 
-    await turnStream(sessionId.value, RECOMMEND_MESSAGE, {
+    await turnStream(sessionId.value, RECOMMEND_MESSAGE, withTurnTracking(sessionId.value, {
       agentVersion: useSettingsStore().agentVersion, // 설정에서 고른 버전 — null이면 필드 생략(백엔드 기본)
       signal,
       onStage: (message) => {
@@ -767,7 +804,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
           assistantMessage.stagesDone = true;
         }
       },
-    });
+    }));
   }
 
   // 질문 카드 응답 반영(v3) — operation="fill_cards" 결정론 턴. 값 대입은 백엔드
@@ -785,7 +822,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     const signal = startTurnController();
     await useSettingsStore().loadAgentVersions();
 
-    await turnStream(sessionId.value, FILL_CARDS_MESSAGE, {
+    await turnStream(sessionId.value, FILL_CARDS_MESSAGE, withTurnTracking(sessionId.value, {
       operation: "fill_cards",
       cardValues,
       agentVersion: useSettingsStore().agentVersion,
@@ -823,7 +860,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
           ? `${assistantMessage.text}\n\n⚠ ${message || t("pipeline.errors.fillCardsFailed")}`
           : `⚠ ${message || t("pipeline.errors.fillCardsFailed")}`;
       },
-    });
+    }));
   }
 
   async function loadRecommendationHistory() {
@@ -1008,6 +1045,39 @@ export const usePipelineStore = defineStore("pipeline", () => {
     }
   }
 
+  // 최신 분석·추천 산출물만 다시 가져와 반영한다(loadSession의 최초 하이드레이션과 같은 조회를
+  // 재사용) — chat.resumeActiveTurnIfNeeded의 재개 실패 폴백이 놓쳤을 수 있는, 그 사이 완료된
+  // 턴의 산출물을 채워 넣는 용도(Qodo 리뷰). loadSession()은 sessionId가 이미 같으면 아무것도
+  // 안 하고 즉시 반환하는데(다른 세션으로의 "이동"에만 의미가 있어서), 여기서는 오히려 같은
+  // 세션을 다시 확인하는 게 목적이라 그 가드를 그대로 재사용할 수 없다 — loadSession의 나머지
+  // 부수효과(대화 이력 재로딩·세대 증가 등)까지 다시 트리거하고 싶지도 않아, loadSession을
+  // 재사용하는 대신 필요한 조회만 별도 함수로 둔다.
+  async function refreshLatestArtifacts(id) {
+    if (sessionId.value !== id) return;
+    let analysisRes, recommendationRes;
+    try {
+      [analysisRes, recommendationRes] = await Promise.all([
+        swallowNotFound(getLatestAnalysis(id)),
+        swallowNotFound(getLatestRecommendation(id)),
+      ]);
+    } catch {
+      return; // 일시 실패 — 다음 새로고침이나 세션 재방문에서 다시 시도된다
+    }
+    if (sessionId.value !== id) return;
+    if (analysisRes) {
+      analysis.value = { ...analysisRes.result, analysis_id: analysisRes.analysis_id ?? null };
+      analysisStatus.value = "done";
+    }
+    if (recommendationRes) {
+      recommendation.value = recommendationRes;
+      recommendStatus.value = "done";
+      recommendTreesByVersion.value[recommendationRes.version] = JSON.parse(
+        JSON.stringify(recommendationRes.recommendation),
+      );
+      loadRecommendationHistory();
+    }
+  }
+
   // 사이드바 세션 이력에서 과거 세션을 선택했을 때, 그 세션을 "현재 세션"으로 하이드레이션한다.
   // 업로드 패널의 문서 카드(파일명·크기·파싱 상태)는 최신 분석이 참조하는 document_id로
   // GET /api/documents/{id}를 불러와 복원한다(RPA-264) — 세션 단위로 문서를 직접 조회하는
@@ -1095,6 +1165,15 @@ export const usePipelineStore = defineStore("pipeline", () => {
     }
     sessionLoadStatus.value = "idle";
     loadRecommendationHistory();
+    // 새로고침(부팅 시 restoreLastSession) 또는 다중 탭에서 이 세션에 진행 중이던 턴을
+    // sessionStorage에 남겨 뒀으면 이어받는다(FRONTEND_TASK_턴_재개_SSE). 대화창이 이미
+    // 최종 상태(idle)로 그려진 뒤라 UI를 막지 않도록 await하지 않는다 — 스트림은
+    // 백그라운드에서 이어지고, 도중 다른 세션으로 다시 이동하면 startTurnController가
+    // 다음 턴을 시작할 때 자연히 끊긴다.
+    // .catch: 위 주석처럼 의도적으로 fire-and-forget이라 await하지 않는다 — 다만 그렇다고
+    // 예외 처리까지 생략하면(sessionStorage 접근 실패 등) unhandled promise rejection이 된다
+    // (Qodo 리뷰).
+    useChatStore().resumeActiveTurnIfNeeded(id).catch(() => {});
   }
 
   // 앱 부팅(새로고침 포함) 시 1회 호출 — localStorage에 마지막 세션 id가 있으면 그대로
@@ -1163,6 +1242,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
     startTurnController,
     loadSession,
     restoreLastSession,
+    refreshLatestArtifacts,
     loadRecommendationHistory,
     saveRecommendationEdit,
     // 2상(초안 → 정밀화) — 설계 §6.3
