@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
 import { useArchiveStore } from "../stores/archive";
+import SidebarSessionList from "./SidebarSessionList.vue";
 
 // 브랜드 · 세션 이력 · 기능 소개 · 설정 · 계정(로그아웃)까지 앱의 전역 메뉴/옵션을 전부 이
 // 좌측 사이드바가 담당한다 — 예전에는 별도의 상단 헤더(AppHeader.vue)가 있었지만 화면
@@ -58,26 +59,12 @@ function closeMobileDrawer() {
   if (isMobile.value) mobileOpen.value = false;
 }
 
-// 접힌 상태(아이콘 전용)에서 펼침이 필요한 항목(이력)을 누르면 먼저 사이드바 자체를 펼친다 —
-// 모바일이면 드로어를 열고, 데스크톱이면 저장된 선호도를 펼침으로 바꾼다.
-function ensureExpanded() {
-  if (!collapsedForDisplay.value) return;
-  if (isMobile.value) {
-    mobileOpen.value = true;
-    return;
-  }
-  isCollapsed.value = false;
-  localStorage.setItem(COLLAPSE_KEY, "0");
-}
-
 // ----- 세션 이력 -----
 const HISTORY_KEY = "a360.historyExpanded";
 const savedHistory = localStorage.getItem(HISTORY_KEY);
 const historyExpanded = ref(savedHistory !== null ? savedHistory === "1" : true);
 
 const VISIBLE_STEP = 10;
-const searchQuery = ref("");
-const visibleCount = ref(VISIBLE_STEP);
 const openMenuId = ref(null);
 const menuPosition = ref({ top: null, bottom: null, right: 0 });
 
@@ -87,17 +74,106 @@ const menuStyle = computed(() => ({
   right: `${menuPosition.value.right}px`,
 }));
 
-// "세션 이력" 항목 클릭 — 사이드바가 접혀 있으면(아이콘 전용) 먼저 펼치고 이력도 함께 연다.
-// 이미 펼쳐진 상태라면 이력 서브메뉴만 접었다 편다.
-function toggleHistory() {
+// 최근 세션 목록 — 펼쳐진 사이드바의 이력 아코디언과 접힌 사이드바의 이력 플라이아웃(사진 3)
+// 양쪽에서 동일하게 쓴다. 검색 팝업(사진 4)은 별도의 검색어 기반 목록을 따로 갖는다.
+const mainVisibleCount = ref(VISIBLE_STEP);
+const mainVisibleSessions = computed(() => archive.sessions.slice(0, mainVisibleCount.value));
+const mainHasMoreSessions = computed(() => mainVisibleCount.value < archive.sessions.length);
+
+function showMoreMainSessions() {
+  mainVisibleCount.value += VISIBLE_STEP;
+}
+
+// 접힌 사이드바에서 "세션 이력" 아이콘을 누르면 사이드바 자체를 펼치는 대신, 아이콘 옆에
+// 뜨는 플라이아웃으로 최근 세션 목록만 보여준다(사진 3) — 새 채팅/검색은 이제 각자 별도의
+// 아이콘 버튼이라 플라이아웃 안에는 담지 않는다.
+const collapsedHistoryOpen = ref(false);
+const historyFlyoutPosition = ref({ top: 0, left: 0 });
+
+const historyOpenForDisplay = computed(() =>
+  collapsedForDisplay.value ? collapsedHistoryOpen.value : historyExpanded.value,
+);
+
+// 사이드바가 펼쳐지면(반응형 전환 등으로) 접힘 전용 플라이아웃은 의미가 없으므로 닫는다.
+watch(collapsedForDisplay, (collapsed) => {
+  if (!collapsed) collapsedHistoryOpen.value = false;
+});
+
+function toggleHistory(event) {
   if (collapsedForDisplay.value) {
-    ensureExpanded();
-    historyExpanded.value = true;
-    localStorage.setItem(HISTORY_KEY, "1");
+    if (collapsedHistoryOpen.value) {
+      collapsedHistoryOpen.value = false;
+      return;
+    }
+    // 트리거의 원시 좌표만으로 위치를 잡으면, 뷰포트가 좁거나 낮은 화면(모바일 가로 등)에서
+    // 플라이아웃(260px 폭, 최대 min(420px, 70vh) 높이)이 오른쪽·아래로 밀려나 세션 제어가
+    // 화면 밖으로 나갈 수 있다(Qodo 리뷰) — 오른쪽에 공간이 없으면 왼쪽으로 뒤집고, 아래로
+    // 넘치면 위로 당겨 뷰포트 안에 들어오게 한다.
+    const rect = event.currentTarget.getBoundingClientRect();
+    const FLYOUT_WIDTH = 260;
+    const FLYOUT_MARGIN = 8;
+    const flyoutMaxHeight = Math.min(420, window.innerHeight * 0.7);
+    const left =
+      rect.right + FLYOUT_MARGIN + FLYOUT_WIDTH > window.innerWidth
+        ? Math.max(FLYOUT_MARGIN, rect.left - FLYOUT_WIDTH - FLYOUT_MARGIN)
+        : rect.right + FLYOUT_MARGIN;
+    const top = Math.max(FLYOUT_MARGIN, Math.min(rect.top, window.innerHeight - flyoutMaxHeight - FLYOUT_MARGIN));
+    historyFlyoutPosition.value = { top, left };
+    collapsedHistoryOpen.value = true;
     return;
   }
   historyExpanded.value = !historyExpanded.value;
   localStorage.setItem(HISTORY_KEY, historyExpanded.value ? "1" : "0");
+}
+
+// ----- 검색 팝업(사진 4) -----
+// 사이드바 접힘 여부와 무관하게(별도 검색 아이콘 버튼으로) 열리는 전역 검색 오버레이 —
+// 이력 아코디언/플라이아웃과는 별개로 자체 검색어·페이지네이션 상태를 갖는다.
+const searchQuery = ref("");
+const searchVisibleCount = ref(VISIBLE_STEP);
+const searchPopupOpen = ref(false);
+
+const searchFilteredSessions = computed(() => {
+  const q = searchQuery.value.trim();
+  if (!q) return archive.sessions;
+  return archive.sessions.filter((session) => (session.title ?? "").includes(q));
+});
+
+const searchVisibleSessions = computed(() => searchFilteredSessions.value.slice(0, searchVisibleCount.value));
+const searchHasMoreSessions = computed(() => searchVisibleCount.value < searchFilteredSessions.value.length);
+
+watch(searchQuery, () => {
+  searchVisibleCount.value = VISIBLE_STEP;
+});
+
+function showMoreSearchSessions() {
+  searchVisibleCount.value += VISIBLE_STEP;
+}
+
+function openSearchPopup() {
+  searchQuery.value = "";
+  searchVisibleCount.value = VISIBLE_STEP;
+  searchPopupOpen.value = true;
+}
+
+function closeSearchPopup() {
+  searchPopupOpen.value = false;
+}
+
+function handleGlobalKeydown(event) {
+  if (event.key !== "Escape") return;
+  // 세션 옵션(⋮) 메뉴가 검색 팝업·플라이아웃 안에서 열려 있을 수 있다 — body로 텔레포트된
+  // 그 메뉴는 openMenuId만으로 렌더되므로, 바깥 오버레이만 닫고 openMenuId를 안 지우면 소유
+  // 행이 사라진 뒤에도 메뉴가 계속 떠 있는 채로 남는다(Qodo 리뷰). 안쪽(메뉴)부터 먼저 닫는다.
+  if (openMenuId.value) {
+    openMenuId.value = null;
+    return;
+  }
+  if (searchPopupOpen.value) {
+    closeSearchPopup();
+    return;
+  }
+  if (collapsedHistoryOpen.value) collapsedHistoryOpen.value = false;
 }
 
 function startNewChat() {
@@ -108,12 +184,14 @@ function startNewChat() {
 onMounted(() => {
   mobileMql.addEventListener("change", handleMobileChange);
   window.addEventListener("pointerdown", closeMenuOnOutsideClick);
+  window.addEventListener("keydown", handleGlobalKeydown);
   archive.loadSessions();
 });
 
 onBeforeUnmount(() => {
   mobileMql.removeEventListener("change", handleMobileChange);
   window.removeEventListener("pointerdown", closeMenuOnOutsideClick);
+  window.removeEventListener("keydown", handleGlobalKeydown);
   // 메뉴가 열린 채로 언마운트되는 경우를 대비한 안전망 — 중복 remove는 안전하다.
   window.removeEventListener("scroll", closeMenuOnReflow, true);
   window.removeEventListener("resize", closeMenuOnReflow);
@@ -131,27 +209,10 @@ watch(openMenuId, (id, prevId) => {
   }
 });
 
-const filteredSessions = computed(() => {
-  const q = searchQuery.value.trim();
-  if (!q) return archive.sessions;
-  return archive.sessions.filter((session) => (session.title ?? "").includes(q));
-});
-
-const visibleSessions = computed(() => filteredSessions.value.slice(0, visibleCount.value));
-const hasMoreSessions = computed(() => visibleCount.value < filteredSessions.value.length);
-
-watch(searchQuery, () => {
-  visibleCount.value = VISIBLE_STEP;
-});
-
-// "더 보기" — 목록 API 자체는 페이지네이션을 지원하지 않아 이미 받아온 전체 배열에서
-// 10개 단위로 노출 개수를 늘리는 방식이다.
-function showMoreSessions() {
-  visibleCount.value += VISIBLE_STEP;
-}
-
 function selectSession(id) {
   openMenuId.value = null;
+  searchPopupOpen.value = false;
+  collapsedHistoryOpen.value = false;
   closeMobileDrawer();
   emit("select-session", id);
 }
@@ -183,6 +244,15 @@ function closeMenuOnOutsideClick(event) {
     !event.target.closest(".archive-chat__item-menu")
   ) {
     openMenuId.value = null;
+  }
+  // 접힌 사이드바의 이력 플라이아웃(사진 3)도 같은 방식으로 바깥 클릭 시 닫는다 — 플라이아웃
+  // 자체는 body로 텔레포트되고, 여는 버튼은 .app-sidebar__nav-item--history다.
+  if (
+    collapsedHistoryOpen.value &&
+    !event.target.closest(".app-sidebar__history-flyout") &&
+    !event.target.closest(".app-sidebar__nav-item--history")
+  ) {
+    collapsedHistoryOpen.value = false;
   }
 }
 
@@ -265,23 +335,34 @@ function runLogout() {
       </div>
 
       <nav class="app-sidebar__nav" :aria-label="t('sidebar.mainNavLabel')" data-tour="sidebar-nav">
+        <button type="button" class="app-sidebar__nav-item" :title="t('sidebar.newChat')" @click="startNewChat">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+          <span class="app-sidebar__nav-label">{{ t("sidebar.newChat") }}</span>
+        </button>
+
+        <button type="button" class="app-sidebar__nav-item" :title="t('sidebar.search')" @click="openSearchPopup">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.6" />
+            <path d="M20 20l-3.8-3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
+          <span class="app-sidebar__nav-label">{{ t("sidebar.search") }}</span>
+        </button>
+
         <button
           type="button"
-          class="app-sidebar__nav-item"
-          :aria-expanded="historyExpanded && !collapsedForDisplay"
+          class="app-sidebar__nav-item app-sidebar__nav-item--history"
+          :aria-expanded="historyOpenForDisplay"
           :title="t('sidebar.historyTitle')"
-          @click="toggleHistory"
+          @click="toggleHistory($event)"
         >
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path
-              d="M4 19.5V5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v14a.5.5 0 0 1-.5.5h-15a.5.5 0 0 1-.5-.5Z"
+              d="M4 12a8 8 0 1 1 3.4 6.7L4 20l1.1-3.5A7.96 7.96 0 0 1 4 12Z"
               stroke="currentColor"
               stroke-width="1.7"
-            />
-            <path
-              d="M8 15v-3.5M12 15V8.5M16 15v-2"
-              stroke="currentColor"
-              stroke-width="1.7"
+              stroke-linejoin="round"
               stroke-linecap="round"
             />
           </svg>
@@ -303,73 +384,18 @@ function runLogout() {
           :class="{ 'app-sidebar__history-wrap--open': historyExpanded }"
         >
           <div class="app-sidebar__history">
-            <button
-              type="button"
-              class="app-sidebar__new-chat"
-              @click="startNewChat"
-            >
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-              </svg>
-              <span>{{ t("sidebar.newChat") }}</span>
-            </button>
-
-            <div class="archive-chat__search">
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.6" />
-                <path d="M20 20l-3.8-3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-              </svg>
-              <input v-model="searchQuery" type="text" :placeholder="t('sidebar.searchPlaceholder')" :aria-label="t('sidebar.searchPlaceholder')" />
-            </div>
-
-            <p v-if="archive.deleteError" class="upload-error">{{ archive.deleteError }}</p>
-
-            <ul class="archive-chat__list">
-              <li v-if="archive.listStatus === 'loading'" class="archive-chat__empty">{{ t("sidebar.loadingSessions") }}</li>
-              <li v-else-if="archive.listStatus === 'error'" class="archive-chat__empty">{{ archive.listError }}</li>
-
-              <template v-else>
-                <li
-                  v-for="session in visibleSessions"
-                  :key="session.id"
-                  class="archive-chat__item"
-                  :class="{ 'archive-chat__item--active': session.id === props.activeSessionId }"
-                >
-                  <button type="button" class="archive-results__item-main" @click="selectSession(session.id)">
-                    <span
-                      v-if="session.id === props.activeSessionId && props.activeSessionLoading"
-                      class="archive-chat__item-spinner"
-                      role="status"
-                      :aria-label="t('sidebar.sessionLoading')"
-                    ></span>
-                    <span v-else class="archive-results__item-icon archive-results__item-icon--session">
-                      {{ (session.solution || "A360").toUpperCase() }}
-                    </span>
-                    <div class="archive-results__item-body">
-                      <span class="archive-results__item-title">{{ session.title || t("sidebar.untitledSession") }}</span>
-                      <span class="archive-results__item-date">{{ session.dateLabel }}</span>
-                    </div>
-                  </button>
-
-                  <div class="archive-chat__item-menu-wrap">
-                    <button
-                      type="button"
-                      class="archive-chat__item-menu-btn"
-                      :aria-label="t('sidebar.sessionOptions')"
-                      @click="toggleMenu(session.id, $event)"
-                    >
-                      &#8942;
-                    </button>
-                  </div>
-                </li>
-
-                <li v-if="!visibleSessions.length" class="archive-chat__empty">{{ t("sidebar.noSessions") }}</li>
-
-                <li v-if="hasMoreSessions" class="archive-chat__show-more">
-                  <button type="button" @click="showMoreSessions">{{ t("sidebar.showMore") }}</button>
-                </li>
-              </template>
-            </ul>
+            <SidebarSessionList
+              :sessions="mainVisibleSessions"
+              :active-session-id="props.activeSessionId"
+              :active-session-loading="props.activeSessionLoading"
+              :list-status="archive.listStatus"
+              :list-error="archive.listError"
+              :delete-error="archive.deleteError"
+              :has-more="mainHasMoreSessions"
+              @select="selectSession"
+              @toggle-menu="toggleMenu"
+              @show-more="showMoreMainSessions"
+            />
           </div>
         </div>
 
@@ -469,6 +495,83 @@ function runLogout() {
         >
           {{ t("common.delete") }}
         </button>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <!-- 접힌 사이드바에서 "세션 이력" 아이콘을 눌렀을 때 뜨는 플라이아웃(사진 3) — 사이드바
+       자체를 펼치지 않고 최근 세션 목록만 아이콘 옆에 띄운다. -->
+  <Teleport to="body">
+    <Transition name="fade-up">
+      <div
+        v-if="collapsedHistoryOpen"
+        class="app-sidebar__history-flyout"
+        :style="{ top: `${historyFlyoutPosition.top}px`, left: `${historyFlyoutPosition.left}px` }"
+      >
+        <SidebarSessionList
+          :sessions="mainVisibleSessions"
+          :active-session-id="props.activeSessionId"
+          :active-session-loading="props.activeSessionLoading"
+          :list-status="archive.listStatus"
+          :list-error="archive.listError"
+          :delete-error="archive.deleteError"
+          :has-more="mainHasMoreSessions"
+          @select="selectSession"
+          @toggle-menu="toggleMenu"
+          @show-more="showMoreMainSessions"
+        />
+      </div>
+    </Transition>
+  </Teleport>
+
+  <!-- 검색 팝업(사진 4) — 사이드바 접힘 여부와 무관하게 검색 아이콘 버튼으로 연다. -->
+  <Teleport to="body">
+    <Transition name="fade-up">
+      <div v-if="searchPopupOpen" class="app-sidebar__search-backdrop" @click="closeSearchPopup"></div>
+    </Transition>
+    <Transition name="fade-up">
+      <div v-if="searchPopupOpen" class="app-sidebar__search-popup" role="dialog" :aria-label="t('sidebar.search')">
+        <div class="app-sidebar__search-popup-header">
+          <div class="archive-chat__search">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.6" />
+              <path d="M20 20l-3.8-3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            </svg>
+            <input
+              v-model="searchQuery"
+              type="text"
+              :placeholder="t('sidebar.searchPlaceholder')"
+              :aria-label="t('sidebar.searchPlaceholder')"
+              autofocus
+            />
+          </div>
+          <button
+            type="button"
+            class="app-sidebar__search-popup-close"
+            :aria-label="t('common.close')"
+            :title="t('common.close')"
+            @click="closeSearchPopup"
+          >
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        <p class="app-sidebar__search-popup-label">{{ t("sidebar.recentChats") }}</p>
+
+        <SidebarSessionList
+          :sessions="searchVisibleSessions"
+          :active-session-id="props.activeSessionId"
+          :active-session-loading="props.activeSessionLoading"
+          :list-status="archive.listStatus"
+          :list-error="archive.listError"
+          :delete-error="archive.deleteError"
+          :has-more="searchHasMoreSessions"
+          @select="selectSession"
+          @toggle-menu="toggleMenu"
+          @show-more="showMoreSearchSessions"
+        />
       </div>
     </Transition>
   </Teleport>

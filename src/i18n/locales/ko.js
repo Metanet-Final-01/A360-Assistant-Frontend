@@ -66,6 +66,8 @@ export default {
     historyTitle: "세션 이력",
     analysis: "분석",
     newChat: "새 채팅",
+    search: "검색",
+    recentChats: "최근 대화",
     searchPlaceholder: "세션 제목 검색",
     noSessions: "저장된 세션이 없습니다.",
     untitledSession: "제목 없는 세션",
