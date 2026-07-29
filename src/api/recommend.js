@@ -43,8 +43,8 @@ export async function downloadRecommendationExport(sessionId, version) {
 
 // POST /api/sessions/{id}/recommendations/{version}/export/docx — 서식 있는 .docx로 내보낸다
 // (RPA-296, FR-17). 흐름도는 프론트만 렌더하므로(FR-18) 백엔드가 서버에서 캡처할 수 없다 —
-// 흐름도 캡처가 가능한 화면(flow-window)에서만 flowImageBlobs를 넘겨 문서에 임베드하고, 캡처가
-// 불가능하거나 실패한 화면(AnalysisPanel)에서는 생략해도 문서 자체는 그대로 나온다.
+// 호출부(AnalysisPanel)가 화면 밖에 숨겨 둔 FlowCanvas로 캡처해 flowImageBlobs로 넘기고, 캡처가
+// 실패하거나 애초에 흐름도가 없으면 생략해도 문서 자체는 그대로 나온다.
 // flowImageBlobs: 페이지 단위로 잘라 캡처한 PNG blob 배열(순서대로) — 백엔드가 같은 필드명
 // (flow_images)을 반복 전송된 파트로 모아 받아, 장마다 페이지 나눔을 넣어 순서대로 삽입한다
 // (RPA-296 후속). 한 장짜리 배열도 그대로 동작한다.
