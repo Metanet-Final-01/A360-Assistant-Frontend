@@ -31,9 +31,20 @@ async function readErrorDetail(response) {
 // 프레임 포맷(event/message/data, 재개 응답에는 커스텀 id: 줄도 붙지만 data: 줄만 있으면
 // 되므로 그대로 무시된다)을 쓰므로 리더 루프를 공유한다.
 // turn_started stage는 onStage(빈 메시지 무시됨)와 별도로 onTurnStarted(turn_id, resumable)로도 전달한다.
+// STREAM_INTERRUPTED — done/error 프레임 없이 연결이 끊긴 "전송 계층" 실패임을 나타내는 코드.
+// 서버가 명시적으로 error 이벤트를 보냈거나 done으로 끝난 "확정된" 결과와 달리, 백엔드 턴
+// 자체는 여전히 진행 중이며 재개 가능할 수 있다 — withTurnTracking이 이 코드일 때는 재개
+// 커서(activeTurnKey)를 지우지 않는 이유(Qodo 리뷰)가 여기서 갈린다.
+export const STREAM_INTERRUPTED = "STREAM_INTERRUPTED";
+
 async function pumpEventStream(response, { onToken, onStage, onPartial, onDone, onError, onTurnStarted }) {
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
   let buffer = "";
+  // done/error 이벤트를 실제로 받았는지 추적한다 — 못 받고 EOF로 끝나면(프록시 타임아웃,
+  // 백엔드 크래시 등) "성공적으로 끝남"이 아니라 중단으로 취급해야 한다(Qodo 리뷰). 그렇지
+  // 않으면 onDone/onError 어느 쪽도 안 불려 호출부의 임시 말풍선이 영원히 미완성 상태로 남고,
+  // activeTurnKey도 지워지지 않아 다음 새로고침이 이미 끝난(또는 죽은) 턴을 계속 재개 시도한다.
+  let sawTerminal = false;
 
   try {
     while (true) {
@@ -62,15 +73,24 @@ async function pumpEventStream(response, { onToken, onStage, onPartial, onDone, 
             onTurnStarted?.(event.data?.turn_id ?? null, !!event.data?.resumable);
           }
         } else if (event.event === "partial") onPartial?.(event.data ?? null);
-        else if (event.event === "done") onDone(event.data);
-        else if (event.event === "error") onError(null, event.message ?? t("api.errors.unknown"));
+        else if (event.event === "done") {
+          sawTerminal = true;
+          onDone(event.data);
+        } else if (event.event === "error") {
+          sawTerminal = true;
+          onError(null, event.message ?? t("api.errors.unknown"));
+        }
       }
     }
   } catch (err) {
     if (err?.name === "AbortError") return; // 세션 전환 등으로 의도적으로 취소됨 — 에러 아님
-    // 서버가 정상 error 이벤트 없이 스트림을 중간에 끊는 경우 (예: 백엔드 미처리 예외)
-    onError(null, t("api.errors.streamDisconnected"));
+    // 서버가 정상 error 이벤트 없이 스트림을 중간에 끊는 경우 (예: 백엔드 미처리 예외) — 전송
+    // 계층 실패이므로 확정된 서버 에러(위 event.event === "error")와 구분해 STREAM_INTERRUPTED로 알린다.
+    onError(STREAM_INTERRUPTED, t("api.errors.streamDisconnected"));
+    return;
   }
+
+  if (!sawTerminal) onError(STREAM_INTERRUPTED, t("api.errors.streamDisconnected"));
 }
 
 // GET /api/sessions/{sessionId}/turns/{turnId}/stream — 새로고침 등으로 놓친 SSE를 이어받는다
@@ -182,19 +202,16 @@ export async function turnStream(
   }
   if (!response.ok) {
     const { code, message: errorMessage, turnId } = await readErrorDetail(response);
-    // 409 TURN_IN_PROGRESS — 이미 다른 요청(또는 새로고침 전 이 브라우저)이 같은 세션의 턴을
-    // 진행 중이다. 새 턴을 만들지 않고 그 turn_id로 곧장 재구독한다(FRONTEND_TASK_턴_재개_SSE) —
-    // 사용자에게는 에러가 아니라 "이어서 받는 중"으로만 보이면 된다.
+    // 409 TURN_IN_PROGRESS — 이미 다른 턴(다른 탭·기기, 또는 새로고침 전 이 브라우저)이 같은
+    // 세션에서 진행 중이라 이번에 보낸 메시지는 저장되지 않고 거부됐다. 예전엔 여기서 곧장 그
+    // turn_id로 재구독했는데, 그러면 방금 보낸(실제로는 거부된) 새 메시지용 콜백으로 완전히
+    // 다른 턴의 답변이 흘러들어가 엉뚱한 말풍선이 채워졌다(Qodo 리뷰). 이 함수는 재구독 여부를
+    // 스스로 결정하지 않고, 충돌한 turn_id를 그대로 onError에 실어 호출부가 판단하게 한다 —
+    // 호출부는 이미 그려 둔 낙관적 UI(사용자 메시지·빈 답변 말풍선)를 먼저 정리한 뒤에야
+    // 그 turn_id를 재구독해야 안전하다.
     if (response.status === 409 && turnId) {
-      return resumeTurnStream(sessionId, turnId, {
-        onToken,
-        onStage,
-        onPartial,
-        onDone,
-        onTurnStarted,
-        onUnavailable: () => onError("RESUME_UNAVAILABLE", t("api.errors.streamDisconnected")),
-        signal,
-      });
+      onError("TURN_IN_PROGRESS", errorMessage, turnId);
+      return;
     }
     onError(code, errorMessage);
     return;

@@ -239,12 +239,15 @@ function toggleMenu(id, event) {
 // 메뉴 자체는 body로 텔레포트되어 .archive-chat__item-menu-wrap 밖에 위치하므로 별도로 확인한다.
 // window 레벨 리스너라 target이 항상 Element라는 보장이 없다(Qodo 리뷰, AnalysisPanel과 동일 패턴) —
 // 텍스트 노드 등 Element가 아니면 closest 자체가 없어 그냥 바깥 클릭으로 취급해 닫는다.
+// 세션 옵션 메뉴와 이력 플라이아웃은 서로 독립적으로 열리고 닫혀야 한다 — 예전엔 메뉴가 안
+// 열려 있으면 함수가 여기서 바로 return해, 메뉴 없이 플라이아웃만 열린 (가장 흔한) 상태에서
+// 바깥을 클릭해도 플라이아웃이 안 닫혔다(Qodo 리뷰). 두 블록을 각자 독립적으로 검사한다.
 function closeMenuOnOutsideClick(event) {
-  if (!openMenuId.value) return;
+  const isElementTarget = event.target instanceof Element;
   if (
-    !(event.target instanceof Element) ||
-    (!event.target.closest(".archive-chat__item-menu-wrap") &&
-      !event.target.closest(".archive-chat__item-menu"))
+    openMenuId.value &&
+    (!isElementTarget ||
+      (!event.target.closest(".archive-chat__item-menu-wrap") && !event.target.closest(".archive-chat__item-menu")))
   ) {
     openMenuId.value = null;
   }
@@ -252,8 +255,8 @@ function closeMenuOnOutsideClick(event) {
   // 자체는 body로 텔레포트되고, 여는 버튼은 .app-sidebar__nav-item--history다.
   if (
     collapsedHistoryOpen.value &&
-    !event.target.closest(".app-sidebar__history-flyout") &&
-    !event.target.closest(".app-sidebar__nav-item--history")
+    (!isElementTarget ||
+      (!event.target.closest(".app-sidebar__history-flyout") && !event.target.closest(".app-sidebar__nav-item--history")))
   ) {
     collapsedHistoryOpen.value = false;
   }

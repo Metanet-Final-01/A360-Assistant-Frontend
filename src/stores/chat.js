@@ -131,6 +131,13 @@ export const useChatStore = defineStore("chat", () => {
       // 잠깐 null이라 첫 턴이 저장된 선택을 무시하고 백엔드 기본값으로 나갈 수 있다 — 기다린다.
       await useSettingsStore().loadAgentVersions();
 
+      // 409(TURN_IN_PROGRESS) — 다른 탭·기기의 턴과 충돌해 방금 보낸 메시지가 거부된 경우
+      // turnId를 여기 기록해 둔다. onError 안에서 바로 재구독하지 않는 이유는, 낙관적으로
+      // 그려 둔 사용자 말풍선·빈 답변 말풍선을 지우는 작업과 재구독을 sendTurn의 나머지
+      // 흐름(아래)에서 순서대로 처리해야 안전해서다(Qodo 리뷰 — 예전엔 여기서 곧장 재구독해
+      // 거부된 새 메시지용 콜백에 완전히 다른 턴의 답변이 채워졌다).
+      let conflictTurnId = null;
+
       await turnStream(sessionId, trimmed, withTurnTracking(sessionId, {
         operation,
         agentVersion: useSettingsStore().agentVersion, // 설정에서 고른 버전 — null이면 필드 생략(백엔드 기본)
@@ -172,8 +179,12 @@ export const useChatStore = defineStore("chat", () => {
           pipeline.applyTurnArtifacts(data);
           pipeline.resetLiveFlow(); // 스트림 종료 → 패널이 저장된 최종본을 보여준다
         },
-        onError: (code, message) => {
+        onError: (code, message, turnId) => {
           if (signal.aborted) return;
+          if (code === "TURN_IN_PROGRESS" && turnId) {
+            conflictTurnId = turnId;
+            return; // 아래에서 낙관적 UI 정리 + 재구독을 처리한다
+          }
           typewriter.finish();
           pipeline.resetLiveFlow(); // 실패 시 라이브 스트림 종료
           // 이미 받은 토큰이 있으면 지우지 않고 에러 문구만 이어붙인다
@@ -184,6 +195,18 @@ export const useChatStore = defineStore("chat", () => {
           }
         },
       }));
+
+      // 방금 보낸 메시지가 다른 진행 중인 턴과 충돌해 거부됐다 — 낙관적으로 그려 둔 사용자
+      // 말풍선·빈 답변 말풍선은 실제로 저장된 적 없는 유령이라 지우고, 실제 진행 중인 그
+      // 턴을 재구독해 진짜 답변으로 이어 그린다. 그 사이 다른 세션으로 전환됐으면(대화
+      // 목록이 통째로 바뀌었으면) 지금 세션 것이 아니게 된 낙관적 UI를 건드리지 않고 재구독도
+      // 하지 않는다.
+      if (conflictTurnId && !signal.aborted && chatMessages.value === messagesAtStart) {
+        const idx = chatMessages.value.indexOf(assistantMessage);
+        if (idx > 0) chatMessages.value.splice(idx - 1, 2);
+        const resumeSignal = pipeline.startTurnController();
+        await attachToResumedTurn(sessionId, conflictTurnId, resumeSignal);
+      }
     } finally {
       isSending.value = false;
     }
@@ -213,18 +236,17 @@ export const useChatStore = defineStore("chat", () => {
       : [{ role: "assistant", text: getChatGreeting(), time: formatTime() }];
   }
 
-  // FRONTEND_TASK_턴_재개_SSE — 새로고침(또는 다른 탭)으로 놓친 답변 스트림을 이어받는다.
-  // pipeline.loadSession()이 세션 하이드레이션 마지막 단계에서 호출한다. 진행 중이던 턴의
-  // 사용자 메시지는 턴이 끝나야 저장되므로 chat-messages 이력에도 없다 — 그 사용자 말풍선을
-  // 되살리지는 않고(원문을 프론트가 들고 있지 않다), 이어지는 답변 말풍선만 새로 그린다.
-  async function resumeActiveTurnIfNeeded(sessionId) {
+  // FRONTEND_TASK_턴_재개_SSE — 이미 진행 중인 턴(turnId)을 이어받아 화면에 그린다. 두 경로가
+  // 공유한다: (1) 새로고침 복원(resumeActiveTurnIfNeeded, sessionStorage에서 turnId를 읽음),
+  // (2) sendTurn이 409로 다른 턴과 충돌했을 때 그 실제 진행 중인 턴을 재구독하는 경로(Qodo
+  // 리뷰) — 예전엔 이 경우 거부된 새 메시지용 콜백으로 엉뚱한 턴의 답변이 흘러들어갔다.
+  // isSending/턴 컨트롤러 관리는 호출부 책임이다.
+  async function attachToResumedTurn(sessionId, turnId, signal) {
     const pipeline = usePipelineStore();
-    if (pipeline.sessionId !== sessionId || isSending.value) return;
-    const turnId = sessionStorage.getItem(activeTurnKey(sessionId));
-    if (!turnId) return;
-
-    isSending.value = true;
     isPristineGreeting.value = false;
+    // 진행 중이던 턴의 사용자 메시지는 턴이 끝나야 저장되므로 chat-messages 이력에도 없다 —
+    // 그 사용자 말풍선을 되살리지는 않고(원문을 프론트가 들고 있지 않다), 이어지는 답변
+    // 말풍선만 새로 그린다.
     const assistantMessage = reactive({
       role: "assistant",
       text: "",
@@ -237,53 +259,67 @@ export const useChatStore = defineStore("chat", () => {
     });
     chatMessages.value.push(assistantMessage);
     const typewriter = createTypewriter(assistantMessage);
-    const signal = pipeline.startTurnController();
 
+    await resumeTurnStream(sessionId, turnId, {
+      signal,
+      onStage: (message) => {
+        if (signal.aborted) return;
+        if (message?.trim()) assistantMessage.stages.push(message.trim());
+      },
+      onPartial: (data) => {
+        if (signal.aborted) return;
+        pipeline.applyLiveFrame(data);
+      },
+      onToken: (token) => {
+        if (signal.aborted) return;
+        typewriter.push(token);
+      },
+      onDone: (data) => {
+        forgetActiveTurn(sessionId);
+        if (signal.aborted) return;
+        if (typewriter.started) {
+          typewriter.finish();
+        } else {
+          assistantMessage.text = data?.answer || t("chat.errors.noAnswer");
+        }
+        if (assistantMessage.stages.length) {
+          assistantMessage.stages.push(t("chat.stageDone"));
+          assistantMessage.stagesDone = true;
+        }
+        if (Array.isArray(data?.sources) && data.sources.length) {
+          assistantMessage.sources = data.sources;
+        }
+        if (data?.type === "compact" && data.compact) {
+          lastCompact.value = data.compact;
+        }
+        pipeline.applyTurnArtifacts(data);
+        pipeline.resetLiveFlow();
+      },
+      onUnavailable: () => {
+        forgetActiveTurn(sessionId);
+        if (signal.aborted) return;
+        // 재개 실패(만료·버퍼 장애 등) — 방금 그린 임시 말풍선을 포함해 서버에 저장된
+        // 이력으로 통째로 다시 맞춘다. 턴이 실제로 끝나 저장까지 됐다면 그 결과가 보이고,
+        // 끝내 저장되지 못했다면(만료) 조용히 사라지는 게 맞다 — 서버 상태가 진실이다.
+        // 대화 이력뿐 아니라 그 사이 완료됐을 수 있는 분석·추천 산출물도 함께 새로 가져온다
+        // (Qodo 리뷰) — 안 그러면 채팅은 최신인데 분석/흐름도 패널만 낡은 채로 남는다.
+        loadHistoryMessages(sessionId, pipeline.sessionGeneration).catch(() => {});
+        pipeline.refreshLatestArtifacts(sessionId).catch(() => {});
+      },
+    });
+  }
+
+  // pipeline.loadSession()이 세션 하이드레이션 마지막 단계에서 호출한다.
+  async function resumeActiveTurnIfNeeded(sessionId) {
+    const pipeline = usePipelineStore();
+    if (pipeline.sessionId !== sessionId || isSending.value) return;
+    const turnId = sessionStorage.getItem(activeTurnKey(sessionId));
+    if (!turnId) return;
+
+    isSending.value = true;
     try {
-      await resumeTurnStream(sessionId, turnId, {
-        signal,
-        onStage: (message) => {
-          if (signal.aborted) return;
-          if (message?.trim()) assistantMessage.stages.push(message.trim());
-        },
-        onPartial: (data) => {
-          if (signal.aborted) return;
-          pipeline.applyLiveFrame(data);
-        },
-        onToken: (token) => {
-          if (signal.aborted) return;
-          typewriter.push(token);
-        },
-        onDone: (data) => {
-          forgetActiveTurn(sessionId);
-          if (signal.aborted) return;
-          if (typewriter.started) {
-            typewriter.finish();
-          } else {
-            assistantMessage.text = data?.answer || t("chat.errors.noAnswer");
-          }
-          if (assistantMessage.stages.length) {
-            assistantMessage.stages.push(t("chat.stageDone"));
-            assistantMessage.stagesDone = true;
-          }
-          if (Array.isArray(data?.sources) && data.sources.length) {
-            assistantMessage.sources = data.sources;
-          }
-          if (data?.type === "compact" && data.compact) {
-            lastCompact.value = data.compact;
-          }
-          pipeline.applyTurnArtifacts(data);
-          pipeline.resetLiveFlow();
-        },
-        onUnavailable: () => {
-          forgetActiveTurn(sessionId);
-          if (signal.aborted) return;
-          // 재개 실패(만료·버퍼 장애 등) — 방금 그린 임시 말풍선을 포함해 서버에 저장된
-          // 이력으로 통째로 다시 맞춘다. 턴이 실제로 끝나 저장까지 됐다면 그 결과가 보이고,
-          // 끝내 저장되지 못했다면(만료) 조용히 사라지는 게 맞다 — 서버 상태가 진실이다.
-          loadHistoryMessages(sessionId, pipeline.sessionGeneration).catch(() => {});
-        },
-      });
+      const signal = pipeline.startTurnController();
+      await attachToResumedTurn(sessionId, turnId, signal);
     } finally {
       isSending.value = false;
     }
