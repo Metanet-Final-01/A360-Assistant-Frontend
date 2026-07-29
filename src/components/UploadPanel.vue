@@ -31,7 +31,9 @@ function selectSystem(id) {
 }
 
 function closeSystemMenuOnOutsideClick(event) {
-  if (systemMenuOpen.value && !event.target.closest(".panel__header-system")) {
+  // window 레벨 리스너라 target이 항상 Element라는 보장이 없다(Qodo 리뷰) — Element가
+  // 아니면 closest 자체가 없어 그냥 바깥 클릭으로 취급해 닫는다.
+  if (systemMenuOpen.value && (!(event.target instanceof Element) || !event.target.closest(".panel__header-system"))) {
     systemMenuOpen.value = false;
   }
 }
@@ -145,7 +147,11 @@ async function handleTextSubmit() {
 function switchMode(mode) {
   inputMode.value = mode;
   textDraft.value = "";
-  if (!pipeline.file) pipeline.resetUpload();
+  // pipeline.file 유무만으로는 "비어있는 세션"을 판단할 수 없다(Qodo 리뷰) — 챗봇이 파일
+  // 없이 먼저 대화를 시작하면(ensureChatSessionId) pipeline.sessionId만 있고 file은 계속
+  // null이다. 그 상태에서 file 기준으로만 판단하면 탭을 눌러보기만 해도 resetUpload()가
+  // 그 챗 세션(대화 맥락)까지 지워버린다. 세션 자체가 없을 때만(진짜 pristine) 리셋한다.
+  if (!pipeline.sessionId) pipeline.resetUpload();
 }
 
 function resetUploadSection() {
