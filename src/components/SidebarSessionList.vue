@@ -71,6 +71,7 @@ const { t } = useI18n();
         <button type="button" @click="emit('show-more')">{{ t("sidebar.showMore") }}</button>
       </li>
     </template>
-    <ScrollThumb :target="listRef" />
+    <!-- ScrollThumb의 루트를 li로 렌더한다 — ul의 직계 자식은 li여야 한다(Qodo 리뷰). -->
+    <ScrollThumb tag="li" :target="listRef" />
   </ul>
 </template>

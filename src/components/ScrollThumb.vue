@@ -14,6 +14,10 @@ const props = defineProps({
   // ref가 아니라 언랩된 엘리먼트(또는 마운트 전이라 null)로 들어온다 — .value로 한 번 더
   // 까려고 하면 undefined가 되어 아무것도 안 그려진다.
   target: { type: Object, default: null },
+  // 루트 엘리먼트 태그 — 기본은 div지만, <ul> 안에 직접 얹는 경우(SidebarSessionList) 등
+  // 부모 마크업이 특정 자식 태그를 요구하면 "li" 등으로 바꿀 수 있다(Qodo 리뷰 — ul > div는
+  // 시맨틱/접근성 가정을 깨는 잘못된 마크업이다).
+  tag: { type: String, default: "div" },
 });
 
 const MIN_THUMB = 24;
@@ -50,6 +54,12 @@ function scheduleUpdate() {
   });
 }
 
+// 드래그 도중 pointercancel(OS 제스처·멀티터치 취소·포커스 전환 등)이나 컴포넌트 언마운트가
+// 끼어들 수 있다 — pointerup만 정리하면 그 경우 window 리스너가 계속 남아 언마운트된 target의
+// scrollTop을 계속 건드리고, dragging 상태도 true로 고착된다(Qodo 리뷰). 진행 중인 드래그의
+// 정리 함수를 바깥 스코프에 보관해 onBeforeUnmount에서도 부를 수 있게 한다.
+let activeDragCleanup = null;
+
 function onPointerDown(event) {
   const el = props.target;
   if (!el || event.button !== 0) return;
@@ -67,13 +77,17 @@ function onPointerDown(event) {
     const scrollRange = scrollHeight - clientHeight;
     el.scrollTop = startScrollTop + (deltaY / travel) * scrollRange;
   }
-  function onUp() {
+  function stopDrag() {
     dragging.value = false;
     window.removeEventListener("pointermove", onMove);
-    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointerup", stopDrag);
+    window.removeEventListener("pointercancel", stopDrag);
+    activeDragCleanup = null;
   }
+  activeDragCleanup = stopDrag;
   window.addEventListener("pointermove", onMove);
-  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointerup", stopDrag);
+  window.addEventListener("pointercancel", stopDrag);
 }
 
 let resizeObserver = null;
@@ -106,18 +120,20 @@ watch(
 );
 
 onBeforeUnmount(() => {
+  activeDragCleanup?.();
   teardown(props.target);
   if (rafId !== null) cancelAnimationFrame(rafId);
 });
 </script>
 
 <template>
-  <div
+  <component
+    :is="tag"
     v-show="visible"
     class="scroll-thumb"
     :class="{ 'scroll-thumb--dragging': dragging }"
     aria-hidden="true"
     :style="{ transform: `translateY(${thumbTop}px)`, height: `${thumbHeight}px` }"
     @pointerdown="onPointerDown"
-  ></div>
+  ></component>
 </template>
