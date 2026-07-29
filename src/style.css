@@ -374,33 +374,6 @@ input {
   padding: 4px 2px 8px;
 }
 
-/* "새 채팅" — 사이드바에서 유일하게 채색된 액션이라 옅은 브랜드 틴트로 눈에 띄게 둔다. */
-.app-sidebar__new-chat {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  padding: 10px 12px;
-  font-size: 0.84rem;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-.app-sidebar__new-chat svg {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-}
-
-.app-sidebar__new-chat:hover {
-  background: var(--surface-sunken-hover);
-  color: var(--accent-text);
-}
-
 .app-sidebar__nav-item svg {
   width: 20px;
   height: 20px;
@@ -5303,6 +5276,93 @@ input {
   outline: none;
   border-color: var(--brand-primary);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+}
+
+/* 접힌 사이드바에서 "세션 이력" 아이콘을 눌렀을 때 아이콘 옆에 뜨는 플라이아웃(RPA-343) —
+   사이드바 자체를 펼치지 않고 최근 세션 목록만 보여준다. body로 텔레포트되어 뷰포트 기준
+   고정 위치(top/left는 JS에서 버튼 좌표로 계산)로 뜬다. */
+.app-sidebar__history-flyout {
+  position: fixed;
+  z-index: 950;
+  width: 260px;
+  max-height: min(420px, 70vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-pop);
+  padding: 8px;
+}
+
+/* 검색 팝업(RPA-343) — 사이드바 접힘 여부와 무관하게 별도 검색 아이콘 버튼으로 연다. */
+.app-sidebar__search-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.32);
+  z-index: 960;
+}
+
+.app-sidebar__search-popup {
+  position: fixed;
+  top: 12vh;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 970;
+  width: min(480px, 92vw);
+  max-height: 72vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-pop);
+  padding: 14px;
+}
+
+.app-sidebar__search-popup-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.app-sidebar__search-popup-header .archive-chat__search {
+  flex: 1;
+  margin: 0;
+}
+
+.app-sidebar__search-popup-close {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.app-sidebar__search-popup-close svg {
+  width: 17px;
+  height: 17px;
+}
+
+.app-sidebar__search-popup-close:hover {
+  background: var(--surface-sunken-hover);
+  color: var(--accent-text);
+}
+
+.app-sidebar__search-popup-label {
+  margin: 12px 2px 4px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  flex-shrink: 0;
 }
 
 .archive-chat__list {
