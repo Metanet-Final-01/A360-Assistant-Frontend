@@ -174,10 +174,33 @@ const hasDocxFlow = computed(() => docxFlowSteps.value.some((s) => (s.actions?.l
 const docxCanvasRef = ref(null);
 const exportingDocx = ref(false);
 
+// FlowCanvas는 async component라 hasDocxFlow가 true가 되는 순간 곧바로 마운트되지 않는다 —
+// 흐름도가 막 생긴 직후(또는 느린 네트워크에서) 사용자가 바로 DOCX 내보내기를 누르면
+// docxCanvasRef가 아직 null이라 이미지가 조용히 누락될 수 있었다(Qodo 리뷰). hasDocxFlow가
+// 켜지자마자 청크를 미리 받아 둬서 그 창을 최대한 줄인다 — 실제 마운트(v-if)는 여전히
+// 템플릿이 결정하므로 여기서는 프리페치만 한다.
+watch(hasDocxFlow, (v) => {
+  if (v) import("./flow-canvas/FlowCanvas.vue").catch(() => {});
+});
+
+// docxCanvasRef가 채워질 때까지(청크 로딩 + 컴포넌트 마운트) 프레임 단위로 잠깐 기다린다 —
+// 위 프리페치로도 못 따라잡을 만큼 빠르게 누르거나 청크 로딩 자체가 실패한 경우, 무한정
+// 기다리지 않고 timeoutMs 후 포기해 이미지 없이 진행한다(Qodo 리뷰 — 레이스 컨디션·로딩
+// 실패 둘 다 이 타임아웃 하나로 흡수된다).
+async function waitForDocxCanvas(timeoutMs = 2000) {
+  const start = performance.now();
+  while (!docxCanvasRef.value) {
+    if (performance.now() - start > timeoutMs) return null;
+    await nextTick();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  }
+  return docxCanvasRef.value;
+}
+
 // 캡처 실패해도 문서 자체는 계속 내려받아야 하므로 던지지 않고 빈 배열로 이어간다.
 // html-to-image도 FlowCanvas처럼 실제로 내보낼 때만 필요해 동적 임포트한다.
 async function captureFlowImages() {
-  const canvas = docxCanvasRef.value;
+  const canvas = await waitForDocxCanvas();
   if (!canvas) return [];
   const blobs = [];
   try {
