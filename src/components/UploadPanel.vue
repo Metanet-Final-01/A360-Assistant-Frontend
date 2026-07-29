@@ -80,6 +80,15 @@ watch(
   },
 );
 
+// 탭 전환은 더 이상 콘텐츠를 지우지 않는다(switchMode) — 대신 지금 로드된 문서/텍스트
+// 요청이 현재 탭과 같은 종류일 때만 그 결과(doc-card·진행 상태·요약)를 보여주고, 다른
+// 탭으로 넘어가면 그 탭에 맞는 빈 입력 영역(드롭존/텍스트창)을 보여준다. 이렇게 해야 예:
+// PDF 분석 결과를 띄워둔 채 "텍스트로 입력" 탭을 눌러 새 요청을 작성하고, 다시 "파일
+// 업로드" 탭으로 돌아오면 원래 분석 결과가 그대로 남아있다 — 데이터 자체는 store에서
+// 지워진 적이 없으니 추천 흐름도 패널 등 다른 패널의 내용도 함께 유지된다.
+const loadedFileMode = computed(() => (pipeline.file ? (pipeline.file.ext === "txt" ? "text" : "file") : null));
+const showLoadedDoc = computed(() => loadedFileMode.value !== null && loadedFileMode.value === inputMode.value);
+
 const fileSizeLabel = computed(() => (pipeline.file ? formatBytes(pipeline.file.size) : ""));
 const uploadedAtLabel = computed(() => formatDateLabel(pipeline.document?.created_at));
 
@@ -128,10 +137,15 @@ async function handleTextSubmit() {
   }
 }
 
+// 탭 전환은 화면(showLoadedDoc)만 바꾸고 store는 건드리지 않는다 — resetUpload()를 부르면
+// 세션·분석·추천 흐름도가 전부 사라지는데, 아직 아무것도 업로드/제출하지 않은 빈 상태
+// 말고는 그럴 이유가 없다(다른 탭에 로드된 문서가 있어도 그건 지운 게 아니라 잠시 안 보일
+// 뿐이라 다시 탭을 누르면 그대로 돌아온다). 실제로 처음부터 다시 시작하려면 "새 문서
+// 업로드"/"새 요청 입력" 버튼(resetUploadSection)을 쓴다.
 function switchMode(mode) {
   inputMode.value = mode;
   textDraft.value = "";
-  pipeline.resetUpload();
+  if (!pipeline.file) pipeline.resetUpload();
 }
 
 function resetUploadSection() {
@@ -372,7 +386,7 @@ const tokenLabel = computed(() => {
         </div>
 
         <div
-          v-if="inputMode === 'file' && !pipeline.file"
+          v-if="inputMode === 'file' && !showLoadedDoc"
           class="dropzone"
           :class="{ 'dropzone--active': isDragging }"
           role="button"
@@ -405,7 +419,7 @@ const tokenLabel = computed(() => {
           />
         </div>
 
-        <div v-else-if="inputMode === 'text' && !pipeline.file" class="text-input-area">
+        <div v-else-if="inputMode === 'text' && !showLoadedDoc" class="text-input-area">
           <textarea
             v-model="textDraft"
             class="text-input-area__field"
@@ -426,7 +440,7 @@ const tokenLabel = computed(() => {
           {{ pipeline.uploadError }}
         </p>
 
-        <div class="uploaded-doc" v-if="pipeline.file">
+        <div class="uploaded-doc" v-if="showLoadedDoc">
           <h3 class="uploaded-doc__label">{{ inputMode === "text" ? t("upload.inputRequestLabel") : t("upload.uploadedDocLabel") }}</h3>
 
           <div class="doc-card">
@@ -475,7 +489,7 @@ const tokenLabel = computed(() => {
        </div>
       </div>
 
-      <div v-if="pipeline.file" class="upload-section-toggle">
+      <div v-if="showLoadedDoc" class="upload-section-toggle">
         <button type="button" class="btn btn--text" @click="resetUploadSection">
           {{ inputMode === "text" ? t("upload.newTextRequest") : t("upload.newDocumentUpload") }}
         </button>
@@ -500,7 +514,7 @@ const tokenLabel = computed(() => {
       </div>
 
       <!-- 분석 진행 상태 — 업로드부터 흐름도 생성까지 파이프라인 각 단계의 실제 상태 -->
-      <section v-if="pipeline.file" class="side-card" aria-labelledby="upload-progress-title">
+      <section v-if="showLoadedDoc" class="side-card" aria-labelledby="upload-progress-title">
         <h3 id="upload-progress-title" class="side-card__title">{{ t("upload.progress.title") }}</h3>
         <ul class="progress-list">
           <li
@@ -543,7 +557,7 @@ const tokenLabel = computed(() => {
       </section>
 
       <!-- 분석 요약 — 분석 결과에서 파생한 수치와 이번 세션의 실행 메타 -->
-      <section v-if="hasAnalysis" class="side-card" aria-labelledby="upload-summary-title">
+      <section v-if="hasAnalysis && showLoadedDoc" class="side-card" aria-labelledby="upload-summary-title">
         <h3 id="upload-summary-title" class="side-card__title">{{ t("upload.summary.title") }}</h3>
         <dl class="stat-list">
           <div class="stat-list__row">
