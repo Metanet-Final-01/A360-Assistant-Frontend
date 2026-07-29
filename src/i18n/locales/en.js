@@ -333,6 +333,7 @@ export default {
 
   upload: {
     title: "Upload work definition document",
+    systemSelectTitle: "Select target system",
     fileTab: "Upload file",
     textTab: "Enter as text",
     dropzone: {

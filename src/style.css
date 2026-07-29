@@ -819,6 +819,12 @@ input {
   position: relative;
 }
 
+/* 업무정의서 업로드 패널의 대상 시스템 선택 드롭다운 — .panel__header-export와 같은
+   위치 기준(position anchor)만 필요해 별도 클래스로 분리했다(바깥 클릭 판정용 셀렉터). */
+.panel__header-system {
+  position: relative;
+}
+
 .panel__header-chevron {
   width: 13px;
   height: 13px;

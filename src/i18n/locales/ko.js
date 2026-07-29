@@ -333,6 +333,7 @@ export default {
 
   upload: {
     title: "업무정의서 업로드",
+    systemSelectTitle: "대상 시스템 선택",
     fileTab: "파일 업로드",
     textTab: "텍스트로 입력",
     dropzone: {
