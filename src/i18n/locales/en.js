@@ -66,6 +66,8 @@ export default {
     historyTitle: "Session history",
     analysis: "Analysis",
     newChat: "New chat",
+    search: "Search",
+    recentChats: "Recent chats",
     searchPlaceholder: "Search session titles",
     noSessions: "No saved sessions.",
     untitledSession: "Untitled session",
@@ -332,6 +334,7 @@ export default {
 
   upload: {
     title: "Upload work definition document",
+    systemSelectTitle: "Select target system",
     fileTab: "Upload file",
     textTab: "Enter as text",
     dropzone: {

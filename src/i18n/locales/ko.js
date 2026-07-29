@@ -27,7 +27,7 @@ export default {
   },
 
   actionBar: {
-    next: "다음 (추천 단계로 이동)",
+    next: "다음(추천안으로 이동)",
     generating: "흐름도 생성 중…",
   },
 
@@ -66,6 +66,8 @@ export default {
     historyTitle: "세션 이력",
     analysis: "분석",
     newChat: "새 채팅",
+    search: "검색",
+    recentChats: "최근 대화",
     searchPlaceholder: "세션 제목 검색",
     noSessions: "저장된 세션이 없습니다.",
     untitledSession: "제목 없는 세션",
@@ -332,6 +334,7 @@ export default {
 
   upload: {
     title: "업무정의서 업로드",
+    systemSelectTitle: "대상 시스템 선택",
     fileTab: "파일 업로드",
     textTab: "텍스트로 입력",
     dropzone: {

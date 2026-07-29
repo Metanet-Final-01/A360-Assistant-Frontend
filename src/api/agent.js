@@ -15,12 +15,106 @@ async function readErrorDetail(response) {
     const body = await response.json();
     const detail = body?.detail;
     if (detail && typeof detail === "object" && !Array.isArray(detail)) {
-      return { code: detail.code ?? "UNKNOWN", message: detail.message ?? response.statusText };
+      return {
+        code: detail.code ?? "UNKNOWN",
+        message: detail.message ?? response.statusText,
+        turnId: detail.turn_id ?? null,
+      };
     }
   } catch {
     // 본문이 JSON이 아니거나 detail이 없는 경우
   }
-  return { code: "UNKNOWN", message: response.statusText };
+  return { code: "UNKNOWN", message: response.statusText, turnId: null };
+}
+
+// SSE 프레임(줄바꿈 두 번으로 구분) 파서 — POST /turn과 GET .../stream 재개 응답이 같은
+// 프레임 포맷(event/message/data, 재개 응답에는 커스텀 id: 줄도 붙지만 data: 줄만 있으면
+// 되므로 그대로 무시된다)을 쓰므로 리더 루프를 공유한다.
+// turn_started stage는 onStage(빈 메시지 무시됨)와 별도로 onTurnStarted(turn_id, resumable)로도 전달한다.
+async function pumpEventStream(response, { onToken, onStage, onPartial, onDone, onError, onTurnStarted }) {
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += value;
+
+      let boundary;
+      while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+        const frame = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const dataLine = frame.split("\n").find((line) => line.startsWith("data:"));
+        if (!dataLine) continue;
+
+        let event;
+        try {
+          event = JSON.parse(dataLine.slice(5).trim());
+        } catch {
+          continue;
+        }
+
+        if (event.event === "token") onToken?.(event.message ?? "");
+        else if (event.event === "stage") {
+          onStage?.(event.message ?? "");
+          if (event.stage === "turn_started") {
+            onTurnStarted?.(event.data?.turn_id ?? null, !!event.data?.resumable);
+          }
+        } else if (event.event === "partial") onPartial?.(event.data ?? null);
+        else if (event.event === "done") onDone(event.data);
+        else if (event.event === "error") onError(null, event.message ?? t("api.errors.unknown"));
+      }
+    }
+  } catch (err) {
+    if (err?.name === "AbortError") return; // 세션 전환 등으로 의도적으로 취소됨 — 에러 아님
+    // 서버가 정상 error 이벤트 없이 스트림을 중간에 끊는 경우 (예: 백엔드 미처리 예외)
+    onError(null, t("api.errors.streamDisconnected"));
+  }
+}
+
+// GET /api/sessions/{sessionId}/turns/{turnId}/stream — 새로고침 등으로 놓친 SSE를 이어받는다
+// (FRONTEND_TASK_턴_재개_SSE). after는 일부러 보내지 않는다 — 생략하면 서버가 처음부터 전부
+// 재생하는데, 토큰이 되풀이돼도 결과(누적 텍스트)는 동일하고 커서 관리가 필요 없어 더 단순하다.
+// 이 엔드포인트 레벨의 모든 실패(503 RESUME_UNAVAILABLE·404 TURN_NOT_FOUND·네트워크 오류)와
+// 스트림 도중의 error 프레임은 onUnavailable() 하나로 모아 알린다 — 호출부는 GET
+// /chat-messages로 복원하는 것 외엔 딱히 세분화해서 할 일이 없다(명세의 "잦은 케이스" 절 참고).
+export async function resumeTurnStream(
+  sessionId,
+  turnId,
+  { onToken, onStage, onPartial, onDone, onTurnStarted, onUnavailable, signal },
+) {
+  let response;
+  try {
+    response = await fetchWithAuth(`/api/sessions/${sessionId}/turns/${turnId}/stream`, { signal });
+  } catch (err) {
+    if (err?.name === "AbortError") return;
+    onUnavailable?.();
+    return;
+  }
+  if (response.status === 401) {
+    try {
+      onUnavailable?.();
+    } finally {
+      notifyUnauthorized(); // 토큰 만료 — 재개 요청도 turnStream()과 동일하게 강제 로그아웃해야
+      // 앱이 만료된 로그인 상태로 남지 않는다(Qodo 리뷰). onUnavailable이 먼저 폴백을 그려야
+      // 하므로 로그아웃(상태 초기화)은 마지막에 실행한다.
+    }
+    return;
+  }
+  if (!response.ok || !response.body) {
+    onUnavailable?.();
+    return;
+  }
+
+  await pumpEventStream(response, {
+    onToken,
+    onStage,
+    onPartial,
+    onDone,
+    onTurnStarted,
+    onError: () => onUnavailable?.(), // 도중 error 프레임·연결 끊김 → chat-messages 복원으로 폴백
+  });
 }
 
 // POST /api/sessions/{sessionId}/turn — 에이전트 단일 진입점 (RPA-64/67). 챗·분석·추천이
@@ -40,7 +134,18 @@ async function readErrorDetail(response) {
 export async function turnStream(
   sessionId,
   message,
-  { operation = "chat", agentVersion = null, cardValues = null, onToken, onStage, onPartial, onDone, onError, signal },
+  {
+    operation = "chat",
+    agentVersion = null,
+    cardValues = null,
+    onToken,
+    onStage,
+    onPartial,
+    onDone,
+    onError,
+    onTurnStarted,
+    signal,
+  },
 ) {
   let response;
   try {
@@ -76,7 +181,21 @@ export async function turnStream(
     return;
   }
   if (!response.ok) {
-    const { code, message: errorMessage } = await readErrorDetail(response);
+    const { code, message: errorMessage, turnId } = await readErrorDetail(response);
+    // 409 TURN_IN_PROGRESS — 이미 다른 요청(또는 새로고침 전 이 브라우저)이 같은 세션의 턴을
+    // 진행 중이다. 새 턴을 만들지 않고 그 turn_id로 곧장 재구독한다(FRONTEND_TASK_턴_재개_SSE) —
+    // 사용자에게는 에러가 아니라 "이어서 받는 중"으로만 보이면 된다.
+    if (response.status === 409 && turnId) {
+      return resumeTurnStream(sessionId, turnId, {
+        onToken,
+        onStage,
+        onPartial,
+        onDone,
+        onTurnStarted,
+        onUnavailable: () => onError("RESUME_UNAVAILABLE", t("api.errors.streamDisconnected")),
+        signal,
+      });
+    }
     onError(code, errorMessage);
     return;
   }
@@ -85,41 +204,5 @@ export async function turnStream(
     return;
   }
 
-  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-  let buffer = "";
-
-  try {
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += value;
-
-      let boundary;
-      while ((boundary = buffer.indexOf("\n\n")) !== -1) {
-        const frame = buffer.slice(0, boundary);
-        buffer = buffer.slice(boundary + 2);
-        const dataLine = frame.split("\n").find((line) => line.startsWith("data:"));
-        if (!dataLine) continue;
-
-        let event;
-        try {
-          event = JSON.parse(dataLine.slice(5).trim());
-        } catch {
-          continue;
-        }
-
-        if (event.event === "token") onToken?.(event.message ?? "");
-        else if (event.event === "stage") onStage?.(event.message ?? "");
-        // partial = 중간 산출물(data). 흐름도 라이브 렌더용 flow 스냅샷이 여기로 온다.
-        // (기존 분석 partial은 message가 없어 stage 라인에 안 뜨던 것 — 하위호환 유지)
-        else if (event.event === "partial") onPartial?.(event.data ?? null);
-        else if (event.event === "done") onDone(event.data);
-        else if (event.event === "error") onError(null, event.message ?? t("api.errors.unknown"));
-      }
-    }
-  } catch (err) {
-    if (err?.name === "AbortError") return; // 세션 전환 등으로 의도적으로 취소됨 — 에러 아님
-    // 서버가 정상 error 이벤트 없이 스트림을 중간에 끊는 경우 (예: 백엔드 미처리 예외)
-    onError(null, t("api.errors.streamDisconnected"));
-  }
+  await pumpEventStream(response, { onToken, onStage, onPartial, onDone, onError, onTurnStarted });
 }
