@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { usePipelineStore } from "../stores/pipeline";
 import { useSettingsStore } from "../stores/settings";
@@ -14,6 +14,43 @@ const { t } = useI18n();
 
 const titleRef = ref(null);
 useFitTitle(titleRef, () => t("upload.title"));
+
+// 대상 시스템 선택 드롭다운 — 지금은 A360 흐름도 제작만 지원하지만, 추후 다른 시스템도
+// 지원할 걸 대비해 미리 선택 지점을 만들어 둔다. 목록에 항목이 A360 하나뿐이라 실질적으로는
+// 늘 고정이고, 드롭다운 자체가 향후 확장 지점을 보여주는 역할이다.
+const SYSTEMS = [{ id: "a360", label: "A360" }];
+const selectedSystemId = ref(SYSTEMS[0].id);
+const selectedSystem = computed(
+  () => SYSTEMS.find((s) => s.id === selectedSystemId.value) ?? SYSTEMS[0],
+);
+const systemMenuOpen = ref(false);
+
+function selectSystem(id) {
+  systemMenuOpen.value = false;
+  selectedSystemId.value = id;
+}
+
+function closeSystemMenuOnOutsideClick(event) {
+  if (systemMenuOpen.value && !event.target.closest(".panel__header-system")) {
+    systemMenuOpen.value = false;
+  }
+}
+
+function closeSystemMenuOnEscape(event) {
+  if (systemMenuOpen.value && event.key === "Escape") {
+    systemMenuOpen.value = false;
+  }
+}
+
+onMounted(() => {
+  window.addEventListener("pointerdown", closeSystemMenuOnOutsideClick);
+  window.addEventListener("keydown", closeSystemMenuOnEscape);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("pointerdown", closeSystemMenuOnOutsideClick);
+  window.removeEventListener("keydown", closeSystemMenuOnEscape);
+});
 
 const isDragging = ref(false);
 const fileInputRef = ref(null);
@@ -257,6 +294,50 @@ const tokenLabel = computed(() => {
         >⠿</span
       >
       <h2 id="upload-panel-title" ref="titleRef">{{ t("upload.title") }}</h2>
+      <div class="panel__header-actions">
+        <div class="panel__header-system">
+          <button
+            type="button"
+            class="btn panel__header-btn"
+            :title="t('upload.systemSelectTitle')"
+            :aria-label="t('upload.systemSelectTitle')"
+            :aria-expanded="systemMenuOpen"
+            aria-haspopup="listbox"
+            @click="systemMenuOpen = !systemMenuOpen"
+          >
+            {{ selectedSystem.label }}
+            <svg
+              class="panel__header-chevron"
+              :class="{ 'panel__header-chevron--open': systemMenuOpen }"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path d="M7 9.5 12 14l5-4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </button>
+          <Transition name="fade-down">
+            <div
+              v-if="systemMenuOpen"
+              class="panel__header-menu"
+              role="listbox"
+              :aria-label="t('upload.systemSelectTitle')"
+            >
+              <button
+                v-for="system in SYSTEMS"
+                :key="system.id"
+                type="button"
+                role="option"
+                class="panel__header-menu-item"
+                :aria-selected="system.id === selectedSystemId"
+                @click="selectSystem(system.id)"
+              >
+                {{ system.label }}
+              </button>
+            </div>
+          </Transition>
+        </div>
+      </div>
     </header>
 
     <div class="panel__body">
