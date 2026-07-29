@@ -399,42 +399,46 @@ function runLogout() {
           </div>
         </div>
 
-        <button
-          type="button"
-          class="app-sidebar__nav-item"
-          :title="t('sidebar.tutorial')"
-          @click="runTutorial"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7" />
-            <path
-              d="M9.6 9.4a2.4 2.4 0 1 1 3.4 2.8c-.7.4-1 .9-1 1.8"
-              stroke="currentColor"
-              stroke-width="1.7"
-              stroke-linecap="round"
-            />
-            <circle cx="12" cy="16.8" r="0.9" fill="currentColor" />
-          </svg>
-          <span class="app-sidebar__nav-label">{{ t("sidebar.tutorial") }}</span>
-        </button>
+        <!-- 세션 이력(위 아코디언)이 아무리 길어도 기능 소개·설정은 항상 사이드바 최하단
+             (계정 영역 바로 위)에 붙는다 — nav가 flex column이라 margin-top:auto로 민다. -->
+        <div class="app-sidebar__nav-bottom">
+          <button
+            type="button"
+            class="app-sidebar__nav-item"
+            :title="t('sidebar.tutorial')"
+            @click="runTutorial"
+          >
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7" />
+              <path
+                d="M9.6 9.4a2.4 2.4 0 1 1 3.4 2.8c-.7.4-1 .9-1 1.8"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+              />
+              <circle cx="12" cy="16.8" r="0.9" fill="currentColor" />
+            </svg>
+            <span class="app-sidebar__nav-label">{{ t("sidebar.tutorial") }}</span>
+          </button>
 
-        <button
-          type="button"
-          class="app-sidebar__nav-item"
-          :title="t('sidebar.settings')"
-          @click="runOpenSettings"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" stroke="currentColor" stroke-width="1.7" />
-            <path
-              d="M19.4 13.5c.05-.33.08-.66.08-1s-.03-.67-.08-1l1.6-1.25a.7.7 0 0 0 .17-.9l-1.5-2.6a.7.7 0 0 0-.85-.3l-1.9.76a7.4 7.4 0 0 0-1.73-1l-.29-2.02a.7.7 0 0 0-.7-.6h-3a.7.7 0 0 0-.7.6l-.29 2.02c-.63.24-1.21.58-1.73 1l-1.9-.76a.7.7 0 0 0-.85.3l-1.5 2.6a.7.7 0 0 0 .17.9l1.6 1.25c-.05.33-.08.66-.08 1s.03.67.08 1l-1.6 1.25a.7.7 0 0 0-.17.9l1.5 2.6c.18.3.54.42.85.3l1.9-.76c.52.42 1.1.76 1.73 1l.29 2.02c.05.34.35.6.7.6h3c.35 0 .65-.26.7-.6l.29-2.02c.63-.24 1.21-.58 1.73-1l1.9.76c.31.12.67 0 .85-.3l1.5-2.6a.7.7 0 0 0-.17-.9l-1.6-1.25Z"
-              stroke="currentColor"
-              stroke-width="1.4"
-              stroke-linejoin="round"
-            />
-          </svg>
-          <span class="app-sidebar__nav-label">{{ t("sidebar.settings") }}</span>
-        </button>
+          <button
+            type="button"
+            class="app-sidebar__nav-item"
+            :title="t('sidebar.settings')"
+            @click="runOpenSettings"
+          >
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" stroke="currentColor" stroke-width="1.7" />
+              <path
+                d="M19.4 13.5c.05-.33.08-.66.08-1s-.03-.67-.08-1l1.6-1.25a.7.7 0 0 0 .17-.9l-1.5-2.6a.7.7 0 0 0-.85-.3l-1.9.76a7.4 7.4 0 0 0-1.73-1l-.29-2.02a.7.7 0 0 0-.7-.6h-3a.7.7 0 0 0-.7.6l-.29 2.02c-.63.24-1.21.58-1.73 1l-1.9-.76a.7.7 0 0 0-.85.3l-1.5 2.6a.7.7 0 0 0 .17.9l1.6 1.25c-.05.33-.08.66-.08 1s.03.67.08 1l-1.6 1.25a.7.7 0 0 0-.17.9l1.5 2.6c.18.3.54.42.85.3l1.9-.76c.52.42 1.1.76 1.73 1l.29 2.02c.05.34.35.6.7.6h3c.35 0 .65-.26.7-.6l.29-2.02c.63-.24 1.21-.58 1.73-1l1.9.76c.31.12.67 0 .85-.3l1.5-2.6a.7.7 0 0 0-.17-.9l-1.6-1.25Z"
+                stroke="currentColor"
+                stroke-width="1.4"
+                stroke-linejoin="round"
+              />
+            </svg>
+            <span class="app-sidebar__nav-label">{{ t("sidebar.settings") }}</span>
+          </button>
+        </div>
       </nav>
 
       <div class="app-sidebar__footer">

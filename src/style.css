@@ -320,6 +320,16 @@ input {
   overflow-y: auto;
 }
 
+/* 기능 소개·설정 — 세션 이력 목록 길이와 무관하게 항상 사이드바 최하단(계정 영역 바로
+   위)에 붙인다. nav가 flex column이므로 margin-top:auto로 남는 공간만큼 밀어낸다. */
+.app-sidebar__nav-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
 .app-sidebar__nav-item {
   display: flex;
   align-items: center;
@@ -5424,7 +5434,6 @@ input {
 
 .archive-chat__item--active {
   background: var(--brand-primary-soft);
-  box-shadow: inset 2px 0 0 var(--brand-primary-strong);
 }
 
 .archive-chat__item-menu-wrap {
