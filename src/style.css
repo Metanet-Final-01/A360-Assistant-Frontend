@@ -117,27 +117,73 @@
 }
 
 /* 전역 스크롤바 — 브라우저 기본 스크롤바는 라이트 색상 고정이라 다크모드에서 흰 줄처럼
-   튀어 보인다. 시맨틱 변수를 써서 테마 전환에 자동으로 맞춰지게 한다. */
+   튀어 보인다. 시맨틱 변수를 써서 테마 전환에 자동으로 맞춰지게 한다. 얇고 트랙 배경 없이
+   손잡이만 은은하게 보이도록 하여 주변 UI 위에 떠 있는 느낌을 준다. */
 html {
   scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
+  scrollbar-color: color-mix(in srgb, var(--border) 65%, transparent) transparent;
 }
 
 *::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 4px;
+  height: 4px;
 }
 
 *::-webkit-scrollbar-track {
   background: transparent;
 }
 
+/* Windows Chromium/Edge는 기본적으로 트랙 위아래에 화살표 버튼을 그린다 — 숨긴다.
+   :vertical/:horizontal + :decrement/:increment로 방향별 변종까지 명시하고 !important로
+   다른 규칙에 덮이지 않게 한다(버튼 하나가 남으면 트랙 크기가 재계산돼 썸이 밀린다). */
+*::-webkit-scrollbar-button,
+*::-webkit-scrollbar-button:vertical:start:decrement,
+*::-webkit-scrollbar-button:vertical:end:increment,
+*::-webkit-scrollbar-button:horizontal:start:decrement,
+*::-webkit-scrollbar-button:horizontal:end:increment,
+*::-webkit-scrollbar-button:single-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
 *::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: color-mix(in srgb, var(--border) 65%, transparent);
   border-radius: 999px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* 자체 스크롤 손잡이(ScrollThumb.vue) — 브라우저가 위 ::-webkit-scrollbar-* 커스터마이즈를
+   아예 무시하고 OS 스크롤바(화살표 포함)를 강제로 그리는 환경(고대비 모드, Chrome의 Windows 11
+   네이티브 스크롤바 등)이 있어 만들었다. 이 클래스가 붙은 컨테이너는 네이티브 스크롤바를 아예
+   숨기고(숨기는 것 자체는 거의 모든 환경에서 확실히 먹힌다) ScrollThumb이 그 자리를 대신한다. */
+.scroll-region {
+  position: relative;
+  scrollbar-width: none;
+}
+
+.scroll-region::-webkit-scrollbar {
+  display: none;
+}
+
+.scroll-thumb {
+  position: absolute;
+  top: 0;
+  right: 2px;
+  width: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border) 65%, transparent);
+  cursor: pointer;
+  touch-action: none;
+  transition: background 0.15s ease;
+}
+
+.scroll-thumb:hover,
+.scroll-thumb--dragging {
   background: var(--text-muted);
 }
 
@@ -4446,10 +4492,6 @@ input {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  /* 스크롤바가 나타나고 사라질 때 콘텐츠 폭이 바뀌어(chat-message의 max-width:84%가
-     그만큼 다시 계산됨) 말풍선 너비가 미세하게 들쭉날쭉해지는 걸 막는다 — 스크롤 유무와
-     무관하게 항상 스크롤바 자리를 남겨 둔다. */
-  scrollbar-gutter: stable;
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -5391,25 +5433,6 @@ input {
   overflow-y: auto;
   flex: 1;
   min-height: 0;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
-}
-
-.archive-chat__list::-webkit-scrollbar {
-  width: 5px;
-}
-
-.archive-chat__list::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.archive-chat__list::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 3px;
-}
-
-.archive-chat__list::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
 }
 
 .archive-chat__show-more {

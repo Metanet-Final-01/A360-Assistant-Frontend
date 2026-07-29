@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
 import { useArchiveStore } from "../stores/archive";
 import SidebarSessionList from "./SidebarSessionList.vue";
+import ScrollThumb from "./ScrollThumb.vue";
 
 // 브랜드 · 세션 이력 · 기능 소개 · 설정 · 계정(로그아웃)까지 앱의 전역 메뉴/옵션을 전부 이
 // 좌측 사이드바가 담당한다 — 예전에는 별도의 상단 헤더(AppHeader.vue)가 있었지만 화면
@@ -65,6 +66,7 @@ const savedHistory = localStorage.getItem(HISTORY_KEY);
 const historyExpanded = ref(savedHistory !== null ? savedHistory === "1" : true);
 
 const VISIBLE_STEP = 10;
+const navRef = ref(null);
 const openMenuId = ref(null);
 const menuPosition = ref({ top: null, bottom: null, right: 0 });
 
@@ -334,7 +336,7 @@ function runLogout() {
         </button>
       </div>
 
-      <nav class="app-sidebar__nav" :aria-label="t('sidebar.mainNavLabel')" data-tour="sidebar-nav">
+      <nav class="app-sidebar__nav scroll-region" ref="navRef" :aria-label="t('sidebar.mainNavLabel')" data-tour="sidebar-nav">
         <button type="button" class="app-sidebar__nav-item" :title="t('sidebar.newChat')" @click="startNewChat">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
@@ -439,6 +441,7 @@ function runLogout() {
             <span class="app-sidebar__nav-label">{{ t("sidebar.settings") }}</span>
           </button>
         </div>
+        <ScrollThumb :target="navRef" />
       </nav>
 
       <div class="app-sidebar__footer">

@@ -9,6 +9,7 @@ import { evidenceLabel } from "../utils/format";
 import { useFitTitle } from "../composables/useFitTitle";
 import { useRecommendationExport } from "../composables/useRecommendationExport";
 import FlowSequence from "./FlowSequence.vue";
+import ScrollThumb from "./ScrollThumb.vue";
 
 defineOptions({ inheritAttrs: false });
 
@@ -647,7 +648,7 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
-    <div class="panel__body" ref="scrollBodyRef">
+    <div class="panel__body scroll-region" ref="scrollBodyRef">
       <p v-if="exportError" class="export-error-banner" role="alert">{{ exportError }}</p>
 
       <!-- 실시간 생성/수정 상태 배너 — 어느 탭에 있든 보여야 하므로 탭 콘텐츠 바깥에 둔다 -->
@@ -1128,6 +1129,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </template>
+      <ScrollThumb :target="scrollBodyRef" />
     </div>
 
     <div
