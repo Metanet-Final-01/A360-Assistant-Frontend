@@ -105,8 +105,20 @@ function toggleHistory(event) {
       collapsedHistoryOpen.value = false;
       return;
     }
+    // 트리거의 원시 좌표만으로 위치를 잡으면, 뷰포트가 좁거나 낮은 화면(모바일 가로 등)에서
+    // 플라이아웃(260px 폭, 최대 min(420px, 70vh) 높이)이 오른쪽·아래로 밀려나 세션 제어가
+    // 화면 밖으로 나갈 수 있다(Qodo 리뷰) — 오른쪽에 공간이 없으면 왼쪽으로 뒤집고, 아래로
+    // 넘치면 위로 당겨 뷰포트 안에 들어오게 한다.
     const rect = event.currentTarget.getBoundingClientRect();
-    historyFlyoutPosition.value = { top: rect.top, left: rect.right + 8 };
+    const FLYOUT_WIDTH = 260;
+    const FLYOUT_MARGIN = 8;
+    const flyoutMaxHeight = Math.min(420, window.innerHeight * 0.7);
+    const left =
+      rect.right + FLYOUT_MARGIN + FLYOUT_WIDTH > window.innerWidth
+        ? Math.max(FLYOUT_MARGIN, rect.left - FLYOUT_WIDTH - FLYOUT_MARGIN)
+        : rect.right + FLYOUT_MARGIN;
+    const top = Math.max(FLYOUT_MARGIN, Math.min(rect.top, window.innerHeight - flyoutMaxHeight - FLYOUT_MARGIN));
+    historyFlyoutPosition.value = { top, left };
     collapsedHistoryOpen.value = true;
     return;
   }
@@ -150,6 +162,13 @@ function closeSearchPopup() {
 
 function handleGlobalKeydown(event) {
   if (event.key !== "Escape") return;
+  // 세션 옵션(⋮) 메뉴가 검색 팝업·플라이아웃 안에서 열려 있을 수 있다 — body로 텔레포트된
+  // 그 메뉴는 openMenuId만으로 렌더되므로, 바깥 오버레이만 닫고 openMenuId를 안 지우면 소유
+  // 행이 사라진 뒤에도 메뉴가 계속 떠 있는 채로 남는다(Qodo 리뷰). 안쪽(메뉴)부터 먼저 닫는다.
+  if (openMenuId.value) {
+    openMenuId.value = null;
+    return;
+  }
   if (searchPopupOpen.value) {
     closeSearchPopup();
     return;
