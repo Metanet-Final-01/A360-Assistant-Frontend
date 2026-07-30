@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { formatMessage } from "../utils/chatFormat";
+import ScrollThumb from "./ScrollThumb.vue";
 
 const { t } = useI18n();
 
@@ -442,7 +443,7 @@ onBeforeUnmount(() => {
       </p>
 
       <div
-        class="chat-popup__messages"
+        class="chat-popup__messages scroll-region"
         ref="messagesRef"
         @wheel.passive="handleMessagesWheel"
         @touchstart.passive="handleMessagesTouchStart"
@@ -525,6 +526,7 @@ onBeforeUnmount(() => {
           <span class="chat-message__time">{{ message.time }}</span>
         </div>
         </template>
+        <ScrollThumb :target="messagesRef" />
       </div>
 
       <form class="chat-popup__composer" @submit.prevent="handleSend">
