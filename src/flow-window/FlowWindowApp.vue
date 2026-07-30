@@ -116,9 +116,15 @@ function insertCatalogAction(descriptor) {
 }
 
 async function saveCanvasEdits() {
-  await flowCanvasRef.value?.save((editedSteps, summary) =>
-    pipeline.saveRecommendationEdit({ ...pipeline.recommendation.recommendation, steps: editedSteps }, summary),
-  );
+  await flowCanvasRef.value?.save(async (editedSteps, summary) => {
+    await pipeline.saveRecommendationEdit({ ...pipeline.recommendation.recommendation, steps: editedSteps }, summary);
+    // saveRecommendationEdit는 실패해도 던지지 않고 recommendSaveError만 세운다 — FlowCanvas.save가
+    // dirty를 지울지 판단할 수 있게 성공 여부를 명시적으로 돌려준다. 정밀화 잠금(409
+    // REFINE_IN_PROGRESS)은 pipeline이 "에러 아닌 상태"로 흡수해 recommendSaveError를 오히려
+    // 비워 버리므로(refineLocked=true로만 표시), recommendSaveError만 보면 저장 안 됐는데도
+    // 성공으로 오판한다(Qodo 리뷰) — refineLocked도 함께 확인해야 한다.
+    return !pipeline.recommendSaveError && !pipeline.refineLocked;
+  });
 }
 
 // 닫기는 이제 이 창 자체의 OS 타이틀바 X 버튼(별도 창이라 항상 있다)이 전담한다 — 저장 안 한

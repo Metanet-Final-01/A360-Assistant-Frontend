@@ -497,9 +497,19 @@ async function save(saveFn) {
   saving.value = true;
   try {
     const summary = pendingSummaries.value.map(summaryLabel).join(", ") || null;
-    await saveFn(stripUiIds(editableTree.value), summary);
-    dirty.value = false;
-    pendingSummaries.value = [];
+    // saveFn(pipeline.saveRecommendationEdit)은 저장 실패(백엔드 검증 오류 등)해도 던지지
+    // 않고 recommendSaveError만 세운 채 정상적으로 resolve한다(설계상 의도 — 흐름도 화면
+    // 자체가 사라지지 않게). 그 반환값으로 성공 여부를 명시적으로 받아야 한다 — 반환값을
+    // 무시하고 무조건 dirty를 꺼버리면, 실패했는데도 "저장됨" 취급돼 저장/취소 버튼이
+    // 통째로 사라지고 "편집 종료"만 남아 사용자가 다시 시도할 방법이 없어진다.
+    // ok는 반드시 명시적으로 true여야 dirty를 지운다 — !== false로 느슨하게 받으면 콜백이
+    // return을 깜빡해 undefined가 와도(가장 흔한 실수) 성공으로 오판해 이 계약을 만든 목적
+    // (실패해도 저장/취소 버튼이 사라지지 않게 하는 것) 자체가 조용히 무너진다(Qodo 리뷰).
+    const ok = await saveFn(stripUiIds(editableTree.value), summary);
+    if (ok === true) {
+      dirty.value = false;
+      pendingSummaries.value = [];
+    }
   } finally {
     saving.value = false;
   }
