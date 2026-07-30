@@ -2,6 +2,7 @@
 // 인증 불필요)를 소비 측(ActionCatalogPanel/ActionCatalogList/FlowCanvas)이 기대하는 형태
 // ({id,name,actions:[{id,action,label,isContainer}]})로 매핑한다.
 import { apiRequest } from "../api/http";
+import { t } from "../i18n";
 
 // 카탈로그는 57패키지·368액션 규모의 정적 참조 데이터라 세션 중 안 바뀐다 — 피커를 여러 번 열어도
 // (사이드바 재마운트, 액션 교체 팝오버 재오픈) 최초 1회만 fetch하고 이후엔 같은 프라미스를
@@ -49,6 +50,11 @@ export function toActionDescriptor(pkg, entry) {
 
 // 서술자로 편집 트리에 끼워 넣을 새 RecommendedAction 노드를 만든다. __uid는 일부러 안 붙인다 —
 // 삽입 직후 flowTree.assignUiIds가 트리 전체를 훑으며(이미 있는 노드는 건드리지 않고) 채운다.
+// confidence는 AI가 산출하는 수치라 사용자가 직접 넣거나 고친 액션엔 애초에 값이 없다(null) —
+// 그 자체는 정상이지만, JSON 내보내기 등 원본 데이터를 그대로 내려주는 경로에서는 "왜 신뢰도가
+// 없는지"가 안 드러나 AI가 값을 못 낸 경우와 구분이 안 됐다. confidence는 백엔드 스키마가
+// float|None으로만 받아 문자열을 못 넣으므로, 이미 자유 텍스트인 rationale에 안내 문구를
+// 남겨 둔다 — JSON·DOCX·Markdown·상세 패널 어디서 봐도 이 액션이 사용자 편집분임을 알 수 있다.
 export function createActionNode(descriptor) {
   const node = {
     package: descriptor.packageName,
@@ -56,7 +62,7 @@ export function createActionNode(descriptor) {
     label: descriptor.label,
     parameters: [],
     confidence: null,
-    rationale: null,
+    rationale: t("recommendFlow.userEditedRationale"),
     sources: [],
   };
   if (descriptor.isContainer) node.children = [];

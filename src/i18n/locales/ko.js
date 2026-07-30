@@ -292,6 +292,7 @@ export default {
     discardConfirm: "저장하지 않은 변경사항이 있습니다. 버리고 닫으시겠습니까?",
     changeActionTitle: "액션 변경",
     changeActionPickerTitle: "다른 패키지/액션으로 바꾸기",
+    userEditedRationale: "사용자에 의해 추가/수정되었습니다",
     deleteActionTitle: "삭제",
     deleteActionConfirm: "정말 삭제하시겠습니까?",
     unsavedHint: "저장하지 않은 변경사항이 있습니다.",

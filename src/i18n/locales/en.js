@@ -292,6 +292,7 @@ export default {
     discardConfirm: "You have unsaved changes. Discard them and close?",
     changeActionTitle: "Change action",
     changeActionPickerTitle: "Switch to a different package/action",
+    userEditedRationale: "Added/modified by the user",
     deleteActionTitle: "Delete",
     deleteActionConfirm: "Are you sure you want to delete this?",
     unsavedHint: "You have unsaved changes.",
