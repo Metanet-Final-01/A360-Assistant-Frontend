@@ -116,9 +116,12 @@ function insertCatalogAction(descriptor) {
 }
 
 async function saveCanvasEdits() {
-  await flowCanvasRef.value?.save((editedSteps, summary) =>
-    pipeline.saveRecommendationEdit({ ...pipeline.recommendation.recommendation, steps: editedSteps }, summary),
-  );
+  await flowCanvasRef.value?.save(async (editedSteps, summary) => {
+    await pipeline.saveRecommendationEdit({ ...pipeline.recommendation.recommendation, steps: editedSteps }, summary);
+    // saveRecommendationEdit는 실패해도 던지지 않고 recommendSaveError만 세운다 — FlowCanvas.save가
+    // dirty를 지울지 판단할 수 있게 성공 여부를 명시적으로 돌려준다.
+    return !pipeline.recommendSaveError;
+  });
 }
 
 // 닫기는 이제 이 창 자체의 OS 타이틀바 X 버튼(별도 창이라 항상 있다)이 전담한다 — 저장 안 한
