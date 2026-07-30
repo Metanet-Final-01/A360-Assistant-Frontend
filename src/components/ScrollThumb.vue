@@ -35,9 +35,19 @@ function update() {
     visible.value = false;
     return;
   }
-  visible.value = true;
-  const height = Math.max((clientHeight / scrollHeight) * clientHeight, MIN_THUMB);
+  // MIN_THUMB로 바닥을 두되 clientHeight를 넘지 않게 천장도 씌운다(Qodo 리뷰) — 안 그러면
+  // 뷰포트 자체가 MIN_THUMB보다 작은(아주 좁은 패널) 스크롤 가능 컨테이너에서 손잡이가
+  // 트랙보다 커져 travel이 음수가 되고, 위치도 어긋나고 드래그(onMove)도 travel<=0이라 먹통이 된다.
+  const height = Math.min(clientHeight, Math.max((clientHeight / scrollHeight) * clientHeight, MIN_THUMB));
   const travel = clientHeight - height;
+  // 클램프 후에도 travel<=0이면(뷰포트가 MIN_THUMB보다 작아 손잡이가 트랙을 꽉 채움) 커스텀
+  // 손잡이를 숨긴다 — 드래그가 의미 없어질뿐더러, 실제 스크롤(휠·터치·키보드)은 target의
+  // 네이티브 overflow가 계속 맡으므로 숨겨도 스크롤 자체는 그대로 된다.
+  if (travel <= 0) {
+    visible.value = false;
+    return;
+  }
+  visible.value = true;
   const ratio = scrollTop / (scrollHeight - clientHeight);
   thumbHeight.value = height;
   // 손잡이는 target 내부의 absolute 자식이라 스크롤에 따라 콘텐츠와 함께 밀려난다 —
