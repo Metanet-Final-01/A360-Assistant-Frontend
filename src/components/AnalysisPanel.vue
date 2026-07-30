@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { usePipelineStore } from "../stores/pipeline";
 import { useUiStore } from "../stores/ui";
@@ -9,6 +9,12 @@ import { evidenceLabel } from "../utils/format";
 import { useFitTitle } from "../composables/useFitTitle";
 import { useRecommendationExport } from "../composables/useRecommendationExport";
 import FlowSequence from "./FlowSequence.vue";
+import ScrollThumb from "./ScrollThumb.vue";
+
+// FlowCanvas(vue-flow 전체)는 DOCX 캡처에만 쓰는데 이 패널은 로그인 후 화면마다 항상 뜬다 —
+// 정적 임포트하면 흐름도를 한 번도 안 보는 세션에도 vue-flow(200KB+)가 메인 청크에 얹힌다.
+// 동적 임포트로 hasDocxFlow가 처음 true가 될 때(=저장된 추천안에 액션이 생겼을 때)만 받아온다.
+const FlowCanvas = defineAsyncComponent(() => import("./flow-canvas/FlowCanvas.vue"));
 
 defineOptions({ inheritAttrs: false });
 
@@ -156,6 +162,80 @@ const exportMenuOpen = ref(false);
 async function runExport(fn) {
   exportMenuOpen.value = false;
   await fn();
+}
+
+// ── DOCX 내보내기 흐름도 이미지 캡처 ──
+// 예전엔 flow-window(FlowWindowApp)에서만 가능했던 절차(FlowCanvas.prepareExportPages/
+// captureExportPage로 스텝 경계마다 페이지를 잘라 캡처)를 이 패널로 그대로 옮겨 왔다. 다만 이
+// 패널의 "추천 흐름도" 탭은 FlowSequence(세로 목록)로 그려서 캡처할 노드 그래프가 없으므로,
+// 화면 밖에 숨겨 둔 FlowCanvas 인스턴스(docxCanvasRef, 템플릿 맨 아래)를 캡처 전용으로 둔다 —
+// 저장된 추천안(pipeline.recommendation, liveMode 아님)을 소스로 쓴다.
+const docxFlowSteps = computed(() => pipeline.recommendation?.recommendation?.steps ?? []);
+const hasDocxFlow = computed(() => docxFlowSteps.value.some((s) => (s.actions?.length ?? 0) > 0));
+const docxCanvasRef = ref(null);
+const exportingDocx = ref(false);
+
+// FlowCanvas는 async component라 hasDocxFlow가 true가 되는 순간 곧바로 마운트되지 않는다 —
+// 흐름도가 막 생긴 직후(또는 느린 네트워크에서) 사용자가 바로 DOCX 내보내기를 누르면
+// docxCanvasRef가 아직 null이라 이미지가 조용히 누락될 수 있었다(Qodo 리뷰). hasDocxFlow가
+// 켜지자마자 청크를 미리 받아 둬서 그 창을 최대한 줄인다 — 실제 마운트(v-if)는 여전히
+// 템플릿이 결정하므로 여기서는 프리페치만 한다.
+watch(hasDocxFlow, (v) => {
+  if (v) import("./flow-canvas/FlowCanvas.vue").catch(() => {});
+});
+
+// docxCanvasRef가 채워질 때까지(청크 로딩 + 컴포넌트 마운트) 프레임 단위로 잠깐 기다린다 —
+// 위 프리페치로도 못 따라잡을 만큼 빠르게 누르거나 청크 로딩 자체가 실패한 경우, 무한정
+// 기다리지 않고 timeoutMs 후 포기해 이미지 없이 진행한다(Qodo 리뷰 — 레이스 컨디션·로딩
+// 실패 둘 다 이 타임아웃 하나로 흡수된다).
+async function waitForDocxCanvas(timeoutMs = 2000) {
+  const start = performance.now();
+  while (!docxCanvasRef.value) {
+    if (performance.now() - start > timeoutMs) return null;
+    await nextTick();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  }
+  return docxCanvasRef.value;
+}
+
+// 캡처 실패해도 문서 자체는 계속 내려받아야 하므로 던지지 않고 빈 배열로 이어간다.
+// html-to-image도 FlowCanvas처럼 실제로 내보낼 때만 필요해 동적 임포트한다.
+async function captureFlowImages() {
+  const canvas = await waitForDocxCanvas();
+  if (!canvas) return [];
+  const blobs = [];
+  try {
+    const { toBlob } = await import("html-to-image");
+    const pageCount = canvas.prepareExportPages() ?? 0;
+    for (let i = 0; i < pageCount; i++) {
+      const target = await canvas.captureExportPage(i);
+      if (!target) continue;
+      const blob = await toBlob(target.element, {
+        backgroundColor: target.backgroundColor,
+        width: target.width,
+        height: target.height,
+        style: target.style,
+      });
+      if (blob) blobs.push(blob);
+    }
+  } catch {
+    blobs.length = 0;
+  } finally {
+    canvas.endExportCapture();
+  }
+  return blobs;
+}
+
+async function exportDocx() {
+  exportMenuOpen.value = false;
+  if (exportingDocx.value) return;
+  exportingDocx.value = true;
+  try {
+    const flowImageBlobs = hasDocxFlow.value ? await captureFlowImages() : [];
+    await downloadDocx(flowImageBlobs);
+  } finally {
+    exportingDocx.value = false;
+  }
 }
 
 function closeExportMenu(event) {
@@ -611,8 +691,14 @@ onBeforeUnmount(() => {
               <button type="button" role="menuitem" class="panel__header-menu-item" @click="runExport(downloadMarkdown)">
                 {{ t("recommendDetail.exportMarkdown") }}
               </button>
-              <button type="button" role="menuitem" class="panel__header-menu-item" @click="runExport(downloadDocx)">
-                {{ t("recommendDetail.exportDocx") }}
+              <button
+                type="button"
+                role="menuitem"
+                class="panel__header-menu-item"
+                :disabled="exportingDocx"
+                @click="exportDocx"
+              >
+                {{ exportingDocx ? t("recommendDetail.exportingDocx") : t("recommendDetail.exportDocx") }}
               </button>
             </div>
           </Transition>
@@ -647,7 +733,7 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
-    <div class="panel__body" ref="scrollBodyRef">
+    <div class="panel__body scroll-region" ref="scrollBodyRef">
       <p v-if="exportError" class="export-error-banner" role="alert">{{ exportError }}</p>
 
       <!-- 실시간 생성/수정 상태 배너 — 어느 탭에 있든 보여야 하므로 탭 콘텐츠 바깥에 둔다 -->
@@ -1128,6 +1214,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </template>
+      <ScrollThumb :target="scrollBodyRef" />
     </div>
 
     <div
@@ -1136,6 +1223,14 @@ onBeforeUnmount(() => {
     >
       <p v-if="pipeline.recommendStatus === 'error'" class="upload-error">{{ pipeline.recommendError }}</p>
       <p v-if="pipeline.recommendSaveError" class="upload-error">{{ pipeline.recommendSaveError }}</p>
+    </div>
+
+    <!-- DOCX 내보내기 전용 캡처 캔버스 — 이 패널의 "추천 흐름도" 탭은 FlowSequence(세로 목록)로
+         그리지만, DOCX엔 flow-window와 같은 노드 그래프 이미지가 실려야 한다. 화면 밖으로
+         밀어 두되 display:none/visibility:hidden은 쓰지 않는다 — html-to-image가 캡처하는
+         .vue-flow__transformationpane가 상속으로 같이 숨겨지면 빈 이미지가 찍힌다. -->
+    <div v-if="hasDocxFlow" class="panel__docx-capture" aria-hidden="true">
+      <FlowCanvas ref="docxCanvasRef" :steps="docxFlowSteps" :editable="false" />
     </div>
   </section>
 </template>

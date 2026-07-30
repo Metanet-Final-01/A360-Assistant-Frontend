@@ -7,6 +7,7 @@ import { formatBytes } from "../utils/format";
 import { formatDateLabel } from "../utils/dateFormat";
 import { analysisStats } from "../utils/analysisSummary";
 import { useFitTitle } from "../composables/useFitTitle";
+import ScrollThumb from "./ScrollThumb.vue";
 
 const pipeline = usePipelineStore();
 const settings = useSettingsStore();
@@ -14,6 +15,8 @@ const { t } = useI18n();
 
 const titleRef = ref(null);
 useFitTitle(titleRef, () => t("upload.title"));
+
+const scrollBodyRef = ref(null);
 
 // 대상 시스템 선택 드롭다운 — 지금은 A360 흐름도 제작만 지원하지만, 추후 다른 시스템도
 // 지원할 걸 대비해 미리 선택 지점을 만들어 둔다. 목록에 항목이 A360 하나뿐이라 실질적으로는
@@ -360,7 +363,7 @@ const tokenLabel = computed(() => {
       </div>
     </header>
 
-    <div class="panel__body">
+    <div class="panel__body scroll-region" ref="scrollBodyRef">
       <div
         class="upload-section-body"
         :class="{ 'upload-section-body--collapsed': uploadSectionCollapsed }"
@@ -592,6 +595,7 @@ const tokenLabel = computed(() => {
           </div>
         </dl>
       </section>
+      <ScrollThumb :target="scrollBodyRef" />
     </div>
 
     <div class="panel__bottom-fade" aria-hidden="true"></div>

@@ -1,10 +1,14 @@
 <script setup>
+import { ref } from "vue";
 import { useI18n } from "vue-i18n";
+import ScrollThumb from "./ScrollThumb.vue";
 
 // AppSidebar.vue의 세션 목록 렌더링을 공유하는 하위 컴포넌트 — 펼쳐진 사이드바의 이력
 // 아코디언, 접힌 사이드바의 이력 플라이아웃, 검색 팝업(사진 3·4) 세 곳에서 동일한 항목
 // 마크업을 재사용한다. 삭제(⋮) 메뉴 자체는 AppSidebar.vue가 body로 텔레포트해 전역으로
 // 하나만 띄우므로, 여기서는 열기 요청만 toggle-menu로 위로 올려보낸다.
+const listRef = ref(null);
+
 defineProps({
   sessions: { type: Array, default: () => [] },
   activeSessionId: { type: String, default: null },
@@ -22,7 +26,7 @@ const { t } = useI18n();
 <template>
   <p v-if="deleteError" class="upload-error">{{ deleteError }}</p>
 
-  <ul class="archive-chat__list">
+  <ul class="archive-chat__list scroll-region" ref="listRef">
     <li v-if="listStatus === 'loading'" class="archive-chat__empty">{{ t("sidebar.loadingSessions") }}</li>
     <li v-else-if="listStatus === 'error'" class="archive-chat__empty">{{ listError }}</li>
 
@@ -67,5 +71,7 @@ const { t } = useI18n();
         <button type="button" @click="emit('show-more')">{{ t("sidebar.showMore") }}</button>
       </li>
     </template>
+    <!-- ScrollThumb의 루트를 li로 렌더한다 — ul의 직계 자식은 li여야 한다(Qodo 리뷰). -->
+    <ScrollThumb tag="li" :target="listRef" />
   </ul>
 </template>
