@@ -5,7 +5,6 @@ import { toBlob } from "html-to-image";
 import { useAuthStore } from "../stores/auth";
 import { usePipelineStore } from "../stores/pipeline";
 import { useSettingsStore } from "../stores/settings";
-import { downloadRecommendationDocx } from "../api/recommend";
 import { formatDateShort } from "../utils/dateFormat";
 import { triggerBlobDownload } from "../utils/download";
 import FlowCanvas from "../components/flow-canvas/FlowCanvas.vue";
@@ -94,50 +93,6 @@ async function downloadFlowImage() {
     imageExportError.value = t("recommendFlow.exportImageFailed");
   } finally {
     capturingImage.value = false;
-  }
-}
-
-// "DOCX로 내보내기" — 흐름도(FR-18)는 이 창에서만 렌더되므로 서버가 직접 캡처할 수 없다
-// (RPA-296). 백엔드는 이미지를 고정 폭(6.3in)으로만 삽입하고 높이는 원본 비율 그대로 따라가는데,
-// Word는 페이지보다 큰 인라인 그림을 다음 페이지로 이어 그려주지 않고 페이지 경계에서 그냥
-// 잘라버린다(실측 확인됨) — downloadFlowImage와 같은 세로 한 줄 레이아웃을 그대로 캡처해 한 장만
-// 보내면 단계가 많은 흐름도는 반드시 잘린다. RPA-296 후속으로 백엔드가 흐름도 이미지를 여러 장
-// (flow_images) 받아 장마다 페이지 나눔을 넣어 삽입하도록 바뀌었으므로, 프론트는 스텝 경계에서
-// 페이지 단위로 잘라(prepareExportPages/captureExportPage, 세로 한 줄 모양은 그대로 유지 —
-// 컬럼으로 욱여넣지 않아 글자 크기가 항상 일정하다) 페이지 수만큼 따로 캡처해 배열로 보낸다.
-// 캡처 실패해도 문서 자체는 계속 내려받아야 하므로 던지지 않고 이미지 없이 이어간다.
-const exportingDocx = ref(false);
-const docxExportError = ref("");
-
-async function downloadFlowDocx() {
-  if (exportingDocx.value) return;
-  exportingDocx.value = true;
-  docxExportError.value = "";
-  try {
-    const flowImageBlobs = [];
-    try {
-      const pageCount = flowCanvasRef.value?.prepareExportPages() ?? 0;
-      for (let i = 0; i < pageCount; i++) {
-        const target = await flowCanvasRef.value.captureExportPage(i);
-        if (!target) continue;
-        const blob = await toBlob(target.element, {
-          backgroundColor: target.backgroundColor,
-          width: target.width,
-          height: target.height,
-          style: target.style,
-        });
-        if (blob) flowImageBlobs.push(blob);
-      }
-    } catch {
-      flowImageBlobs.length = 0;
-    } finally {
-      flowCanvasRef.value?.endExportCapture();
-    }
-    await downloadRecommendationDocx(pipeline.sessionId, pipeline.recommendation.version, flowImageBlobs);
-  } catch (err) {
-    docxExportError.value = err?.message ?? t("recommendFlow.exportDocxFailed");
-  } finally {
-    exportingDocx.value = false;
   }
 }
 
@@ -302,20 +257,11 @@ const formatDate = formatDateShort;
           >
             {{ capturingImage ? t("recommendFlow.exportingImage") : t("recommendFlow.exportImage") }}
           </button>
-          <button
-            type="button"
-            class="btn btn--outline"
-            :disabled="!hasActions || exportingDocx"
-            @click="downloadFlowDocx"
-          >
-            {{ exportingDocx ? t("recommendFlow.exportingDocx") : t("recommendFlow.exportDocx") }}
-          </button>
         </div>
       </div>
 
       <p v-if="pipeline.recommendSaveError" class="upload-error">{{ pipeline.recommendSaveError }}</p>
       <p v-if="imageExportError" class="upload-error">{{ imageExportError }}</p>
-      <p v-if="docxExportError" class="upload-error">{{ docxExportError }}</p>
 
       <Transition :css="false" @enter="onHistoryEnter" @leave="onHistoryLeave">
         <div v-if="showHistory" class="flow-history-collapse">
@@ -363,12 +309,6 @@ const formatDate = formatDateShort;
             @update:saving="canvasSaving = $event"
             @update:unplaced-count="canvasUnplacedCount = $event"
           />
-          <!-- DOCX 캡처 동안 FlowCanvas가 페이지 조각을 순서대로 잠깐씩 그렸다가 원래 화면으로
-               돌아온다 — 그 전환이 화면에 그대로 보이면 어색하므로 캡처하는 동안 가려 둔다. -->
-          <div v-if="exportingDocx" class="flow-window__canvas-overlay">
-            <span class="analyzing-state__spinner" aria-hidden="true"></span>
-            <span>{{ t("recommendFlow.exportingDocx") }}</span>
-          </div>
         </div>
       </div>
       <p v-else class="modal__empty">{{ t("recommendFlow.noResults") }}</p>

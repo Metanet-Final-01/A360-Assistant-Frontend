@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useI18n } from "vue-i18n";
 import { formatMessage } from "../utils/chatFormat";
 import { safeExternalHref } from "../utils/url";
+import ScrollThumb from "./ScrollThumb.vue";
 
 const { t } = useI18n();
 
@@ -228,6 +229,20 @@ function stopDrag() {
   isOverDockZone.value = false;
 }
 
+// historyLoading이 켜져 있는 동안엔 메시지 목록 자체가 v-if로 DOM에서 빠져 있어(로딩
+// 스피너만 표시), 그 사이 messages가 도착해도 위 감시자가 스크롤을 옮길 대상이 없다(높이
+// 0에 가까운 스피너 컨테이너 기준으로 계산됨). 로딩이 꺼져 실제 목록이 다시 그려진
+// 다음에야 바닥으로 옮겨야 새로고침·세션 전환 직후 스크롤이 맨 위에 멎어 있지 않는다.
+watch(
+  () => props.historyLoading,
+  async (loading, wasLoading) => {
+    if (wasLoading && !loading) {
+      await nextTick();
+      resumeAutoScroll();
+    }
+  },
+);
+
 watch(
   () => props.messages.map((message) => message.text).join(""),
   async () => {
@@ -429,7 +444,7 @@ onBeforeUnmount(() => {
       </p>
 
       <div
-        class="chat-popup__messages"
+        class="chat-popup__messages scroll-region"
         ref="messagesRef"
         @wheel.passive="handleMessagesWheel"
         @touchstart.passive="handleMessagesTouchStart"
@@ -512,6 +527,7 @@ onBeforeUnmount(() => {
           <span class="chat-message__time">{{ message.time }}</span>
         </div>
         </template>
+        <ScrollThumb :target="messagesRef" />
       </div>
 
       <form class="chat-popup__composer" @submit.prevent="handleSend">
