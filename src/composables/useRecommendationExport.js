@@ -4,13 +4,13 @@ import { usePipelineStore } from "../stores/pipeline";
 import { downloadRecommendationExport, downloadRecommendationDocx } from "../api/recommend";
 import { triggerBlobDownload } from "../utils/download";
 
-// 흐름도 내보내기(JSON/Markdown/DOCX) — 사이드바의 "내보내기"와 하단 액션 바의
-// "JSON 다운로드"가 같은 동작을 제공하므로 로직을 한 곳에 모은다.
+// 흐름도 내보내기(JSON/Markdown/DOCX) — AnalysisPanel 헤더의 "내보내기" 드롭다운이 쓴다.
 //
-// DOCX는 백엔드가 서식 있는 문서로 만들어 준다(RPA-296/RPA-329) — 이 컴포저블 호출부(사이드바·
-// 액션 바)엔 흐름도 캔버스가 없어 이미지 없이 호출하지만, 개요·요구사항·변수·질문카드 등
-// 나머지 내용은 그대로 담긴 문서가 나온다(흐름도 이미지까지 포함하는 캡처는 flow-window의
-// downloadFlowDocx 참고). utils/exportFlow(Markdown 조립)는 무거우므로 실제로 누를 때만
+// DOCX는 백엔드가 서식 있는 문서로 만들어 준다(RPA-296/RPA-329). 흐름도 이미지를 실을지는
+// 호출부 재량이다 — AnalysisPanel은 화면 밖에 숨겨 둔 FlowCanvas로 페이지를 캡처해
+// flowImageBlobs로 넘기고(자세한 캡처 절차는 AnalysisPanel.vue 참고), 캡처가 없거나 실패해도
+// downloadDocx(undefined)로 이미지 없이 호출하면 개요·요구사항·변수·질문카드 등 나머지 내용은
+// 그대로 담긴 문서가 나온다. utils/exportFlow(Markdown 조립)는 무거우므로 실제로 누를 때만
 // 동적 임포트해서 메인 청크 밖에 남긴다.
 export function useRecommendationExport() {
   const pipeline = usePipelineStore();
@@ -53,11 +53,13 @@ export function useRecommendationExport() {
     }
   }
 
-  async function downloadDocx() {
+  // flowImageBlobs: 호출부(AnalysisPanel)가 흐름도 캔버스를 페이지 단위로 캡처해 준 PNG blob
+  // 배열(순서대로) — 넘기지 않으면 이미지 없이 문서만 내려받는다(백엔드가 그대로 지원).
+  async function downloadDocx(flowImageBlobs) {
     if (!canExport.value) return;
     exportError.value = "";
     try {
-      await downloadRecommendationDocx(pipeline.sessionId, pipeline.recommendation.version);
+      await downloadRecommendationDocx(pipeline.sessionId, pipeline.recommendation.version, flowImageBlobs);
     } catch (err) {
       exportError.value = err?.message ?? t("recommendDetail.errors.exportFailed");
     }
