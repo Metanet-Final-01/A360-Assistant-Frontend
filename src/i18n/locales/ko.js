@@ -27,7 +27,6 @@ export default {
   },
 
   actionBar: {
-    next: "다음(추천안으로 이동)",
     generating: "흐름도 생성 중…",
   },
 
@@ -217,7 +216,6 @@ export default {
       failed: "실패",
     },
     candStepActions: "단계 {steps} · 액션 {actions}",
-    verdictWinner: "🏆 후보 {winner} 선택 — {reason}",
     mustCoverageLabel: "must 커버리지",
     blockersLabel: "blocker {count}건",
     questionCardsLabel: "질문 카드 {count}장",
@@ -293,6 +291,7 @@ export default {
     discardConfirm: "저장하지 않은 변경사항이 있습니다. 버리고 닫으시겠습니까?",
     changeActionTitle: "액션 변경",
     changeActionPickerTitle: "다른 패키지/액션으로 바꾸기",
+    userEditedRationale: "사용자에 의해 추가/수정되었습니다",
     deleteActionTitle: "삭제",
     deleteActionConfirm: "정말 삭제하시겠습니까?",
     changeActionChildrenConfirm: "이 안에 있는 하위 액션이 모두 사라집니다. 계속하시겠습니까?",

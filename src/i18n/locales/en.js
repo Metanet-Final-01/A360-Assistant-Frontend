@@ -27,7 +27,6 @@ export default {
   },
 
   actionBar: {
-    next: "Next (go to recommendation)",
     generating: "Generating flow…",
   },
 
@@ -217,7 +216,6 @@ export default {
       failed: "Failed",
     },
     candStepActions: "Step {steps} · Action {actions}",
-    verdictWinner: "🏆 Candidate {winner} selected — {reason}",
     mustCoverageLabel: "must coverage",
     blockersLabel: "{count} blockers",
     questionCardsLabel: "{count} question cards",
@@ -293,6 +291,7 @@ export default {
     discardConfirm: "You have unsaved changes. Discard them and close?",
     changeActionTitle: "Change action",
     changeActionPickerTitle: "Switch to a different package/action",
+    userEditedRationale: "Added/modified by the user",
     deleteActionTitle: "Delete",
     deleteActionConfirm: "Are you sure you want to delete this?",
     changeActionChildrenConfirm: "All actions inside this container will be lost. Continue?",

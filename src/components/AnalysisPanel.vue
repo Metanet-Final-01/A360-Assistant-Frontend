@@ -138,14 +138,11 @@ const canGoNext = computed(
 const isGenerating = computed(
   () => pipeline.recommendStatus === "generating" || pipeline.liveActive,
 );
-// generating이면 진행 문구, 이미 흐름도가 있으면(done) "흐름도 보기", 그 외(아직 생성 전)는
-// "다음"(goNext가 실제로 startRecommend()를 호출하는 상태) — recommendStatus를 안 보고 늘
-// "흐름도 보기"로 고정하면, 아직 생성 전인데도 버튼 라벨과 실제 클릭 동작(생성 시작)이
-// 어긋난다(Qodo 리뷰).
-const nextLabel = computed(() => {
-  if (isGenerating.value) return t("actionBar.generating");
-  return pipeline.recommendStatus === "done" ? t("recommendDetail.viewFlow") : t("actionBar.next");
-});
+// 이 버튼은 상태와 무관하게 "흐름도로 간다"는 하나의 의미다 — 아직 없으면 생성해서 보여주고,
+// 이미 있으면 바로 열어 보여준다(goNext). 그래서 라벨도 항상 "흐름도 보기"로 통일한다 — 생성
+// 전이라고 "다음"으로 바뀌면 오히려 버튼의 의미가 매번 달라 보인다. 생성 중일 때만 진행 문구로
+// 바뀐다.
+const nextLabel = computed(() => (isGenerating.value ? t("actionBar.generating") : t("recommendDetail.viewFlow")));
 
 async function goNext() {
   ui.setAnalysisTab("flow");
@@ -302,10 +299,9 @@ const refineNotice = computed(() => {
   return pipeline.refineReason || t(key);
 });
 
-// ── v3 품질 루프 진행 카드 (spec/candidates/verdict/scorecard 프레임) ──
+// ── v3 품질 루프 진행 카드 (spec/candidates/scorecard 프레임) ──
 // v2 백엔드에선 이 값들이 항상 null이라 스트립 자체가 렌더되지 않는다(하위호환).
 const liveCandidates = computed(() => pipeline.liveCandidates);
-const liveVerdict = computed(() => pipeline.liveVerdict);
 const liveScorecard = computed(() => pipeline.liveScorecard);
 const candStatusText = computed(() => ({
   composing: t("recommendDetail.candStatus.composing"),
@@ -1081,8 +1077,8 @@ onBeforeUnmount(() => {
 
         <!-- ── 탭 6: 추천 흐름도 ── -->
         <div v-else-if="activeTab === 'flow'" class="tab-pane">
-          <!-- v3 품질 루프 진행 스트립 — 후보 카드(트리는 승자 확정 후에만) · 심판 · 검증 요약 -->
-          <div v-if="liveMode && (liveCandidates || liveVerdict || liveScorecard)" class="flow-quality-strip">
+          <!-- v3 품질 루프 진행 스트립 — 후보 카드(트리는 초안 확정 후에만) · 검증 요약 -->
+          <div v-if="liveMode && (liveCandidates || liveScorecard)" class="flow-quality-strip">
             <div v-if="liveCandidates" class="flow-quality-strip__cands">
               <span
                 v-for="c in liveCandidates"
@@ -1094,9 +1090,6 @@ onBeforeUnmount(() => {
                 <em>{{ candStatusText[c.status] ?? t("recommendDetail.candStepActions", { steps: c.steps, actions: c.actions }) }}</em>
               </span>
             </div>
-            <p v-if="liveVerdict" class="quality-verdict">
-              {{ t("recommendDetail.verdictWinner", { winner: liveVerdict.winner, reason: liveVerdict.reason }) }}
-            </p>
             <p v-if="liveScorecard" class="quality-scorecard">
               {{ t("recommendDetail.mustCoverageLabel") }}
               {{ liveScorecard.must_coverage != null ? Math.round(liveScorecard.must_coverage * 100) + "%" : "—" }}
