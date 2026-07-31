@@ -216,7 +216,6 @@ export default {
       failed: "Failed",
     },
     candStepActions: "Step {steps} · Action {actions}",
-    verdictWinner: "🏆 Candidate {winner} selected — {reason}",
     mustCoverageLabel: "must coverage",
     blockersLabel: "{count} blockers",
     questionCardsLabel: "{count} question cards",

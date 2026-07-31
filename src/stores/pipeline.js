@@ -161,11 +161,11 @@ export const usePipelineStore = defineStore("pipeline", () => {
   // 라이브 분석 스냅샷(kind:"analysis") — 흐름도와 같은 partial 채널을 쓰되 분석 결과 전용.
   // 분석 스트리밍 중 업로드 패널이 이걸 인라인 렌더한다(요약 → 단계 하나씩 채워짐).
   const liveAnalysis = ref(null); // { summary, document_title, steps, ambiguities }
-  // v3 품질 루프 국면 스냅샷 — 후보 생성/심판/검증 요약을 담는 진행 카드용 상태.
+  // v3 품질 루프 국면 스냅샷 — 후보 생성·검증 요약을 담는 진행 카드용 상태.
   // 모르는 kind는 여전히 무시된다(하위호환) — v2 백엔드에선 이 값들이 늘 null이다.
   const liveSpec = ref(null); // FlowSpec { goal, requirements[] ... } — 요구 정형화 진행
   const liveCandidates = ref(null); // [{id, persona, status, steps, actions}] — 후보 요약 카드
-  const liveVerdict = ref(null); // {winner, reason, scores[]} — 심판 점수판
+  // 심판 점수판(kind:"verdict")은 백엔드에서 사라졌다 (RPA-357) — 후보가 하나라 고를 것이 없다.
   const liveScorecard = ref(null); // {must_coverage, blockers, sim_pass_rate, cards, flow_confidence}
 
   // ----- 2상(초안 → 정밀화) 상태 (설계 §6.3) -----
@@ -224,11 +224,6 @@ export const usePipelineStore = defineStore("pipeline", () => {
       liveCaption.value = data.caption ?? "";
       return;
     }
-    if (data.kind === "verdict") {
-      liveVerdict.value = data.verdict ?? null;
-      liveCaption.value = data.caption ?? "";
-      return;
-    }
     if (data.kind === "scorecard") {
       liveScorecard.value = data.scorecard ?? null;
       liveCaption.value = data.caption ?? "";
@@ -269,7 +264,6 @@ export const usePipelineStore = defineStore("pipeline", () => {
     liveAnalysis.value = null;
     liveSpec.value = null;
     liveCandidates.value = null;
-    liveVerdict.value = null;
     liveScorecard.value = null;
     resetRefineState();
   }
@@ -1158,7 +1152,6 @@ export const usePipelineStore = defineStore("pipeline", () => {
     liveAnalysis,
     liveSpec,
     liveCandidates,
-    liveVerdict,
     liveScorecard,
     fillCardsStatus,
     applyLiveFrame,

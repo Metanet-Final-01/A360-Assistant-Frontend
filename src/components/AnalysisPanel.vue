@@ -299,10 +299,9 @@ const refineNotice = computed(() => {
   return pipeline.refineReason || t(key);
 });
 
-// ── v3 품질 루프 진행 카드 (spec/candidates/verdict/scorecard 프레임) ──
+// ── v3 품질 루프 진행 카드 (spec/candidates/scorecard 프레임) ──
 // v2 백엔드에선 이 값들이 항상 null이라 스트립 자체가 렌더되지 않는다(하위호환).
 const liveCandidates = computed(() => pipeline.liveCandidates);
-const liveVerdict = computed(() => pipeline.liveVerdict);
 const liveScorecard = computed(() => pipeline.liveScorecard);
 const candStatusText = computed(() => ({
   composing: t("recommendDetail.candStatus.composing"),
@@ -1078,8 +1077,8 @@ onBeforeUnmount(() => {
 
         <!-- ── 탭 6: 추천 흐름도 ── -->
         <div v-else-if="activeTab === 'flow'" class="tab-pane">
-          <!-- v3 품질 루프 진행 스트립 — 후보 카드(트리는 승자 확정 후에만) · 심판 · 검증 요약 -->
-          <div v-if="liveMode && (liveCandidates || liveVerdict || liveScorecard)" class="flow-quality-strip">
+          <!-- v3 품질 루프 진행 스트립 — 후보 카드(트리는 초안 확정 후에만) · 검증 요약 -->
+          <div v-if="liveMode && (liveCandidates || liveScorecard)" class="flow-quality-strip">
             <div v-if="liveCandidates" class="flow-quality-strip__cands">
               <span
                 v-for="c in liveCandidates"
@@ -1091,9 +1090,6 @@ onBeforeUnmount(() => {
                 <em>{{ candStatusText[c.status] ?? t("recommendDetail.candStepActions", { steps: c.steps, actions: c.actions }) }}</em>
               </span>
             </div>
-            <p v-if="liveVerdict" class="quality-verdict">
-              {{ t("recommendDetail.verdictWinner", { winner: liveVerdict.winner, reason: liveVerdict.reason }) }}
-            </p>
             <p v-if="liveScorecard" class="quality-scorecard">
               {{ t("recommendDetail.mustCoverageLabel") }}
               {{ liveScorecard.must_coverage != null ? Math.round(liveScorecard.must_coverage * 100) + "%" : "—" }}
