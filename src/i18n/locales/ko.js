@@ -216,7 +216,6 @@ export default {
       failed: "실패",
     },
     candStepActions: "단계 {steps} · 액션 {actions}",
-    verdictWinner: "🏆 후보 {winner} 선택 — {reason}",
     mustCoverageLabel: "must 커버리지",
     blockersLabel: "blocker {count}건",
     questionCardsLabel: "질문 카드 {count}장",

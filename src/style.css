@@ -3574,7 +3574,7 @@ input {
   color: var(--mid);
 }
 
-/* ── v3 품질 루프 진행 스트립 (후보 카드 · 심판 · 검증 요약) ── */
+/* ── v3 품질 루프 진행 스트립 (후보 카드 · 검증 요약) ── */
 .flow-quality-strip {
   margin: -6px 0 16px;
   padding: 10px 14px;
@@ -3617,7 +3617,6 @@ input {
   text-decoration: line-through;
 }
 
-.quality-verdict,
 .quality-scorecard {
   margin: 0;
   color: var(--text, #1f2937);
