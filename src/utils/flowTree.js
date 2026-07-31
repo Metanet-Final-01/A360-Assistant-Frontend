@@ -106,12 +106,24 @@ export function stripEmptyChildren(steps) {
   return steps;
 }
 
-function stripNode({ __uid, children, ...rest }) {
-  return children ? { ...rest, children: children.map(stripNode) } : rest;
+// order는 형제 목록 안에서만 의미 있는 1부터의 순번이다(백엔드 에이전트 편집 프롬프트 —
+// compose_agent.md "order는 각 step의 actions 안에서 1부터", edit.md "형제마다 1부터 다시
+// 매긴다" — 즉 에이전트 편집 경로는 이미 이렇게 자동 재번호를 매긴다). 그런데 카탈로그
+// 피커로 새로 만든 액션(actionCatalog.createActionNode)은 order를 아예 안 채우고, 드래그
+// 재정렬도 배열 순서만 바꿀 뿐 각 노드의 order 값은 그대로 둔다 — 그 상태로 저장하면 백엔드
+// Recommendation 스키마가 order를 필수로 요구해 "order: Field required"로 거부한다. 사용자가
+// 직접 채울 값이 아니라 목록 안 위치 자체가 정답이므로, 저장 직전 이 함수가 매번 형제마다
+// 1부터 다시 매겨 항상 실제 위치와 일치시킨다.
+function stripNode({ __uid, children, ...rest }, order) {
+  return { ...rest, order, ...(children ? { children: children.map((c, i) => stripNode(c, i + 1)) } : {}) };
 }
 
-// 저장 직전 __uid를 제거한 딥카피를 만든다 — 백엔드 Recommendation 스키마에 없는 필드라 그대로
-// 보내면 안 된다.
+// 저장 직전 __uid를 제거한 딥카피를 만들고 order를 형제마다 1부터 재번호한다 — 백엔드
+// Recommendation 스키마에 __uid는 없는 필드라 그대로 보내면 안 되고, order는 필수 필드라
+// 빠지거나 어긋나면 안 된다.
 export function stripUiIds(steps) {
-  return (steps ?? []).map((step) => ({ ...step, actions: (step.actions ?? []).map(stripNode) }));
+  return (steps ?? []).map((step) => ({
+    ...step,
+    actions: (step.actions ?? []).map((a, i) => stripNode(a, i + 1)),
+  }));
 }
