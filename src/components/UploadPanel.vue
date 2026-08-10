@@ -18,19 +18,33 @@ useFitTitle(titleRef, () => t("upload.title"));
 
 const scrollBodyRef = ref(null);
 
-// 대상 시스템 선택 드롭다운 — 지금은 A360 흐름도 제작만 지원하지만, 추후 다른 시스템도
-// 지원할 걸 대비해 미리 선택 지점을 만들어 둔다. 목록에 항목이 A360 하나뿐이라 실질적으로는
-// 늘 고정이고, 드롭다운 자체가 향후 확장 지점을 보여주는 역할이다.
-const SYSTEMS = [{ id: "a360", label: "A360" }];
-const selectedSystemId = ref(SYSTEMS[0].id);
-const selectedSystem = computed(
-  () => SYSTEMS.find((s) => s.id === selectedSystemId.value) ?? SYSTEMS[0],
-);
+// 대상 시스템 드롭다운 — **세션의 solution을 그대로 비춘다** (RPA-285/286).
+// 예전엔 `[{id:"a360"}]` 하드코딩 + 로컬 ref라, 에이전트가 대화에서 타 솔루션 카탈로그를
+// 확인해 세션 solution을 확정해도 화면은 늘 "A360"이었다 — 무엇으로 만들어진 흐름도인지
+// 사용자가 알 수 없는 게 이 기능의 가장 나쁜 실패다.
+//
+// 목록을 미리 못 박지 않는 이유: 어떤 솔루션이 올지는 대화가 정한다(백엔드도 알려진 목록으로
+// 제한하지 않는다 — sessions.py `_SOLUTION_RE`). 그래서 "지금 값 + A360(되돌리기)"만 싣는다.
+const A360_ID = "a360";
+const solutionLabel = (id) =>
+  id === A360_ID ? "A360" : id === "other" ? t("archive.solution.otherFallback") : id;
+
+const selectedSystemId = computed(() => pipeline.solution || A360_ID);
+const selectedSystem = computed(() => ({
+  id: selectedSystemId.value,
+  label: solutionLabel(selectedSystemId.value),
+}));
+// A360이면 항목 하나(고정), 타 솔루션이면 현재 값 + A360(오탐 되돌리기).
+const SYSTEMS = computed(() => {
+  const current = { id: selectedSystemId.value, label: solutionLabel(selectedSystemId.value) };
+  return current.id === A360_ID ? [current] : [current, { id: A360_ID, label: "A360" }];
+});
 const systemMenuOpen = ref(false);
 
-function selectSystem(id) {
+async function selectSystem(id) {
   systemMenuOpen.value = false;
-  selectedSystemId.value = id;
+  if (id === selectedSystemId.value) return;
+  await pipeline.setSolution(id); // 실패 시 pipeline.solutionSaveError에 사유가 남는다
 }
 
 function closeSystemMenuOnOutsideClick(event) {
@@ -322,7 +336,7 @@ const tokenLabel = computed(() => {
           <button
             type="button"
             class="btn panel__header-btn"
-            :title="t('upload.systemSelectTitle')"
+            :title="pipeline.solutionSaveError || t('upload.systemSelectTitle')"
             :aria-label="t('upload.systemSelectTitle')"
             :aria-expanded="systemMenuOpen"
             aria-haspopup="listbox"
