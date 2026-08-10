@@ -284,6 +284,22 @@ function handleComposerKeydown(event) {
   }
 }
 
+// 전송 중에는 입력창이 disabled가 되는데, 브라우저는 disabled가 된 요소의 포커스를 뺏는다
+// (blur). 턴이 2~5분이라 응답이 온 뒤에도 커서가 사라진 채로 남아, 이어서 타이핑하려면 매번
+// 입력창을 다시 클릭해야 했다. 전송 → 응답 완료 구간에서 포커스를 되돌려 준다.
+//
+// 다만 **무조건 뺏지는 않는다**: 기다리는 동안 사용자가 흐름도를 편집하거나 다른 입력을
+// 만지고 있을 수 있다. 그 사이 아무 데도 포커스가 없을 때(=대기 중이던 그 자리)만 되돌린다.
+watch(
+  () => props.sending,
+  (isSending, wasSending) => {
+    if (!(wasSending && !isSending) || !props.open) return;
+    const active = document.activeElement;
+    if (active && active !== document.body && active !== composerRef.value) return;
+    nextTick(() => composerRef.value?.focus());
+  },
+);
+
 // 줄바꿈이 늘어난 만큼 textarea 높이를 따라가되(최대 120px, CSS와 동일), 그 이상은
 // 내부 스크롤에 맡긴다.
 function autoResizeComposer() {
