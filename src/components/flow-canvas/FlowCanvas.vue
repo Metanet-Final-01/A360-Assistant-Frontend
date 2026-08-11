@@ -633,12 +633,18 @@ defineExpose({
     @dragleave="onExternalDragLeave"
     @drop="onExternalDrop"
   >
+    <!-- elevate-nodes-on-select=false: vue-flow는 기본값으로 **선택된 노드의 z-index에 +1000**을
+         더한다. 이 캔버스의 z는 flowLayout이 포함 깊이로 매기는데(깊이 1단계 = Z_DEPTH_STEP 10)
+         프레임이 불투명이라, 컨테이너를 클릭하는 순간 그 프레임이 자기 자식들 위로 100단계쯤
+         뛰어올라 안에 있던 액션이 통째로 가려졌다. 깊이 z 불변식("안쪽이 항상 바깥 프레임보다
+         위")이 클릭 한 번에 깨지는 셈이라 승격을 끈다 — 선택 표시는 z가 아니라 테두리가 맡는다. -->
     <VueFlow
       :nodes="nodes"
       :edges="edges"
       :nodes-draggable="editable"
       :nodes-connectable="false"
       :edges-updatable="false"
+      :elevate-nodes-on-select="false"
       :min-zoom="0.2"
       :max-zoom="2"
       @node-drag-start="onNodeDragStart"
