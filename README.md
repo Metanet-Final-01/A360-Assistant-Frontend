@@ -1,43 +1,109 @@
-# A360 Assistant Frontend
+# A360 Assistant
 
-Minimal Vue.js test frontend for the A360 FastAPI backend.
+업무정의서(PDF·PPT·PPTX·DOCX)를 업로드하면 AI가 업무 흐름을 단계별로 분석하고,
+A360 RPA 액션으로 구성된 자동화 흐름도를 추천해주는 어시스턴트입니다.
+추천 결과는 대화형 챗봇으로 다듬거나 캔버스에서 직접 편집할 수 있고, JSON·Markdown·DOCX·이미지로 내보낼 수 있습니다.
 
-## Local Run
+## 화면 구성
+
+로그인 후 화면은 4개 패널로 구성됩니다 (헤더의 그립을 드래그해 순서를 바꿀 수 있습니다).
+
+| 패널 | 위치 | 내용 |
+|---|---|---|
+| 사이드바 | 왼쪽 | 새 채팅, 세션 이력 검색·재방문, 기능 소개, 설정, 로그인 계정 |
+| 업무정의서 업로드 | 왼쪽 두 번째 | 파일 업로드 / 텍스트 입력, 분석 진행 상태, 분석 요약 |
+| 분석·추천 흐름도 상세 | 가운데 | 분석 결과 탭(업무 흐름 요약·단계별 상세·시스템/외부 연계·입력/출력 항목·원문 근거)과 추천 흐름도 탭 |
+| AI 챗봇 (대화형 수정) | 오른쪽 | 분석·추천 진행 상황 안내, 결과에 대한 질의응답, 대화로 흐름도 수정 요청 |
+
+## 주요 기능
+
+### 1. 업무정의서 업로드
+
+- **파일 업로드**: PDF·PPT·PPTX·DOCX 드래그 앤 드롭 또는 선택 (기본 최대 20MB)
+- **텍스트로 입력**: 파일 없이 자연어로 업무 내용을 바로 설명 가능
+  (예: "매일 아침 네이버 금융에서 국내 금 시세를 조회해 엑셀로 정리하고 담당자에게 메일로 보낸다")
+- 업로드/입력 후 분석 진행 상태를 4단계로 실시간 표시: **파일 검증 → 콘텐츠 추출 → 업무 흐름 분석(LLM) → 추천 흐름도 생성**
+- 완료 후 총 단계 수·식별된 시스템·입력/출력 항목 수 등 **분석 요약** 표시
+- 세션에 문서를 추가로 업로드하거나 새 텍스트 요청을 이어서 입력 가능
+
+### 2. 분석 결과
+
+가운데 패널의 탭으로 분석 결과를 여러 관점에서 확인합니다.
+
+- **업무 흐름 요약**: 문서를 몇 개의 주요 단계로 구조화했는지 요약
+- **단계별 상세**: 각 단계의 설명·입력·출력·관련 시스템, 드래그로 순서 변경 및 수정·삭제
+- **시스템/외부 연계**: 단계에서 언급된 시스템·도구 식별 결과
+- **입력/출력 항목**: 문서 전체에서 등장하는 입력·출력 항목과 사용된 단계 번호
+- **원문 근거**: 각 단계가 문서 원문 어디에서 도출됐는지 근거 제시
+
+### 3. 추천 흐름도
+
+- 분석 결과를 바탕으로 A360 액션 시퀀스(추천 흐름도)를 자동 생성 — 패키지별 색상으로 구분되는 캔버스에 렌더링
+- 단계별 액션 카드에서 **신뢰도**(요구 커버리지 × 검증 결과 × 시뮬레이션), 근거, 출처 확인
+- **컨테이너/예외 처리** 등 분기 구조를 포함한 흐름 표현
+- **흐름도 보기**로 별도 창에서 캔버스를 열어 확대해서 확인
+- 편집 모드에서 액션 변경·추가·삭제·순서 변경 가능, 저장 시 새 버전으로 기록되고 **버전 이력**에서 이전 버전으로 되돌리기 가능
+- **내보내기**: JSON / Markdown / DOCX / 이미지
+- 업무 단계 패널에서 수정한 내용을 흐름도에 그대로 반영("편집 내용 흐름도에 저장")
+
+### 4. AI 챗봇 (대화형 수정)
+
+- 분석·추천 진행 상태를 실시간 안내하고, 완료 후 결과에 대해 자유롭게 질문 가능
+- 대화로 흐름도 수정 요청 가능 (예: "3번째 단계에 이메일 발송 액션 추가해줘")
+- **에이전트 버전 선택**: 백엔드가 제공하는 추천 엔진 버전(예: 다중 후보 생성 후 검증하는 Quality Loop 방식) 중 선택 가능 — 목록/설명은 백엔드에서 동적으로 내려받음
+- 대화가 길어지면 누적 토큰 게이지가 표시되고, 필요 시 **대화 압축**으로 이전 대화를 요약본으로 정리
+- 헤더를 드래그해 창 위치를 자유롭게 이동하거나 도킹/플로팅 전환 가능
+
+### 5. 세션 이력
+
+- 왼쪽 사이드바에서 과거 분석·대화 세션을 검색하고 다시 불러오기
+- 세션을 다시 열면 분석 결과·추천 흐름도·대화 내용·대화 게이지가 그대로 복원됨
+
+## 사용 흐름
+
+1. 로그인(또는 회원가입) 후 새 채팅 시작
+2. 업무정의서를 업로드하거나 텍스트로 업무 내용 입력
+3. 자동 분석 진행 상태를 확인 (파일 검증 → 콘텐츠 추출 → 업무 흐름 분석 → 추천 흐름도 생성)
+4. 가운데 패널에서 분석 결과를 검토하고, 필요하면 단계를 직접 수정
+5. 추천 흐름도 탭에서 A360 액션 흐름을 확인하고, 캔버스에서 직접 편집하거나 챗봇에 대화로 수정 요청
+6. 완성된 흐름도를 JSON/Markdown/DOCX/이미지로 내보내기
+
+## 로컬 실행
 
 ```powershell
 npm install
 npm run dev
 ```
 
-Default local backend:
+기본 로컬 백엔드:
 
 ```text
 http://localhost:8000
 ```
 
-Override it with:
+다른 백엔드를 쓰려면:
 
 ```powershell
 copy .env.example .env.local
 ```
 
-Then edit:
+다음 값을 수정합니다:
 
 ```text
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
-## Vercel
+## 배포 (Vercel)
 
-Option A: connect this GitHub repository from the Vercel dashboard and set the environment variable below.
+**옵션 A**: Vercel 대시보드에서 이 GitHub 리포지토리를 연결하고 아래 환경 변수를 설정합니다.
 
-Option B: use the included GitHub Actions workflow:
+**옵션 B**: 포함된 GitHub Actions 워크플로를 사용합니다.
 
 ```text
 .github/workflows/vercel-deploy.yml
 ```
 
-Required GitHub Secrets for Option B:
+옵션 B에 필요한 GitHub Secrets:
 
 ```text
 VERCEL_TOKEN
@@ -46,22 +112,29 @@ VERCEL_PROJECT_ID
 VITE_API_BASE_URL
 ```
 
-Build command:
+빌드 명령:
 
 ```text
 npm run build
 ```
 
-Output directory:
+출력 디렉터리:
 
 ```text
 dist
 ```
 
-Set this Vercel environment variable:
+Vercel 환경 변수 설정:
 
 ```text
 VITE_API_BASE_URL=https://your-backend-domain.example.com
 ```
 
-The backend CloudFormation `FrontendOrigins` must include the final Vercel URL.
+백엔드 CloudFormation의 `FrontendOrigins`에 최종 Vercel URL을 포함해야 합니다.
+
+## 관련 문서
+
+- [docs/CONVENTIONS.md](docs/CONVENTIONS.md) — 브랜치·커밋·PR 협업 컨벤션
+- [docs/JIRA_GITHUB.md](docs/JIRA_GITHUB.md) — Jira ↔ GitHub 연동 가이드
+- [docs/API_명세.md](docs/API_명세.md) — 프론트엔드용 백엔드 API 명세
+- [AGENTS.md](AGENTS.md) — AI 에이전트 작업 가이드
