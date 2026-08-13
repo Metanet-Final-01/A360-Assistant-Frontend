@@ -6,6 +6,9 @@ A360 RPA 액션으로 구성된 자동화 흐름도를 추천해주는 어시스
 
 ## 화면 구성
 
+<img width="1835" height="874" alt="image" src="https://github.com/user-attachments/assets/325bf6b4-946d-4414-8d81-739ee670fb00" />
+
+
 로그인 후 화면은 4개 패널로 구성됩니다 (헤더의 그립을 드래그해 순서를 바꿀 수 있습니다).
 
 | 패널 | 위치 | 내용 |
