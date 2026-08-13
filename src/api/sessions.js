@@ -38,3 +38,11 @@ export function listChatMessages(sessionId) {
 export function getLatestAnalysis(sessionId) {
   return apiRequest(`/api/sessions/${sessionId}/analyses/latest`);
 }
+
+// GET /api/sessions/{id}/usage-gauge — 세션의 대화 누적 토큰 게이지(재조회용, RPA-379).
+// /turn done.data.usage_gauge와 동일한 셰이프. 세션 이력 하이드레이션(loadSession) 시
+// 게이지를 복원하는 용도 — 아직 턴을 한 번도 안 밟은 세션은 404 NO_USAGE.
+// 응답: { intake_tokens, limit_tokens, ratio, compact_recommended, compact_required }
+export function getUsageGauge(sessionId) {
+  return apiRequest(`/api/sessions/${sessionId}/usage-gauge`);
+}

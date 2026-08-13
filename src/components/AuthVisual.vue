@@ -2,8 +2,17 @@
 import { onMounted, onUnmounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import slide1Photo from "../assets/login1.webp";
+import slide1Photo640 from "../assets/login1-640.webp";
 import slide2Photo from "../assets/login2.webp";
+import slide2Photo640 from "../assets/login2-640.webp";
 import slide3Photo from "../assets/login3.webp";
+import slide3Photo640 from "../assets/login3-640.webp";
+
+// 카드 안쪽 이미지 실제 렌더 폭에 맞춰 브라우저가 필요한 것보다 큰 원본(900w)을 받지 않도록
+// srcset 후보를 둔다 — .auth-card__brand 패딩(모바일 64px/데스크톱 96px)과 .auth-slide-photo의
+// max-width:750px(style.css)를 그대로 옮긴 값이라 실제 렌더 폭보다 작게 잡힐 일이 없다(=흐려질
+// 위험 없음). 데스크톱은 항상 750px 상한으로 계산되어 지금과 동일하게 900w가 선택된다.
+const SLIDE_PHOTO_SIZES = "(max-width: 760px) calc(100vw - 64px), 750px";
 
 const { t } = useI18n();
 
@@ -89,19 +98,45 @@ onUnmounted(() => {
     <div class="auth-slider" aria-hidden="true">
       <div class="auth-slide" :class="slideClass(0)">
         <div class="auth-slide-photo">
-          <img :src="slide1Photo" alt="" width="900" height="600" fetchpriority="high" />
+          <img
+            :src="slide1Photo"
+            :srcset="`${slide1Photo640} 640w, ${slide1Photo} 900w`"
+            :sizes="SLIDE_PHOTO_SIZES"
+            alt=""
+            width="900"
+            height="600"
+            fetchpriority="high"
+          />
         </div>
       </div>
 
       <div class="auth-slide" :class="slideClass(1)">
         <div class="auth-slide-photo">
-          <img :src="slide2Photo" alt="" width="900" height="600" loading="lazy" decoding="async" />
+          <img
+            :src="slide2Photo"
+            :srcset="`${slide2Photo640} 640w, ${slide2Photo} 900w`"
+            :sizes="SLIDE_PHOTO_SIZES"
+            alt=""
+            width="900"
+            height="600"
+            loading="lazy"
+            decoding="async"
+          />
         </div>
       </div>
 
       <div class="auth-slide" :class="slideClass(2)">
         <div class="auth-slide-photo">
-          <img :src="slide3Photo" alt="" width="900" height="600" loading="lazy" decoding="async" />
+          <img
+            :src="slide3Photo"
+            :srcset="`${slide3Photo640} 640w, ${slide3Photo} 900w`"
+            :sizes="SLIDE_PHOTO_SIZES"
+            alt=""
+            width="900"
+            height="600"
+            loading="lazy"
+            decoding="async"
+          />
         </div>
       </div>
     </div>

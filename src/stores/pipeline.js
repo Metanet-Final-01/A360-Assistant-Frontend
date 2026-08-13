@@ -9,7 +9,7 @@ import {
   getRefineStatus,
   cancelRefine,
 } from "../api/recommend";
-import { getLatestAnalysis, patchSession } from "../api/sessions";
+import { getLatestAnalysis, getUsageGauge, patchSession } from "../api/sessions";
 import { ApiError } from "../api/http";
 import { useChatStore } from "./chat";
 import { useArchiveStore } from "./archive";
@@ -1093,9 +1093,9 @@ export const usePipelineStore = defineStore("pipeline", () => {
     resetPipelineState();
     sessionLoadStatus.value = "loading";
 
-    let analysisRes, recommendationRes;
+    let analysisRes, recommendationRes, usageGaugeRes;
     try {
-      [analysisRes, recommendationRes] = await Promise.all([
+      [analysisRes, recommendationRes, , , usageGaugeRes] = await Promise.all([
         swallowNotFound(getLatestAnalysis(id)),
         swallowNotFound(getLatestRecommendation(id)),
         useChatStore().loadHistoryMessages(id, myGeneration),
@@ -1103,6 +1103,10 @@ export const usePipelineStore = defineStore("pipeline", () => {
         // 때서야 409를 맞는 것을 막는다. 실패해도 조용히 넘어가므로(refreshRefineStatus
         // 내부에서 흡수) 세션 로딩을 깨뜨리지 않는다.
         refreshRefineStatus(),
+        // 대화 누적 게이지 복원(RPA-379) — 과거 세션을 사이드바에서 불러오면 턴 응답이
+        // 없어 usageGauge가 null로 남던 문제. 아직 턴을 한 번도 안 밟은 세션은 404
+        // NO_USAGE라 swallowNotFound가 null로 삼킨다.
+        swallowNotFound(getUsageGauge(id)),
       ]);
     } catch (err) {
       // 응답이 오기 전에 다른 세션으로 이동했거나(A→B) 같은 세션을 다시 불러왔으면(A→B→A)
@@ -1157,6 +1161,7 @@ export const usePipelineStore = defineStore("pipeline", () => {
         JSON.stringify(recommendationRes.recommendation),
       );
     }
+    if (usageGaugeRes) usageGauge.value = usageGaugeRes;
     sessionLoadStatus.value = "idle";
     loadRecommendationHistory();
     // 새로고침(부팅 시 restoreLastSession) 또는 다중 탭에서 이 세션에 진행 중이던 턴을
