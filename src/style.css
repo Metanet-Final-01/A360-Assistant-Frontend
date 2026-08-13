@@ -2806,22 +2806,6 @@ input {
   font-size: 0.85rem;
 }
 
-.flow-add-btn {
-  flex-shrink: 0;
-  border: 1px solid var(--accent-text);
-  background: var(--surface);
-  color: var(--accent-text);
-  padding: 6px 14px;
-  border-radius: 999px;
-  font-size: 0.82rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.flow-add-btn:hover {
-  background: var(--brand-teal-light);
-}
-
 /* 업무 단계 편집 → 흐름도 새 버전 저장 바 (업로드 패널 단계 목록 하단) */
 .apply-flow-bar {
   display: flex;
