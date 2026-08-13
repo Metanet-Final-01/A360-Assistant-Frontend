@@ -11,7 +11,15 @@ export function useFitTitle(elRef, textSource) {
   function fit() {
     const el = elRef.value;
     if (!el) return;
-    el.style.setProperty("--title-scale", "1");
+    // 이미 스케일이 1(또는 미설정 — 기본값도 1)이면 리셋 write를 건너뛴다. 그래야 마운트
+    // 직후 첫 측정(항상 이 경우)에서 "스타일 write 직후 레이아웃 read"로 강제 리플로우가
+    // 발생하지 않는다 — write 없이 바로 읽으면 이미 진행 중이던 레이아웃 계산에 얹혀가므로
+    // 강제(synchronous forced reflow)가 아니다. 리사이즈 등으로 이전에 축소된 스케일이
+    // 남아 있는 경우에만 실제로 리셋이 필요해 write-then-read를 피할 수 없다.
+    const currentScale = el.style.getPropertyValue("--title-scale");
+    if (currentScale && currentScale !== "1") {
+      el.style.setProperty("--title-scale", "1");
+    }
     const overflow = el.scrollWidth - el.clientWidth;
     if (overflow > 0.5) {
       const scale = Math.max(MIN_SCALE, el.clientWidth / el.scrollWidth);
