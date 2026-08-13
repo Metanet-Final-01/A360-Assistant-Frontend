@@ -595,26 +595,6 @@ function removeStep(stepId) {
   pipeline.markAnalysisEdited(t("upload.changeSummary.remove"));
 }
 
-function startAddStep() {
-  // 다른 단계를 편집하는 중이면 무시한다 — startEditStep과 동일한 이유.
-  if (editingStepId.value !== null) return;
-  const list = steps.value;
-  const newStep = {
-    step_id: crypto.randomUUID(),
-    order: list.length + 1,
-    name: t("upload.newStepDefaultName"),
-    description: "",
-    inputs: [],
-    outputs: [],
-    systems: [],
-    branching: null,
-    evidence: null,
-  };
-  list.push(newStep);
-  draftStepId.value = newStep.step_id;
-  startEditStep(newStep);
-}
-
 onBeforeUnmount(stopDragTracking);
 onMounted(() => {
   window.addEventListener("pointerdown", closeMenuOnOutsideClick);
@@ -983,10 +963,6 @@ onBeforeUnmount(() => {
                 </template>
               </article>
             </TransitionGroup>
-
-            <button type="button" class="flow-add-btn" :disabled="editingStepId !== null" @click="startAddStep">
-              {{ t("upload.addStep") }}
-            </button>
 
             <!-- 편집을 흐름도 새 버전으로 저장 — 흐름도가 이미 생성된 뒤에만 의미가 있다.
                  제스처마다 자동 저장하지 않고 명시 버튼 1회 = 1버전 (버전 이력이 의도 단위로 남는다) -->
